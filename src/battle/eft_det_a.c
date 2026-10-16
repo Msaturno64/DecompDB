@@ -85,6 +85,7 @@ extern void PortMulti_Engage(s32 victim, s32 attacker);                 /* the t
 extern s32 PortMulti_CanContact(s32 attacker, s32 victim);              /* 0: a rush keeps them apart */
 extern s32 PortMulti_InPair(s32 fighter);                               /* in a rush sequence or a throw */
 extern s32 BattleSide_GetTeam(s32 side);                                /* battle_load.c */
+extern s32 BattleSide_GetBand(s32 side); /* battle_load.c: who fights with whom (free for all) */
 #endif
 extern EftDetObj *BtlObj_Get(s32 objId);
 extern EftDetNodeMtx *BtlObj_GetNode(EftDetObj *obj, s32 node);
@@ -754,7 +755,7 @@ void BtlBodyHit_Update(void) {
                 }
                 sPortContacts[i] = 0;
                 for (e = 0; e < BattleSide_GetCount(); e++) {
-                    if (e == PortMulti_TargetOf(i) || BattleSide_GetTeam(e) == BattleSide_GetTeam(i) ||
+                    if (e == PortMulti_TargetOf(i) || BattleSide_GetBand(e) == BattleSide_GetBand(i) ||
                         !PortMulti_CanContact(i, e)) {
                         continue;
                     }
@@ -1287,7 +1288,7 @@ void EftDet_ClashPass(void) {
                 if (BattleSide_GetCount() > 2 && list->rec[i].objId != list->rec[j].objId &&
                     (u32)list->rec[i].objId < (u32)BattleSide_GetCount() &&
                     (u32)list->rec[j].objId < (u32)BattleSide_GetCount() &&
-                    (BattleSide_GetTeam(list->rec[i].objId) == BattleSide_GetTeam(list->rec[j].objId) ||
+                    (BattleSide_GetBand(list->rec[i].objId) == BattleSide_GetBand(list->rec[j].objId) ||
                      PortMulti_InPair(list->rec[i].objId) || PortMulti_InPair(list->rec[j].objId))) {
                     continue;
                 }

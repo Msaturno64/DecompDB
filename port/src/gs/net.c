@@ -236,9 +236,11 @@ static uint32_t speed_bits(int percent) {
    team's starting health, in the rules word too, so that both copies set up the same battle. Only a hosted room has
    them (Port_NetMultiRules, the Host tab); a quick match's rules leave them out (standard battles).
      bit 13       every member on the field
+     bit 14       free for all: every fighter on its own
      bits 24..27  team 1's starting health: (percent / 25 - 1) ^ 3, so that 0 is 100 % (25..400 %, steps of 25)
      bits 28..31  team 2's */
 #define RULE_MULTI 0x2000u
+#define RULE_FFA 0x4000u /* bit 14: and every fighter on its own (free for all) */
 
 static uint32_t health_bits(int percent) {
     return ((uint32_t)(percent / 25 - 1) ^ 3u) & 15u;
@@ -247,13 +249,19 @@ static uint32_t health_bits(int percent) {
 void Port_NetMultiRules(void) {
     extern int PortMulti_Setting(void);                /* port/src/multi_fighter.c: the player's own settings */
     extern int PortMulti_HandicapSetting(int team);
+    extern int PortMulti_FfaSetting(void);
 
-    sRules = (sRules & ~(RULE_MULTI | 0xFF000000u)) | (PortMulti_Setting() ? RULE_MULTI : 0) |
+    sRules = (sRules & ~(RULE_MULTI | RULE_FFA | 0xFF000000u)) | (PortMulti_Setting() ? RULE_MULTI : 0) |
+             (PortMulti_FfaSetting() ? RULE_FFA : 0) |
              health_bits(PortMulti_HandicapSetting(0)) << 24 | health_bits(PortMulti_HandicapSetting(1)) << 28;
 }
 
 int Port_NetMultiAll(void) {
     return (sRules & RULE_MULTI) != 0;
+}
+
+int Port_NetFfa(void) {
+    return (sRules & RULE_FFA) != 0;
 }
 
 int Port_NetHandicap(int team) {

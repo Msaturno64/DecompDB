@@ -30,6 +30,13 @@
 /* Every member of both teams on the field at once instead of one after the other. Game state (not PORT_HOST): a
    restored state must bring back the battle it belongs to. */
 int gPortMultiAll;
+/* And every fighter on its own (free for all): decided with it as the battle is set up (PortMulti_WantAll). Game
+   state, as gPortMultiAll: both copies of an online match hold the host's. */
+int gPortMultiFfa;
+
+int PortMulti_Ffa(void) {
+    return gPortMultiAll && gPortMultiFfa;
+}
 
 /* ----------------------------------------------------------------------------------- BT3_HEAPCHECK (diagnostics) */
 
@@ -129,6 +136,7 @@ static void heap_who(void) {
 #define FIGHTER_MAX 10 /* BTL_FIGHTER_MAX, battle/battle.h (a game header: its pointers are not this file's) */
 
 extern int BattleSide_GetCount(void);  /* src/battle/battle_load.c */
+extern int BattleSide_GetBand(int side); /* who fights with whom (free for all) */
 extern int BattleSide_GetTeam(int side);
 extern int BattleSide_GetObjId(int side);
 extern void BtlCharApi_GetPos(int objId, float *out); /* src/battle/btl_capi_a.c */
@@ -172,7 +180,7 @@ void PortMulti_Engage(int victim, int attacker) {
     int n = BattleSide_GetCount(), a;
 
     if (n <= 2 || victim < 0 || victim >= n || attacker < 0 || attacker >= n ||
-        BattleSide_GetTeam(victim) == BattleSide_GetTeam(attacker)) {
+        BattleSide_GetBand(victim) == BattleSide_GetBand(attacker)) {
         return;
     }
     sEngaged[victim] = attacker;
@@ -243,7 +251,7 @@ int PortMulti_TargetOf(int i) {
         int GAME_PTR thr = (int GAME_PTR)((char GAME_PTR)BtlChar_Get(i) + 0xE90);
 
         k = thr[1] == i ? thr[2] : thr[2] == i ? thr[1] : -1;
-        if (k >= 0 && k < n && BattleSide_GetTeam(k) != BattleSide_GetTeam(i)) {
+        if (k >= 0 && k < n && BattleSide_GetBand(k) != BattleSide_GetBand(i)) {
             return k;
         }
     }
@@ -251,8 +259,8 @@ int PortMulti_TargetOf(int i) {
         return sEngaged[i];
     }
     t = sTarget[i];
-    if (t < 0 || t >= n || BattleSide_GetTeam(t) == BattleSide_GetTeam(i)) {
-        for (k = 0; k < n && BattleSide_GetTeam(k) == BattleSide_GetTeam(i); k++) {
+    if (t < 0 || t >= n || BattleSide_GetBand(t) == BattleSide_GetBand(i)) {
+        for (k = 0; k < n && BattleSide_GetBand(k) == BattleSide_GetBand(i); k++) {
         }
         t = k < n ? k : i ^ 1;
     }
@@ -279,7 +287,7 @@ static int nearest_enemy(int i, int n, float p[][4]) {
     float d, bestD = 0.0f, dx, dy, dz;
 
     for (k = 0; k < n; k++) {
-        if (BattleSide_GetTeam(k) == BattleSide_GetTeam(i) || BtlChar_IsDead(BtlChar_Get(k))) {
+        if (BattleSide_GetBand(k) == BattleSide_GetBand(i) || BtlChar_IsDead(BtlChar_Get(k))) {
             continue;
         }
         dx = p[k][0] - p[i][0];
@@ -300,7 +308,7 @@ static int next_enemy(int i, int n, int from) {
 
     for (s = 1; s <= n; s++) {
         k = ((from < 0 ? 0 : from) + s) % n;
-        if (BattleSide_GetTeam(k) != BattleSide_GetTeam(i) && !BtlChar_IsDead(BtlChar_Get(k))) {
+        if (BattleSide_GetBand(k) != BattleSide_GetBand(i) && !BtlChar_IsDead(BtlChar_Get(k))) {
             return k;
         }
     }
@@ -313,7 +321,7 @@ int PortMulti_NextEnemyAfter(int fighter, int skip, int prev) {
     int e;
 
     for (e = prev + 1; e < BattleSide_GetCount(); e++) {
-        if (e != skip && BattleSide_GetTeam(e) != BattleSide_GetTeam(fighter) && !BtlChar_IsDead(BtlChar_Get(e))) {
+        if (e != skip && BattleSide_GetBand(e) != BattleSide_GetBand(fighter) && !BtlChar_IsDead(BtlChar_Get(e))) {
             return e;
         }
     }
@@ -366,7 +374,7 @@ void PortMulti_UpdateTargets(void) {
     }
     for (i = 0; i < n; i++) {
         k = sTarget[i];
-        if (!(k >= 0 && k < n && BattleSide_GetTeam(k) != BattleSide_GetTeam(i) && !BtlChar_IsDead(BtlChar_Get(k)))) {
+        if (!(k >= 0 && k < n && BattleSide_GetBand(k) != BattleSide_GetBand(i) && !BtlChar_IsDead(BtlChar_Get(k)))) {
             k = nearest_enemy(i, n, p);
         }
         hp = BtlCharApi_GetHp(BattleSide_GetObjId(i));
@@ -428,7 +436,7 @@ int PortMulti_HudFighter(int side) {
         return h;
     }
     t = sTarget[h];
-    return t >= 0 && t < n && BattleSide_GetTeam(t) != BattleSide_GetTeam(h) ? t : side;
+    return t >= 0 && t < n && BattleSide_GetBand(t) != BattleSide_GetBand(h) ? t : side;
 }
 
 /* ------------------------------------------------------------------------------- health bars over the fighters */
@@ -513,7 +521,7 @@ void PortMulti_ProjectBars(int view, int last) {
             sBarBuild[sBarBuilt].y = y / 448.0f;
             sBarBuild[sBarBuilt].hp = hp;
             sBarBuild[sBarBuilt].hpMax = BtlCharApi_GetHpMax(BattleSide_GetObjId(i));
-            sBarBuild[sBarBuilt].ally = BattleSide_GetTeam(i) == BattleSide_GetTeam(me);
+            sBarBuild[sBarBuilt].ally = BattleSide_GetBand(i) == BattleSide_GetBand(me);
             sBarBuilt++;
         }
     }
@@ -576,6 +584,7 @@ static void tech_test(void) {
     extern int BtlCharApi_GetHp(int objId);
     extern char GAME_PTR Battle_GetWork(void); /* src/battle/battle_work.c */
     static int on = -1, frame, turn, used[3], wait, startAt, dmg, startAction, kind, since[3], last[3], prevHp[3];
+    static int A; /* the first fighter of the pair: 0, or BT3_TECHTEST_A (1: side 1's lead against its own extra) */
     extern int BtlChange_IsPendingType0(int player), BtlChange_IsPendingType1(int player); /* btl_capi_b.c */
     extern int BtlChange_IsLoadedFor(int player), BtlChange_IsReady(void); /* btl_char_ctl_b.c, btl_capi_b.c */
     static int loadSince, reported, queue = -1;
@@ -589,8 +598,12 @@ static void tech_test(void) {
     }
     frame++;
     B = BattleSide_GetCount() - 1; /* (the other fighter of the test: the extra, or in a 1v1 fighter 1) */
+    if (frame == 1) {
+        A = getenv("BT3_TECHTEST_A") != NULL && atoi(getenv("BT3_TECHTEST_A")) < B ? atoi(getenv("BT3_TECHTEST_A")) : 0;
+        turn = A;
+    }
     f = turn;
-    other = f == 0 ? B : 0;
+    other = f == A ? B : A;
     for (q = BtlChange_IsReady(), i = 0; i < 3; i++) { /* the change queue (models, partners), each time it moves */
         q = q << 3 | BtlChange_IsPendingType0(i) << 2 | BtlChange_IsPendingType1(i) << 1 | BtlChange_IsLoadedFor(i);
     }
@@ -617,8 +630,8 @@ static void tech_test(void) {
         }
         prevHp[i] = BtlCharApi_GetHp(BattleSide_GetObjId(i));
     }
-    sTarget[0] = B;
-    sTarget[B] = 0;
+    sTarget[A] = B;
+    sTarget[B] = A;
     /* stuck: one action (technique, reaction, down) for 30 s, or a model load that does not end */
     for (i = 0; i < BattleSide_GetCount(); i++) {
         a = BtlCharApi_GetAction(BattleSide_GetObjId(i));
@@ -648,12 +661,12 @@ static void tech_test(void) {
                    dmg, other);
             startAt = 0;
             used[f]++;
-            turn = used[0] > used[B] ? B : 0;
+            turn = used[A] > used[B] ? B : A;
             wait = frame + 45;
         }
         return;
     }
-    if (used[0] >= (on == 2 ? 8 : TT_ROUNDS) && used[B] >= (on == 2 ? 8 : TT_ROUNDS)) {
+    if (used[A] >= (on == 2 ? 8 : TT_ROUNDS) && used[B] >= (on == 2 ? 8 : TT_ROUNDS)) {
         printf("bt3: techtest: done, %d stuck\n", reported);
         fflush(stdout);
         exit(reported ? 3 : 0);
@@ -673,7 +686,7 @@ static void tech_test(void) {
             } else {
                 printf("bt3: techtest: frame %d fighter %d kind %d: no transformation (slot id %d)\n", frame, f, kind, id);
                 used[f] += 2; /* (and the ultimate that would follow it) */
-                turn = used[0] > used[B] ? B : 0;
+                turn = used[A] > used[B] ? B : A;
                 return;
             }
         } else {
@@ -695,7 +708,7 @@ void PortMulti_BattleEnd(void); /* (below: the measuring part) */
 
 void PortMulti_Trace(unsigned vblank, int battle) {
     extern int BattleSide_GetCount(void);       /* src/battle/battle_load.c */
-    extern int BattleSide_GetTeam(int side);
+    extern int BattleSide_GetBand(int side);
     extern int BattleSide_GetObjId(int side);
     extern int BtlCharApi_GetHp(int objId);      /* src/battle/btl_capi_a.c */
     extern void BtlCharApi_GetPos(int objId, float *out);
@@ -736,7 +749,7 @@ void PortMulti_Trace(unsigned vblank, int battle) {
             extern int BtlCharApi_GetAction(int objId); /* src/battle/btl_capi_b.c */
             extern int BtlCharApi_IsInSkill(int objId); /* src/battle/btl_capi_a.c */
 
-            fprintf(fp, " | %d %d %08x %08x %08x %d %X %d", BattleSide_GetTeam(i), BtlCharApi_GetHp(obj), u[0], u[1], u[2],
+            fprintf(fp, " | %d %d %08x %08x %08x %d %X %d", BattleSide_GetBand(i), BtlCharApi_GetHp(obj), u[0], u[1], u[2],
                     PortMulti_TargetOf(i), BtlCharApi_GetAction(obj), BtlCharApi_IsInSkill(obj));
         }
     }
@@ -762,6 +775,23 @@ int PortMulti_Setting(void) {
 void PortMulti_SettingSet(int on) {
     sSetting = on != 0;
     Port_SettingSave("multi_all", sSetting);
+    Port_SettingsWrite();
+}
+
+/* "Free for all": setting multi_ffa, off unless set; with "every member on the field", every fighter fights on its own
+   (the teams only say which side's result screen the last one standing brings). */
+PORT_HOST static int sFfa = -1;
+
+int PortMulti_FfaSetting(void) {
+    if (sFfa < 0) {
+        sFfa = Port_Setting("multi_ffa", 0) != 0;
+    }
+    return sFfa;
+}
+
+void PortMulti_FfaSettingSet(int on) {
+    sFfa = on != 0;
+    Port_SettingSave("multi_ffa", sFfa);
     Port_SettingsWrite();
 }
 
@@ -826,7 +856,12 @@ int PortMulti_WantAll(void) {
     if (getenv("BT3_TEAMS") == NULL) {
         extern int Port_NetMultiAll(void); /* gs/net.c: the host's, from its rules word (both copies the same) */
 
+        extern int Port_NetFfa(void); /* gs/net.c: the host's */
+
         gPortMultiAll = Battle_GetMode() == 0 && (Port_NetActive() ? Port_NetMultiAll() : PortMulti_Setting());
+        gPortMultiFfa = Port_NetActive() ? Port_NetFfa() : PortMulti_FfaSetting();
+    } else {
+        gPortMultiFfa = getenv("BT3_TEAMS_FFA") != NULL; /* (tests: the demo's teams, every fighter on its own) */
     }
     return gPortMultiAll;
 }

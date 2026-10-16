@@ -2160,6 +2160,26 @@ s32 BtlCtrl_IsTeamDead(s32 player) {
         s32 k;
 
         if (BattleSide_GetCount() > 2) {
+            extern s32 PortMulti_Ffa(void); /* port/src/multi_fighter.c: every fighter on its own */
+
+            if (PortMulti_Ffa()) {
+                /* free for all: the fight is over when at most one fighter stands; the side that is out is the one
+                   without it (both, if nobody stands): the last one standing brings its own side's result */
+                s32 up = 0;
+                s32 mine = 0;
+
+                for (k = 0; k < BattleSide_GetCount(); k++) {
+                    chr = BtlChar_Get(k);
+                    for (i = 0; chr != NULL && i < chr->memberCount; i++) {
+                        if (BtlMember_GetGauge(chr, i)->hp > 0) {
+                            up++;
+                            mine |= BattleSide_GetTeam(k) == player;
+                            break;
+                        }
+                    }
+                }
+                return up <= 1 && !mine;
+            }
             for (k = 0; k < BattleSide_GetCount(); k++) {
                 chr = BtlChar_Get(k);
                 if (BattleSide_GetTeam(k) != player || chr == NULL) {

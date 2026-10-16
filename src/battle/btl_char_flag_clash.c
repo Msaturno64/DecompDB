@@ -63,6 +63,7 @@ extern BtlClashProgress *gProgress;
    Chosen by BtlClash_Update while no clash runs; game state, as the clash state is. */
 extern s32 BattleSide_GetCount(void);         /* battle_load.c */
 extern s32 BattleSide_GetTeam(s32 side);
+extern s32 BattleSide_GetBand(s32 side); /* battle_load.c: who fights with whom (free for all) */
 extern s32 PortMulti_TargetOf(s32 fighter);  /* port/src/multi_fighter.c */
 extern s32 PortMulti_InPair(s32 fighter);    /* in a rush sequence or a throw: no clash */
 static s32 sClash[2] = {0, 1};
@@ -577,7 +578,7 @@ static s32 BtlClash_PortFindPair(void) {
 
     for (i = 0; i < n; i++) {
         for (j = i + 1; j < n; j++) {
-            if (PortMulti_TargetOf(i) != j || PortMulti_TargetOf(j) != i || BattleSide_GetTeam(i) == BattleSide_GetTeam(j) ||
+            if (PortMulti_TargetOf(i) != j || PortMulti_TargetOf(j) != i || BattleSide_GetBand(i) == BattleSide_GetBand(j) ||
                 PortMulti_InPair(i) || PortMulti_InPair(j)) {
                 continue;
             }

@@ -1917,9 +1917,17 @@ s32 BattleSide_GetCount(void) {
     return sPortSideCount;
 }
 
-/* The original side a record fights for: itself for 0 and 1. */
+/* The original side a record fights for: itself for 0 and 1. (Its data, its pad's keys, the result's side.) */
 s32 BattleSide_GetTeam(s32 side) {
     return side < 2 ? side : sPortTeam[side];
+}
+
+/* Whom a fighter fights with: its team, or in a free for all nobody (each fighter its own; PortMulti_Ffa). Who is an
+   enemy is asked here; what a fighter is loaded with, which keys it reads and which side wins, of GetTeam. */
+s32 BattleSide_GetBand(s32 side) {
+    extern s32 PortMulti_Ffa(void); /* port/src/multi_fighter.c */
+
+    return PortMulti_Ffa() ? side : BattleSide_GetTeam(side);
 }
 
 /* Battle_Init, before anything is loaded. With every member on the field (gPortMultiAll, port/src/multi_fighter.c)

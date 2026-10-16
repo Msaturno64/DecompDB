@@ -3,6 +3,7 @@
 #include "battle/btl_multi.h"
 #ifdef PORT
 extern s32 BattleSide_GetTeam(s32 side); /* battle_load.c: the team a fighter fights for */
+extern s32 BattleSide_GetBand(s32 side); /* battle_load.c: who fights with whom (free for all) */
 extern void PortMulti_SetOverride(s32 fighter, s32 opponent); /* port/src/multi_fighter.c: -1 ends it */
 extern void PortMulti_Engage(s32 victim, s32 attacker);        /* the two are in an exchange while it lasts */
 extern s32 PortMulti_CanContact(s32 attacker, s32 victim);     /* 0: a rush keeps them apart */
@@ -1023,7 +1024,7 @@ void BtlHit_CheckProximityAll(void) {
         for (j = 0; j < BtlChar_GetCount(); j++) {
 #ifdef PORT
             /* (several fighters on the field: teammates neither grab nor push each other) */
-            if (i != j && (BtlChar_GetCount() <= 2 || BattleSide_GetTeam(i) != BattleSide_GetTeam(j))) {
+            if (i != j && (BtlChar_GetCount() <= 2 || BattleSide_GetBand(i) != BattleSide_GetBand(j))) {
 #else
             if (i != j) {
 #endif

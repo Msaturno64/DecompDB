@@ -370,11 +370,12 @@ void BtlCam_UpdateView(s32 side) {
            of its own); the lead's when none is higher (with two fighters, as ever, the side's own) */
         extern s32 BattleSide_GetCount(void);
         extern s32 BattleSide_GetTeam(s32 side);
+extern s32 BattleSide_GetBand(s32 side); /* battle_load.c: who fights with whom (free for all) */
         s32 k;
         s32 best = BtlCharApi_HasCamPriority(objId);
 
         for (k = 2; k < BattleSide_GetCount(); k++) {
-            if (BattleSide_GetTeam(k) == side && BtlCharApi_HasCamPriority(BattleSide_GetObjId(k)) > best) {
+            if (BattleSide_GetBand(k) == side && BtlCharApi_HasCamPriority(BattleSide_GetObjId(k)) > best) {
                 best = BtlCharApi_HasCamPriority(BattleSide_GetObjId(k));
                 objId = BattleSide_GetObjId(k);
             }

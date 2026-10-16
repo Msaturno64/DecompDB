@@ -74,6 +74,8 @@ void Port_ClashSquareXSet(int quarters);
 int PortMulti_Setting(void);                   // multi_fighter.c: team battle, every member on the field
 void PortMulti_SettingSet(int on);
 int PortMulti_HandicapSetting(int team);       // multi_fighter.c: a team's starting health in such a battle, %
+int PortMulti_FfaSetting(void);                // multi_fighter.c: every fighter on its own (free for all)
+void PortMulti_FfaSettingSet(int on);
 void PortMulti_HandicapSet(int team, int percent);
 extern int gsInterp;                           // gs_draw.c: in-between pictures on (1) / off (0); -1 before the first frame
 void Port_SettingsWrite(void);
@@ -1387,6 +1389,13 @@ static void misc_tab(void) {
                               "count for both players (a match you host takes these).\n"
                               "Applies from the next battle.");
         if (all) {
+            bool ffa = PortMulti_FfaSetting() != 0;
+            if (ImGui::Checkbox("Free for all: every fighter on its own", &ffa)) {
+                PortMulti_FfaSettingSet(ffa);
+            }
+            ImGui::SetItemTooltip("With every member on the field: nobody is anyone's teammate, every fighter fights all the\n"
+                                  "others and the last one standing wins (choose 3 to 10 fighters in the team select, any\n"
+                                  "way between the two teams). Online, the host's setting counts.");
             for (int team = 0; team < 2; team++) {
                 int pct = PortMulti_HandicapSetting(team);
                 char label[48];
