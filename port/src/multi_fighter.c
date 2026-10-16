@@ -831,8 +831,8 @@ void PortMulti_NoteSpread(int fighters) {
     extern int gPortResim; /* gs/state.c */
 
     if (!gPortResim) {
-        printf("bt3: team battle: %d fighters on the field (team 1: %d%%, team 2: %d%% starting health)\n", fighters,
-               PortMulti_Handicap(0), PortMulti_Handicap(1));
+        printf("bt3: team battle: %d fighters on the field%s (team 1: %d%%, team 2: %d%% starting health)\n", fighters,
+               PortMulti_Ffa() ? ", free for all" : "", PortMulti_Handicap(0), PortMulti_Handicap(1));
         fflush(stdout);
     }
 }
