@@ -137,6 +137,7 @@ extern int BtlChar_IsDead(void *chr);
 /* Each fighter's opponent beyond the two: the enemy it is set on. Game state (not PORT_HOST): a rollback brings it
    back with the fighters. -1: none yet. */
 static int sTarget[FIGHTER_MAX];
+static int sTargetFrame, sL3Prev[FIGHTER_MAX], sHpPrev[FIGHTER_MAX]; /* (see PortMulti_UpdateTargets) */
 
 /* The opponent of fighter i (BTL_OPP, battle/battle.h). With two fighters the other one, as on the console; with
    more the target, or the first enemy while there is none yet (before the first PortMulti_UpdateTargets). */
@@ -161,45 +162,91 @@ void PortMulti_ResetTargets(void) {
 
     for (i = 0; i < FIGHTER_MAX; i++) {
         sTarget[i] = -1;
+        sL3Prev[i] = 1; /* (an L3 held into the fight is not a tap) */
+        sHpPrev[i] = 0x7FFFFFFF;
     }
+    sTargetFrame = 0;
 }
 
-/* Battle_Loop, once a frame before the AI: a fighter keeps its target while that one can fight; otherwise it takes
-   the nearest enemy that can (the lowest index of equally near ones, so both players' copies agree). With nobody
-   left to fight the target stays as it is. */
+/* The enemy of fighter i that can fight and is nearest to it (the lowest index of equally near ones, so both
+   players' copies agree), -1 with none. */
+static int nearest_enemy(int i, int n, float p[][4]) {
+    int k, best = -1;
+    float d, bestD = 0.0f, dx, dy, dz;
+
+    for (k = 0; k < n; k++) {
+        if (BattleSide_GetTeam(k) == BattleSide_GetTeam(i) || BtlChar_IsDead(BtlChar_Get(k))) {
+            continue;
+        }
+        dx = p[k][0] - p[i][0];
+        dy = p[k][1] - p[i][1];
+        dz = p[k][2] - p[i][2];
+        d = dx * dx + dy * dy + dz * dz;
+        if (best < 0 || d < bestD) {
+            best = k;
+            bestD = d;
+        }
+    }
+    return best;
+}
+
+/* The next enemy of fighter i after `from` that can fight, in fighter order, round to the start; -1 with none. */
+static int next_enemy(int i, int n, int from) {
+    int s, k;
+
+    for (s = 1; s <= n; s++) {
+        k = ((from < 0 ? 0 : from) + s) % n;
+        if (BattleSide_GetTeam(k) != BattleSide_GetTeam(i) && !BtlChar_IsDead(BtlChar_Get(k))) {
+            return k;
+        }
+    }
+    return -1;
+}
+
+#define PAD_L3_BIT 0x2          /* PAD_L3, include/sys/pad.h */
+#define CHR_RAW_HELD 0x570      /* the fighter's input block: rawHeld, its pad as it was read (battle/btl_input.h) */
+#define CPU_REPICK_FRAMES 90    /* a computer fighter looks again for the nearest enemy every 3 seconds */
+
+/* Battle_Loop, once a frame before the AI. A fighter keeps its target while that one can fight; when it cannot
+   (fallen), the nearest enemy that can. On top of that:
+     - a player's fighter (BTL_CONTROL_PAD) takes the next enemy at a tap of L3 (the pad as the fighter read it last
+       frame: what both machines of an online match have);
+     - a computer fighter takes the nearest enemy again every CPU_REPICK_FRAMES frames (each at its own frame), and
+       at once when it is hurt while another enemy is nearer than its target (it turns to whoever is on it).
+   Everything here is game state: a rollback brings it back. */
 void PortMulti_UpdateTargets(void) {
-    int n = BattleSide_GetCount(), i, k, best;
+    extern int BattleSide_GetControl(int side); /* src/battle/battle_load.c: 0 a pad, 2 the computer */
+    extern int BtlCharApi_GetHp(int objId);
+    int n = BattleSide_GetCount(), i, k, l3, hp;
     float p[FIGHTER_MAX][4] __attribute__((aligned(16)));
-    float d, bestD, dx, dy, dz;
 
     if (n <= 2) {
         return;
     }
+    sTargetFrame++;
     for (i = 0; i < n; i++) {
         BtlCharApi_GetPos(BattleSide_GetObjId(i), p[i]);
     }
     for (i = 0; i < n; i++) {
         k = sTarget[i];
-        if (k >= 0 && k < n && BattleSide_GetTeam(k) != BattleSide_GetTeam(i) && !BtlChar_IsDead(BtlChar_Get(k))) {
-            continue;
+        if (!(k >= 0 && k < n && BattleSide_GetTeam(k) != BattleSide_GetTeam(i) && !BtlChar_IsDead(BtlChar_Get(k)))) {
+            k = nearest_enemy(i, n, p);
         }
-        best = -1;
-        bestD = 0.0f;
-        for (k = 0; k < n; k++) {
-            if (BattleSide_GetTeam(k) == BattleSide_GetTeam(i) || BtlChar_IsDead(BtlChar_Get(k))) {
-                continue;
+        hp = BtlCharApi_GetHp(BattleSide_GetObjId(i));
+        if (BattleSide_GetControl(i) == 0) {
+            l3 = (*(unsigned GAME_PTR)((char GAME_PTR)BtlChar_Get(i) + CHR_RAW_HELD) & PAD_L3_BIT) != 0;
+            if (l3 && !sL3Prev[i]) {
+                int next = next_enemy(i, n, k);
+                k = next >= 0 ? next : k;
             }
-            dx = p[k][0] - p[i][0];
-            dy = p[k][1] - p[i][1];
-            dz = p[k][2] - p[i][2];
-            d = dx * dx + dy * dy + dz * dz;
-            if (best < 0 || d < bestD) {
-                best = k;
-                bestD = d;
-            }
+            sL3Prev[i] = l3;
+        } else if ((sTargetFrame + i * 17) % CPU_REPICK_FRAMES == 0 || (hp < sHpPrev[i] && nearest_enemy(i, n, p) != k)) {
+            int near = nearest_enemy(i, n, p);
+            k = near >= 0 ? near : k;
         }
-        if (best >= 0) {
-            sTarget[i] = best;
+        sHpPrev[i] = hp;
+        if (k >= 0) {
+            sTarget[i] = k;
         }
     }
 }
@@ -207,8 +254,9 @@ void PortMulti_UpdateTargets(void) {
 /* ------------------------------------------------------------------------------------------- BT3_MFLOG (tests) */
 
 /* BT3_MFLOG=<file>: one line per vertical blank of a fight: the blank, then for every fighter its team, health
-   and position (x y z as the bits of the floats, hexadecimal) and its target: "<blank> | <team> <hp> <x> <y> <z>
-   <target> | ...". A blank
+   and position (x y z as the bits of the floats, hexadecimal), its target, action (hexadecimal) and whether it is in
+   a technique: "<blank> ts <time stopped> pv <priority view> | <team> <hp> <x> <y> <z> <target> <action> <skill> |
+   ...". A blank
    run again after a rollback is written again; the last line of a blank counts. Not game state (PORT_HOST). */
 void PortMulti_Trace(unsigned vblank, int battle) {
     extern int BattleSide_GetCount(void);       /* src/battle/battle_load.c */
@@ -226,16 +274,35 @@ void PortMulti_Trace(unsigned vblank, int battle) {
         tried = 1;
         fp = getenv("BT3_MFLOG") != NULL ? fopen(getenv("BT3_MFLOG"), "w") : NULL;
     }
+    /* BT3_MF_STOPAT=<blank> (tests): the program ends there (a versus battle without players waits at its end) */
+    if (getenv("BT3_MF_STOPAT") != NULL && vblank >= (unsigned)atoi(getenv("BT3_MF_STOPAT"))) {
+        printf("bt3: stopped at vertical blank %u (BT3_MF_STOPAT)\n", vblank);
+        fflush(stdout);
+        if (fp != NULL) {
+            fclose(fp);
+        }
+        exit(0);
+    }
     if (fp == NULL || !battle) {
         return;
     }
-    fprintf(fp, "%u", vblank);
+    {
+        extern int BtlChars_IsTimeStopped(void);  /* src/battle/btl_char_ctl_b.c */
+        extern int BtlCam_GetPriorityView(void);  /* src/battle/btl_cam.c: -1 none */
+
+        fprintf(fp, "%u ts %d pv %d", vblank, BtlChars_IsTimeStopped() != 0, BtlCam_GetPriorityView());
+    }
     for (i = 0; i < BattleSide_GetCount(); i++) {
         obj = BattleSide_GetObjId(i);
         BtlCharApi_GetPos(obj, q);
         memcpy(u, q, sizeof(u)); /* (the bits: this file has no floating-point unit to print with) */
-        fprintf(fp, " | %d %d %08x %08x %08x %d", BattleSide_GetTeam(i), BtlCharApi_GetHp(obj), u[0], u[1], u[2],
-                PortMulti_TargetOf(i));
+        {
+            extern int BtlCharApi_GetAction(int objId); /* src/battle/btl_capi_b.c */
+            extern int BtlCharApi_IsInSkill(int objId); /* src/battle/btl_capi_a.c */
+
+            fprintf(fp, " | %d %d %08x %08x %08x %d %X %d", BattleSide_GetTeam(i), BtlCharApi_GetHp(obj), u[0], u[1], u[2],
+                    PortMulti_TargetOf(i), BtlCharApi_GetAction(obj), BtlCharApi_IsInSkill(obj));
+        }
     }
     fputc('\n', fp);
     fflush(fp);
@@ -327,6 +394,20 @@ void PortMulti_DemoTeams(const char *teams) {
                 }
             }
         }
+    }
+    /* BT3_TEAMS_CPU=<level> (tests): every member's computer level, 0..29 (the demo's is low: few techniques) */
+    if (getenv("BT3_TEAMS_CPU") != NULL) {
+        for (side = 0; side < 2; side++) {
+            for (i = 0; i < count[side]; i++) {
+                BattleSide_GetMember(side, i)->word[3] = atoi(getenv("BT3_TEAMS_CPU")); /* BattleMember.cpuLevel */
+            }
+        }
+    }
+    /* BT3_TEAMS_MODE=<n> (tests): the battle's mode (BattleRule.mode, setup + 8); 0 makes the attract demo a versus
+       battle, where the computer fighters use their whole move set (the demo's mode 7 keeps to a few moves) */
+    if (getenv("BT3_TEAMS_MODE") != NULL) {
+        extern int GAME_PTR Battle_GetSetup(void); /* src/battle/battle_work.c: the setup's words */
+        Battle_GetSetup()[2] = atoi(getenv("BT3_TEAMS_MODE"));
     }
     BattleSetup_Finish();
     gPortMultiAll = 1;

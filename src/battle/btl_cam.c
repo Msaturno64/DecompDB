@@ -363,6 +363,25 @@ void BtlCam_UpdateView(s32 side) {
     BtlCamView *view = gBtlCam->cur;
     s32 objId = BattleSide_GetObjId(side);
 
+#ifdef PORT
+    {
+        /* several fighters on the field: the side's view shows the camera of the fighter of its team whose camera
+           has the highest priority (a technique's cut of a fighter beyond the two is seen there, which has no view
+           of its own); the lead's when none is higher (with two fighters, as ever, the side's own) */
+        extern s32 BattleSide_GetCount(void);
+        extern s32 BattleSide_GetTeam(s32 side);
+        s32 k;
+        s32 best = BtlCharApi_HasCamPriority(objId);
+
+        for (k = 2; k < BattleSide_GetCount(); k++) {
+            if (BattleSide_GetTeam(k) == side && BtlCharApi_HasCamPriority(BattleSide_GetObjId(k)) > best) {
+                best = BtlCharApi_HasCamPriority(BattleSide_GetObjId(k));
+                objId = BattleSide_GetObjId(k);
+            }
+        }
+    }
+#endif
+
     if (Battle_IsSplitScreen()) {
         BtlCam_SetLayout(1, 0);
     }
