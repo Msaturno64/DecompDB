@@ -64,6 +64,7 @@ extern BtlClashProgress *gProgress;
 extern s32 BattleSide_GetCount(void);         /* battle_load.c */
 extern s32 BattleSide_GetTeam(s32 side);
 extern s32 PortMulti_TargetOf(s32 fighter);  /* port/src/multi_fighter.c */
+extern s32 PortMulti_InPair(s32 fighter);    /* in a rush sequence or a throw: no clash */
 static s32 sClash[2] = {0, 1};
 #define CLASH_ID(role) sClash[role]
 #define CLASH_CHR(role) BtlChar_Get(sClash[role])
@@ -569,25 +570,27 @@ s32 BtlClash_UpdateC(s32 state) {
 #ifdef PORT
 /* No clash runs: the first pair of fighters set on each other (lowest indices first) that are both in a clash
    action becomes the clash's two; with none, roles 0 and 1 go back to fighters 0 and 1. */
-static void BtlClash_PortFindPair(void) {
+static s32 BtlClash_PortFindPair(void) {
     s32 n = BattleSide_GetCount();
     s32 i;
     s32 j;
 
     for (i = 0; i < n; i++) {
         for (j = i + 1; j < n; j++) {
-            if (PortMulti_TargetOf(i) != j || PortMulti_TargetOf(j) != i || BattleSide_GetTeam(i) == BattleSide_GetTeam(j)) {
+            if (PortMulti_TargetOf(i) != j || PortMulti_TargetOf(j) != i || BattleSide_GetTeam(i) == BattleSide_GetTeam(j) ||
+                PortMulti_InPair(i) || PortMulti_InPair(j)) {
                 continue;
             }
             sClash[0] = i;
             sClash[1] = j;
             if (BtlClash_BothInClashA() || BtlClash_BothInActionFA() || BtlClash_BothInActionFB()) {
-                return;
+                return 1;
             }
         }
     }
     sClash[0] = 0;
     sClash[1] = 1;
+    return 0; /* (no pair: no clash starts, not even between 0 and 1, who may not be on each other) */
 }
 
 /* No clash runs: what state 0 does for the two fighters, for every fighter (none stays in a clash action alone). */
@@ -609,11 +612,10 @@ void BtlClash_Update(void) {
     s32 *state = &gBtlChars->clashState;
 
 #ifdef PORT
-    if (*state == 0 && BattleSide_GetCount() > 2) {
-        BtlClash_PortFindPair();
-    }
-#endif
+    if (*state == 0 && (BattleSide_GetCount() <= 2 || BtlClash_PortFindPair())) {
+#else
     if (*state == 0) {
+#endif
         if (BtlClash_BothInClashA()) {
             *state = 1;
         }

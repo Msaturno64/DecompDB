@@ -83,6 +83,8 @@ extern void PortMulti_SetOverride(s32 fighter, s32 opponent);           /* port/
 extern s32 PortMulti_NextEnemyAfter(s32 fighter, s32 skip, s32 prev);   /* the next enemy that is not down, or -1 */
 extern void PortMulti_Engage(s32 victim, s32 attacker);                 /* the two are in an exchange while it lasts */
 extern s32 PortMulti_CanContact(s32 attacker, s32 victim);              /* 0: a rush keeps them apart */
+extern s32 PortMulti_InPair(s32 fighter);                               /* in a rush sequence or a throw */
+extern s32 BattleSide_GetTeam(s32 side);                                /* battle_load.c */
 #endif
 extern EftDetObj *BtlObj_Get(s32 objId);
 extern EftDetNodeMtx *BtlObj_GetNode(EftDetObj *obj, s32 node);
@@ -1279,6 +1281,17 @@ void EftDet_ClashPass(void) {
                 s32 hit = 0;
                 s32 result;
 
+#ifdef PORT
+                /* several fighters on the field: teammates' shots do not meet, nor does anything a fighter in a rush
+                   sequence or a throw has out (that pair is apart from the rest: PortMulti_CanContact) */
+                if (BattleSide_GetCount() > 2 && list->rec[i].objId != list->rec[j].objId &&
+                    (u32)list->rec[i].objId < (u32)BattleSide_GetCount() &&
+                    (u32)list->rec[j].objId < (u32)BattleSide_GetCount() &&
+                    (BattleSide_GetTeam(list->rec[i].objId) == BattleSide_GetTeam(list->rec[j].objId) ||
+                     PortMulti_InPair(list->rec[i].objId) || PortMulti_InPair(list->rec[j].objId))) {
+                    continue;
+                }
+#endif
                 if (list->rec[i].objId != list->rec[j].objId) {
                     if (EftHit_CanHit(&list->rec[j], 2)) {
                         if (list->rec[i].shape.type == 0 && list->rec[j].shape.type == 0) {
@@ -1316,8 +1329,24 @@ void EftDet_ClashPass(void) {
                                     EftHit_SetTaskFlag(i, 8, list->rec[i].shape.hitPos);
                                     EftHit_SetTaskFlag(j, 8, list->rec[j].shape.hitPos);
                                 } else {
+#ifdef PORT
+                                    if (BattleSide_GetCount() > 2 &&
+                                        (u32)list->rec[i].objId < (u32)BattleSide_GetCount() &&
+                                        (u32)list->rec[j].objId < (u32)BattleSide_GetCount()) {
+                                        /* the two whose shots met struggle (the console's 0 and 1: a third one in a
+                                           rush was pulled out of it), each the other's opponent meanwhile */
+                                        PortMulti_Engage(list->rec[i].objId, list->rec[j].objId);
+                                        PortMulti_Engage(list->rec[j].objId, list->rec[i].objId);
+                                        BtlCharApi_SetHeldFlagAA(list->rec[i].objId);
+                                        BtlCharApi_SetHeldFlagAA(list->rec[j].objId);
+                                    } else {
+                                        BtlCharApi_SetHeldFlagAA(0);
+                                        BtlCharApi_SetHeldFlagAA(1);
+                                    }
+#else
                                     BtlCharApi_SetHeldFlagAA(0);
                                     BtlCharApi_SetHeldFlagAA(1);
+#endif
                                     if (!EftStruggle_IsActive()) {
                                         EftHit_SetTaskFlag(i, 0x100, list->rec[i].shape.hitPos);
                                         EftHit_SetTaskFlag(j, 0x100, list->rec[j].shape.hitPos);

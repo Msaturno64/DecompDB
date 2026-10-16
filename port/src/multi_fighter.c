@@ -202,6 +202,15 @@ int PortMulti_CanContact(int attacker, int victim) {
            (!PAIR_ACTION(BtlCharApi_GetAction(BattleSide_GetObjId(victim))) || PortMulti_TargetOf(victim) == attacker);
 }
 
+/* Whether the fighter is in a rush sequence or a throw (PAIR_ACTION): btl_char_flag_clash.c pairs no clash with it
+   (a beam aimed at someone else met the rush that caught its owner: the clash cut the rush short, and the partner
+   object it had asked for was never taken: the change queue, and every load after it, waited for ever). */
+int PortMulti_InPair(int fighter) {
+    extern int BtlCharApi_GetAction(int objId); /* src/battle/btl_capi_b.c */
+
+    return PAIR_ACTION(BtlCharApi_GetAction(BattleSide_GetObjId(fighter)));
+}
+
 /* The opponent of fighter i (BTL_OPP, battle/battle.h). With two fighters the other one, as on the console; with
    more the one it is in an exchange with, else the target, or the first enemy while there is none yet (before the
    first PortMulti_UpdateTargets). */
@@ -308,6 +317,7 @@ void PortMulti_UpdateTargets(void) {
     float p[FIGHTER_MAX][4] __attribute__((aligned(16)));
 
     if (n <= 2) {
+        tech_test(); /* (BT3_TECHTEST with two fighters: the same techniques in a 1v1, for comparison) */
         return;
     }
     sTargetFrame++;
@@ -370,17 +380,18 @@ static void tech_test(void) {
     extern int BtlChange_IsPendingType0(int player), BtlChange_IsPendingType1(int player); /* btl_capi_b.c */
     extern int BtlChange_IsLoadedFor(int player), BtlChange_IsReady(void); /* btl_char_ctl_b.c, btl_capi_b.c */
     static int loadSince, reported, queue = -1;
-    int f, other, a, i, hp, q;
+    int f, other, a, i, hp, q, B;
 
     if (on < 0) {
-        on = getenv("BT3_TECHTEST") != NULL && BattleSide_GetCount() == 3 ? atoi(getenv("BT3_TECHTEST")) : 0;
+        on = getenv("BT3_TECHTEST") != NULL && (BattleSide_GetCount() == 2 || BattleSide_GetCount() == 3) ? atoi(getenv("BT3_TECHTEST")) : 0;
     }
     if (!on) {
         return;
     }
     frame++;
+    B = BattleSide_GetCount() - 1; /* (the other fighter of the test: the extra, or in a 1v1 fighter 1) */
     f = turn;
-    other = f == 0 ? 2 : 0;
+    other = f == 0 ? B : 0;
     for (q = BtlChange_IsReady(), i = 0; i < 3; i++) { /* the change queue (models, partners), each time it moves */
         q = q << 3 | BtlChange_IsPendingType0(i) << 2 | BtlChange_IsPendingType1(i) << 1 | BtlChange_IsLoadedFor(i);
     }
@@ -390,7 +401,7 @@ static void tech_test(void) {
                q >> 1 & 1, q & 1);
         queue = q;
     }
-    for (i = 0; i < 3; i++) { /* the health a technique takes is counted before nobody is let fall below 60% */
+    for (i = 0; i < BattleSide_GetCount(); i++) { /* the health a technique takes is counted before nobody is let fall below 60% */
         hp = BtlCharApi_GetHp(BattleSide_GetObjId(i));
         if (i == other && startAt > 0 && hp < prevHp[i]) {
             dmg += prevHp[i] - hp;
@@ -401,10 +412,10 @@ static void tech_test(void) {
         }
         prevHp[i] = BtlCharApi_GetHp(BattleSide_GetObjId(i));
     }
-    sTarget[0] = 2;
-    sTarget[2] = 0;
+    sTarget[0] = B;
+    sTarget[B] = 0;
     /* stuck: one action (technique, reaction, down) for 30 s, or a model load that does not end */
-    for (i = 0; i < 3; i++) {
+    for (i = 0; i < BattleSide_GetCount(); i++) {
         a = BtlCharApi_GetAction(BattleSide_GetObjId(i));
         if (a != last[i]) {
             last[i] = a;
@@ -432,12 +443,12 @@ static void tech_test(void) {
                    dmg, other);
             startAt = 0;
             used[f]++;
-            turn = used[0] > used[2] ? 2 : 0;
+            turn = used[0] > used[B] ? B : 0;
             wait = frame + 45;
         }
         return;
     }
-    if (used[0] >= (on == 2 ? 8 : TT_ROUNDS) && used[2] >= (on == 2 ? 8 : TT_ROUNDS)) {
+    if (used[0] >= (on == 2 ? 8 : TT_ROUNDS) && used[B] >= (on == 2 ? 8 : TT_ROUNDS)) {
         printf("bt3: techtest: done, %d stuck\n", reported);
         fflush(stdout);
         exit(reported ? 3 : 0);
@@ -457,7 +468,7 @@ static void tech_test(void) {
             } else {
                 printf("bt3: techtest: frame %d fighter %d kind %d: no transformation (slot id %d)\n", frame, f, kind, id);
                 used[f] += 2; /* (and the ultimate that would follow it) */
-                turn = used[0] > used[2] ? 2 : 0;
+                turn = used[0] > used[B] ? B : 0;
                 return;
             }
         } else {
