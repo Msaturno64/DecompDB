@@ -73,6 +73,12 @@ void Heap_Create(void) {
     s32 size = 0x1EFB000 - (u32)D_3BE71C;
     HeapBlock *start;
 
+#ifdef PORT
+    {
+        extern u32 Port_HeapExtra(void); /* port/src/plat_mem.c: the PC's heap is larger than the console's */
+        size += Port_HeapExtra();
+    }
+#endif
     size += Mem_Align4Pad(size);
     start = malloc(size);
     gHeapSize[0] = size;

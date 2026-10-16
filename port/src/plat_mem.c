@@ -3,7 +3,7 @@
  *
  * The game was written for a machine with 32 MB at fixed addresses and it stores pointers in 32-bit fields, so the
  * 32-bit PC build gives it memory at PS2 addresses:
- *   0x003BE730..0x02000000  the game heap. The game takes it with ONE malloc at start-up (Heap_Create,
+ *   0x003BE730..HEAP_END    the game heap (32 MB more than the console's, below). The game takes it with ONE malloc at start-up (Heap_Create,
  *                           0x1EFB000 minus the end of the menu overlay); Port_Malloc returns the address the
  *                           PS2's malloc returns (0x3BE730, read from a save state), so heap pointers have the
  *                           same values as on the console and memory can be compared with an emulator dump.
@@ -20,7 +20,15 @@
 
 #define HEAP_BASE 0x003BE000u  /* page that holds the first address */
 #define HEAP_FIRST 0x003BE730u /* what the PS2's malloc returns for the game heap (gHeapStart in a PCSX2 save state) */
-#define HEAP_END 0x02000000u
+/* 32 MB more than the console's (branch multi-fighter): every fighter on the field beyond the two needs its own
+   model and animation buffers, 3 MB each (include/battle/btl_obj.h). Heap_Create adds Port_HeapExtra() to the
+   console's heap size, so the game heap ends here too. */
+#define HEAP_END 0x04000000u
+#define PS2_RAM_END 0x02000000u
+
+uint32_t Port_HeapExtra(void) {
+    return HEAP_END - PS2_RAM_END;
+}
 
 static uint32_t sHeapNext = HEAP_FIRST, sHeapEnd = HEAP_END;
 
@@ -247,7 +255,7 @@ static void map_heap(void) {
     map(HEAP_BASE, HEAP_END - HEAP_BASE, "the game heap");
 }
 
-#define STACK_BASE 0x02000000u
+#define STACK_BASE HEAP_END /* right above the game heap */
 #define STACK_SIZE 0x01000000u
 extern int main(int argc, char **argv);
 extern void Port_CallOnStack(void (*fn)(void), void *top);
@@ -305,7 +313,7 @@ static void map_heap(void) {
        taken, which stopped the program at start now and then. */
 #include <malloc.h>
 #include <pthread.h>
-#define STACK_BASE 0x02000000u
+#define STACK_BASE HEAP_END /* right above the game heap */
 #define STACK_SIZE 0x01000000u
 extern int __real_main(int argc, char **argv);
 PORT_HOST static int sArgc = 0, sResult = 0; /* (the process's own arguments: an address on its stack, not game state) */

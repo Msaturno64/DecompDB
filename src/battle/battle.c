@@ -159,11 +159,23 @@ s32 Battle_Init(void) {
     Ot_Init();
     BtlScene_Init(0);
     Battle_Restart();
+#ifdef PORT
+    {
+        extern void PortMulti_BattleStart(void); /* port/src/multi_fighter.c: BT3_MFSTAT */
+        PortMulti_BattleStart();
+    }
+#endif
     return 0;
 }
 
 /* Stores the result and destroys every battle subsystem. */
 s32 Battle_Term(void) {
+#ifdef PORT
+    {
+        extern void PortMulti_BattleEnd(void); /* port/src/multi_fighter.c: BT3_MFSTAT */
+        PortMulti_BattleEnd();
+    }
+#endif
     BattleResult_Finish();
     Adx_StopAll();
     BtlChar_FreeAll();
@@ -328,8 +340,14 @@ s32 Battle_DrawSplit(void) {
 void Battle_Loop(void) {
     s32 draw;
     s32 done;
+#ifdef PORT
+    extern void PortMulti_FrameMark(int where); /* port/src/multi_fighter.c: BT3_MFSTAT */
+#endif
 
     do {
+#ifdef PORT
+        PortMulti_FrameMark(0);
+#endif
         if (Battle_GetWork()->flags & BATTLE_FLAG_RESTART) {
             Battle_Restart();
             Battle_GetWork()->flags &= ~BATTLE_FLAG_RESTART;
@@ -350,6 +368,9 @@ void Battle_Loop(void) {
         BtlChars_SampleInput();
         draw = Battle_Update();
         done = BtlGame_Update();
+#ifdef PORT
+        PortMulti_FrameMark(1);
+#endif
         if (Battle_IsSplitScreen() && draw) {
             Battle_DrawSplit();
         } else {
@@ -357,6 +378,9 @@ void Battle_Loop(void) {
         }
         Gfx_EndFrame(2);
         Dma_Flush();
+#ifdef PORT
+        PortMulti_FrameMark(2);
+#endif
     } while (!done);
 }
 

@@ -211,6 +211,11 @@ int __wrap_Progress_Main(int arg) {
             BattleSide_GetMember(0, 0)->variant = getenv("BT3_VARIANT") != NULL;
             printf("bt3: side 0 is character %d, costume %d\n", BattleSide_GetMember(0, 0)->chara, BattleSide_GetMember(0, 0)->costume);
         }
+        /* BT3_TEAMS=<a>v<b>: team sizes, every member on the field at once (multi_fighter.c) */
+        if (getenv("BT3_TEAMS") != NULL) {
+            extern void PortMulti_DemoTeams(const char *teams);
+            PortMulti_DemoTeams(getenv("BT3_TEAMS"));
+        }
     }
     fflush(stdout);
     return 0;
