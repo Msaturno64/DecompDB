@@ -241,6 +241,41 @@ void PortMulti_Trace(unsigned vblank, int battle) {
     fflush(fp);
 }
 
+/* ---------------------------------------------------------------------------------- the setting (F1, Misc) */
+
+/* "Team battle: every member on the field": setting multi_all, off unless set. Read when a battle is set up. */
+extern int Port_Setting(const char *name, int def); /* plat_settings.c */
+extern void Port_SettingSave(const char *name, int value);
+extern void Port_SettingsWrite(void);
+PORT_HOST static int sSetting = -1;
+
+int PortMulti_Setting(void) {
+    if (sSetting < 0) {
+        sSetting = Port_Setting("multi_all", 0) != 0;
+    }
+    return sSetting;
+}
+
+void PortMulti_SettingSet(int on) {
+    sSetting = on != 0;
+    Port_SettingSave("multi_all", sSetting);
+    Port_SettingsWrite();
+}
+
+/* battle_load.c BattleSetup_PortSpread, as a battle is set up: whether every member goes on the field. The test
+   variable decides when it is there (BT3_TEAMS); otherwise the setting, in a versus battle (the game's own team
+   battle among them) played on this machine. Online the two copies would have to agree: the host's rules are to
+   carry it (multi-fighter T1.9); until then an online match is as ever. */
+int PortMulti_WantAll(void) {
+    extern int Battle_GetMode(void); /* src/battle/battle_work.c: BTL_MODE_*, 0 versus */
+    extern int Port_NetActive(void); /* gs/net.c */
+
+    if (getenv("BT3_TEAMS") == NULL) {
+        gPortMultiAll = PortMulti_Setting() && Battle_GetMode() == 0 && !Port_NetActive();
+    }
+    return gPortMultiAll;
+}
+
 /* ------------------------------------------------------------------------------------------- BT3_TEAMS (tests) */
 
 typedef struct { int word[25]; } DemoMember; /* BattleMember, 0x64 bytes (include/battle/battle.h); word 0 = chara */

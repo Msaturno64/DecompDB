@@ -1917,7 +1917,7 @@ s32 BattleSide_GetTeam(s32 side) {
    with that one member. The side keeps its lead alone, as member 0, so it never switches members. Without it, the
    two sides are the only records, as on the console. */
 void BattleSetup_PortSpread(void) {
-    extern int gPortMultiAll;
+    extern int PortMulti_WantAll(void); /* port/src/multi_fighter.c: the setting, or the test's BT3_TEAMS */
     BattleSide *side;
     BattleSide *extra;
     BattleMember lead;
@@ -1925,7 +1925,7 @@ void BattleSetup_PortSpread(void) {
     s32 i;
     s32 n = 2;
 
-    if (gPortMultiAll) {
+    if (PortMulti_WantAll()) {
         for (s = 0; s < 2; s++) {
             side = Side(s);
             if (side->lead != 0) {

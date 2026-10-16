@@ -69,6 +69,8 @@ int Port_ClashSquare(void);                    // gs_input.c: Square counts as a
 void Port_ClashSquareSet(int on);
 int Port_ClashSquareX(void);                   // what a press is worth, in quarters of a point (4, 6, 7, 8)
 void Port_ClashSquareXSet(int quarters);
+int PortMulti_Setting(void);                   // multi_fighter.c: team battle, every member on the field
+void PortMulti_SettingSet(int on);
 extern int gsInterp;                           // gs_draw.c: in-between pictures on (1) / off (0); -1 before the first frame
 void Port_SettingsWrite(void);
 int Port_LobbyStart(int host, const char *address, int port); // gs/net.c
@@ -1346,6 +1348,17 @@ static int update_latest(void) {
 }
 
 static void misc_tab(void) {
+    {
+        bool all = PortMulti_Setting() != 0;
+        if (ImGui::Checkbox("Team battle: every member on the field (experimental)", &all)) {
+            PortMulti_SettingSet(all);
+        }
+        ImGui::SetItemTooltip("In a versus team battle, every member of both teams fights at once instead of one after\n"
+                              "the other: choose the teams in the game's own team select (for example 2 against 1).\n"
+                              "You play your team's lead; the others are computer fighters. A fallen fighter stays\n"
+                              "where it fell; a team is out when all of its fighters are. Not in online matches yet.\n"
+                              "Applies from the next battle.");
+    }
     {
         bool chk = sUpdCheck != 0;
         if (ImGui::Checkbox("Check for updates", &chk)) {
