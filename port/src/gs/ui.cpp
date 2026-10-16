@@ -27,6 +27,7 @@ extern "C" {
 extern volatile int gPortNetMenuRequest;
 void Port_NetOptions(int rollback, int delay); // gs/net.c
 void Port_NetRulesSet(int type, int dp, int time); // gs/net.c: the host's battle type, DP limit row, time limit
+void Port_NetMultiRules(void);                     // gs/net.c: and the host's team battle settings (Misc)
 void Port_NetSpeedSet(int percent);                // ... and the match's speed, 100..200 (set before the rules)
 int Port_NetSpeedStandard(void);                   // what a quick match runs at
 void Port_NetNameSet(const char *name);         // gs/net.c: this player's name for the match
@@ -72,7 +73,7 @@ int Port_ClashSquareX(void);                   // what a press is worth, in quar
 void Port_ClashSquareXSet(int quarters);
 int PortMulti_Setting(void);                   // multi_fighter.c: team battle, every member on the field
 void PortMulti_SettingSet(int on);
-int PortMulti_Handicap(int team);              // multi_fighter.c: a team's starting health in such a battle, %
+int PortMulti_HandicapSetting(int team);       // multi_fighter.c: a team's starting health in such a battle, %
 void PortMulti_HandicapSet(int team, int percent);
 extern int gsInterp;                           // gs_draw.c: in-between pictures on (1) / off (0); -1 before the first frame
 void Port_SettingsWrite(void);
@@ -977,6 +978,7 @@ static void build_net(void) {
                             Port_NetSpeedSet(speed);
                             Port_SettingSave("net_speed_host", speed);
                             Port_NetRulesSet(battle == 0 ? 0 : battle == 1 ? 1 : 2, battle >= 2 ? battle - 2 : 0, timeLimit);
+                            Port_NetMultiRules(); // (and the team battle's: every member on the field, starting health)
                             Port_SettingSave("net_battle", battle);
                             Port_SettingSave("net_time", timeLimit);
                         }
@@ -1381,11 +1383,12 @@ static void misc_tab(void) {
         ImGui::SetItemTooltip("In a versus team battle, every member of both teams fights at once instead of one after\n"
                               "the other: choose the teams in the game's own team select (for example 2 against 1).\n"
                               "You play your team's lead; the others are computer fighters. A fallen fighter stays\n"
-                              "where it fell; a team is out when all of its fighters are. Not in online matches yet.\n"
+                              "where it fell; a team is out when all of its fighters are. Online, the host's settings\n"
+                              "count for both players (a match you host takes these).\n"
                               "Applies from the next battle.");
         if (all) {
             for (int team = 0; team < 2; team++) {
-                int pct = PortMulti_Handicap(team);
+                int pct = PortMulti_HandicapSetting(team);
                 char label[48];
                 snprintf(label, sizeof(label), team == 0 ? "Starting health, team 1##mhp0" : "Starting health, team 2##mhp1");
                 ImGui::SetNextItemWidth(220.0f);

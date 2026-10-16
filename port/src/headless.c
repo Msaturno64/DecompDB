@@ -266,7 +266,9 @@ int Port_NetMenuListed(void) {
    state and the battle clock. (Not the whole state: each copy shows its own view, and two systems' programs keep
    other addresses in the game's memory.) */
 unsigned long long Port_NetDigest(void) {
-    struct { unsigned arrived; int mode, first, battle, seq, clock, hp[2]; unsigned pos[2][3]; } d;
+    /* (every fighter on the field: with more than two, the extras' too, multi-fighter; NET_VERSION 5) */
+    struct { unsigned arrived; int mode, first, battle, seq, clock, hp[10]; unsigned pos[10][3]; } d;
+    extern int BattleSide_GetCount(void); /* src/battle/battle_load.c */
     float q[4] __attribute__((aligned(16)));
     unsigned long long h = 0xCBF29CE484222325ull;
     const unsigned char *b = (const unsigned char *)&d;
@@ -283,7 +285,7 @@ unsigned long long Port_NetDigest(void) {
         d.battle = 1;
         d.seq = gBtlSeq->state;
         d.clock = BtlSeq_GetClock()[0];
-        for (k = 0; k < 2; k++) {
+        for (k = 0; k < 10 && (k < 2 || k < BattleSide_GetCount()); k++) {
             d.hp[k] = BtlCharApi_GetHp(k);
             BtlCharApi_GetPos(k, q);
             memcpy(d.pos[k], q, 12);
@@ -308,7 +310,10 @@ void Port_Trace(unsigned vblanks) {
            (each has its own view, its own picture shape); these have to be the same on both. */
         extern void Port_StateLog(unsigned vblank, const void *fight, unsigned fightSize);
         extern unsigned long long gPortRandNext;
-        struct { int hp[2]; unsigned pos[2][3]; int clock; unsigned long long rnd; } f;
+        /* (with more than two fighters the extras' health and position follow, in the checksum only: a 1v1's values
+           are as before) */
+        struct { int hp[2]; unsigned pos[2][3]; int clock; unsigned long long rnd; int xhp[8]; unsigned xpos[8][3]; } f;
+        extern int BattleSide_GetCount(void); /* src/battle/battle_load.c */
         int battle = (sBattles != 0 || sFromMenu) && gBtlSeq != NULL && gBtlSeq->state >= 2;
 
         if (battle && getenv("BT3_HASH") != NULL) {
@@ -322,7 +327,12 @@ void Port_Trace(unsigned vblanks) {
             }
             f.clock = BtlSeq_GetClock()[0];
             f.rnd = gPortRandNext;
-            Port_StateLog(vblanks, &f, sizeof(f));
+            for (k = 2; k < 10 && k < BattleSide_GetCount(); k++) {
+                f.xhp[k - 2] = BtlCharApi_GetHp(k);
+                BtlCharApi_GetPos(k, q);
+                memcpy(f.xpos[k - 2], q, 12);
+            }
+            Port_StateLog(vblanks, &f, BattleSide_GetCount() > 2 ? sizeof(f) : (unsigned)__builtin_offsetof(__typeof__(f), xhp));
         } else {
             Port_StateLog(vblanks, NULL, 0);
         }

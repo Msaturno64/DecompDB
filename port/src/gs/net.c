@@ -52,11 +52,13 @@ enum { T_HELLO = 1, T_HELLO_ACK = 2, T_INPUT = 3, T_BYE = 4, T_PING = 5, T_PONG 
 /* The version of what goes over the line. The greeting and its answer carry it, and two copies that differ do not
    start a match (the input packets changed with version 2: times for the ping were added; a copy that read them
    the old way took them for input). 1 was releases 0.1.8 and 0.1.9, which said no version. */
-enum { NET_VERSION = 4, IN_HEAD = 44 }; /* 3 (0.1.15): the host's battle rules travel with its choices.
+enum { NET_VERSION = 5, IN_HEAD = 44 }; /* 3 (0.1.15): the host's battle rules travel with its choices.
    4 (0.1.34): a session's start-up no longer follows the player's "Skip logos" / "Skip intro video" (0.1.32 and
    0.1.33 with either on computed another start-up than the other side and the two never agreed again: such a copy
    must not be let into a match); the input packets carry the sender's check value (sync_*, below), 12 bytes more
-   in their head; the goodbye can say why. */
+   in their head; the goodbye can say why.
+   5 (multi-fighter): the rules word carries the host's "every member on the field" and each team's starting health
+   (RULE_MULTI, below): a copy that did not read them would set up another battle than the host's. */
 static int sVersionBad; /* the other side answered with another version */
 static const uint32_t kVersion = NET_VERSION;
 #include "net_match.h"
@@ -228,6 +230,36 @@ static int sWantSpeed = NET_SPEED_STANDARD;
 
 static uint32_t speed_bits(int percent) {
     return (uint32_t)percent << RULE_SPEED_SHIFT | (percent == 120 ? RULE_FAST : 0);
+}
+
+/* Several fighters on the field (multi-fighter T1.9): the host's "Team battle: every member on the field" and each
+   team's starting health, in the rules word too, so that both copies set up the same battle. Only a hosted room has
+   them (Port_NetMultiRules, the Host tab); a quick match's rules leave them out (standard battles).
+     bit 13       every member on the field
+     bits 24..27  team 1's starting health: (percent / 25 - 1) ^ 3, so that 0 is 100 % (25..400 %, steps of 25)
+     bits 28..31  team 2's */
+#define RULE_MULTI 0x2000u
+
+static uint32_t health_bits(int percent) {
+    return ((uint32_t)(percent / 25 - 1) ^ 3u) & 15u;
+}
+
+void Port_NetMultiRules(void) {
+    extern int PortMulti_Setting(void);                /* port/src/multi_fighter.c: the player's own settings */
+    extern int PortMulti_HandicapSetting(int team);
+
+    sRules = (sRules & ~(RULE_MULTI | 0xFF000000u)) | (PortMulti_Setting() ? RULE_MULTI : 0) |
+             health_bits(PortMulti_HandicapSetting(0)) << 24 | health_bits(PortMulti_HandicapSetting(1)) << 28;
+}
+
+int Port_NetMultiAll(void) {
+    return (sRules & RULE_MULTI) != 0;
+}
+
+int Port_NetHandicap(int team) {
+    int v = (int)(sRules >> (24 + 4 * (team != 0)) & 15u);
+
+    return ((v ^ 3) + 1) * 25;
 }
 
 void Port_NetRulesSet(int type, int dp, int time) {

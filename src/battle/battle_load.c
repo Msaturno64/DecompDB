@@ -1965,6 +1965,11 @@ void BattleSetup_PortSpread(void) {
             }
             side->memberCount = 1;
         }
+        {
+            extern void PortMulti_NoteSpread(s32 fighters); /* port/src/multi_fighter.c: says so in the log */
+
+            PortMulti_NoteSpread(n);
+        }
     }
     sPortSideCount = n;
 }

@@ -334,6 +334,16 @@ int PortMulti_NextEnemyAfter(int fighter, int skip, int prev) {
 static void tech_test(void); /* (BT3_TECHTEST, below) */
 
 void PortMulti_UpdateTargets(void) {
+    { /* BT3_HEAPWHO_AT=<n> (tests, with BT3_HEAPWHO and BT3_HEAPCHECK): heap_who at the n-th battle frame, for a
+         run that does not end its battle (an online test) */
+        static int whoAt = -2, whoFrames;
+        if (whoAt == -2) {
+            whoAt = getenv("BT3_HEAPWHO_AT") != NULL ? atoi(getenv("BT3_HEAPWHO_AT")) : -1;
+        }
+        if (whoAt >= 0 && ++whoFrames == whoAt) {
+            heap_who();
+        }
+    }
     extern int BattleSide_GetControl(int side); /* src/battle/battle_load.c: 0 a pad, 2 the computer */
     extern int BtlCharApi_GetHp(int objId);
     extern int BtlCharApi_GetAction(int objId); /* src/battle/btl_capi_b.c */
@@ -399,7 +409,12 @@ int PortMulti_HudFighter(int side) {
     extern int BattleSide_GetControl(int side); /* src/battle/battle_load.c: 0 a pad, 2 the computer */
     int n = BattleSide_GetCount(), h, t;
 
-    if (!sHudPass || n <= 2 || side < 0 || side > 1) {
+    extern int Port_NetActive(void); /* gs/net.c */
+
+    /* (online the panels are the console's on both copies: the HUD is state both copies hold alike, and each copy's
+       player is someone else; a panel that showed this copy's target made the two differ: the face drawn in it moved
+       the effects' textures in video memory, seen in a 2v1 online test) */
+    if (!sHudPass || n <= 2 || side < 0 || side > 1 || Port_NetActive()) {
         return side;
     }
     if (BattleSide_GetControl(0) == 0 && BattleSide_GetControl(1) != 0) {
@@ -425,12 +440,28 @@ int PortMulti_HudFighter(int side) {
    frame for the render thread (ui.cpp draws them over the picture: drawing only, the game never reads any of it).
    PORT_HOST; a re-simulated frame (rollback) is not drawn and does not come here. */
 PORT_HOST static PortMultiBar sBarBuild[2 * FIGHTER_MAX], sBarShown[2 * FIGHTER_MAX];
+
+/* v by the view's matrix (rows as Vu0Screen_StoreMtx leaves them: the point is x * row0 + y * row1 + z * row2 + w *
+   row3, then divided by w), as Mtx_ProjectInt computes it, but in this file's own arithmetic: Mtx_ProjectInt works in
+   the vector unit's registers, which are game state, and the draw is not run again in a rollback, so calling it
+   here made two online copies differ (seen: a 2v1 online test differed from a blank that moved with the timing). */
+static void bar_project(const float *m, const float *v, int *s) {
+    float p[4], q;
+    int k;
+
+    for (k = 0; k < 4; k++) {
+        p[k] = m[k] * v[0] + m[4 + k] * v[1] + m[8 + k] * v[2] + m[12 + k] * v[3];
+    }
+    q = p[3] != 0.0f ? 1.0f / p[3] : 0.0f;
+    s[0] = (int)(p[0] * q);
+    s[1] = (int)(p[1] * q);
+    s[2] = p[3] > 0.0f ? (int)(p[2] * q) : -1;
+}
 PORT_HOST static int sBarBuilt, sBarCount;
 PORT_HOST static unsigned sBarSeq;
 
 void PortMulti_ProjectBars(int view, int last) {
     extern void Vu0Screen_StoreMtx(float *dst);                        /* the view's world-to-screen matrix */
-    extern int Mtx_ProjectInt(int *out, const float *m, const float *v); /* to integer GS screen coordinates */
     extern void BtlCharApi_GetNodePos(int objId, int node, float *out); /* src/battle/btl_capi_a.c */
     extern int BtlCharApi_GetHp(int objId), BtlCharApi_GetHpMax(int objId);
     extern char GAME_PTR gBtlCamView;                                  /* src/battle/btl_cam.c: the view drawn now */
@@ -467,11 +498,11 @@ void PortMulti_ProjectBars(int view, int last) {
 
             BtlCharApi_GetPos(BattleSide_GetObjId(i), v); /* the feet: how tall the fighter is on this picture */
             v[3] = 1.0f;
-            Mtx_ProjectInt(s, m, v);
+            bar_project(m, v, s);
             feet = s[1] - 0x720;
             BtlCharApi_GetNodePos(BattleSide_GetObjId(i), 0x11, v); /* node 0x11: the neck */
             v[3] = 1.0f;
-            Mtx_ProjectInt(s, m, v);
+            bar_project(m, v, s);
             x = s[0] - 0x700; /* (the GS offset of a 512 x 448 frame, as BtlObj_UpdateVisibility) */
             y = s[1] - 0x720;
             if (s[2] < 0 || x < x0 || x > x1 || y < y0 || y > y1) {
@@ -739,7 +770,7 @@ void PortMulti_SettingSet(int on) {
    uneven teams (multi-fighter T1.9: no automatic handicap, it is a setting). Read when a battle is set up. */
 PORT_HOST static int sHandicap[2] = {-1, -1};
 
-int PortMulti_Handicap(int team) {
+int PortMulti_HandicapSetting(int team) {
     static const char *const kName[2] = {"multi_hp0", "multi_hp1"};
 
     if (team < 0 || team > 1) {
@@ -762,6 +793,28 @@ void PortMulti_HandicapSet(int team, int percent) {
     }
 }
 
+/* battle_load.c, once a battle is set up with every member on the field: a line in the log (a player's report shows
+   which battle it was). PORT_HOST: only says. A battle set up again in a rollback is not one more. */
+int PortMulti_Handicap(int team);
+
+void PortMulti_NoteSpread(int fighters) {
+    extern int gPortResim; /* gs/state.c */
+
+    if (!gPortResim) {
+        printf("bt3: team battle: %d fighters on the field (team 1: %d%%, team 2: %d%% starting health)\n", fighters,
+               PortMulti_Handicap(0), PortMulti_Handicap(1));
+        fflush(stdout);
+    }
+}
+
+/* The starting health a battle uses (battle_load.c): online the host's (its rules word, gs/net.c), else the
+   player's own setting. */
+int PortMulti_Handicap(int team) {
+    extern int Port_NetActive(void), Port_NetHandicap(int team); /* gs/net.c */
+
+    return Port_NetActive() ? Port_NetHandicap(team) : PortMulti_HandicapSetting(team);
+}
+
 /* battle_load.c BattleSetup_PortSpread, as a battle is set up: whether every member goes on the field. The test
    variable decides when it is there (BT3_TEAMS); otherwise the setting, in a versus battle (the game's own team
    battle among them) played on this machine. Online the two copies would have to agree: the host's rules are to
@@ -771,7 +824,9 @@ int PortMulti_WantAll(void) {
     extern int Port_NetActive(void); /* gs/net.c */
 
     if (getenv("BT3_TEAMS") == NULL) {
-        gPortMultiAll = PortMulti_Setting() && Battle_GetMode() == 0 && !Port_NetActive();
+        extern int Port_NetMultiAll(void); /* gs/net.c: the host's, from its rules word (both copies the same) */
+
+        gPortMultiAll = Battle_GetMode() == 0 && (Port_NetActive() ? Port_NetMultiAll() : PortMulti_Setting());
     }
     return gPortMultiAll;
 }
