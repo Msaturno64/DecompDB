@@ -269,6 +269,13 @@ s32 Battle_Draw(void) {
     Gfx_MarkPass(4);
     Gfx_AddDefaultEnv();
     BtlScene_Draw(1);
+#ifdef PORT
+    {
+        extern void PortMulti_ProjectBars(s32 view, s32 last); /* port/src/multi_fighter.c: bars over the extras */
+
+        PortMulti_ProjectBars(0, 1);
+    }
+#endif
     Ot_Draw();
     Dbg_ProfColor(prof, 0x804040FF);
     Dbg_ProfMark(prof);
@@ -324,6 +331,13 @@ s32 Battle_DrawSplit(void) {
         BtlCam_SelectView(i);
         BtlCam_ApplyView(1);
         BtlScene_Draw(i == 0);
+#ifdef PORT
+        {
+            extern void PortMulti_ProjectBars(s32 view, s32 last); /* port/src/multi_fighter.c: bars over the extras */
+
+            PortMulti_ProjectBars(i, i == 1);
+        }
+#endif
         Ot_Draw();
     }
     Dbg_ProfColor(gBattleProf, 0x804040FF);

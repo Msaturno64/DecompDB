@@ -15,6 +15,7 @@
 #include "../port_release.h"
 #include "menu_text.h"
 #include "../quit_dialog.h"
+#include "../multi_fighter.h"
 #include "net_chat.h"
 
 static int sMeter = -1; // the meter (frame rate, connection): -1 not read yet
@@ -356,6 +357,28 @@ static void font_picker(const char *label, PanelFont &pf, const char *tip) {
         ImGui::EndCombo();
     }
     ImGui::SetItemTooltip("%s", tip);
+}
+
+// Several fighters on the field: a small health bar over each fighter that no HUD panel shows (multi_fighter.c
+// projects the heads in the game's draw; this only draws, over the picture). The fill goes green, yellow, red with
+// the health; the frame is blue for the HUD's own side, red for the other.
+static void multi_bars_draw(void) {
+    PortMultiBar b[20];
+    int n = PortMulti_ReadBars(b, 20);
+    ImDrawList *dl = ImGui::GetBackgroundDrawList();
+    float w = (float)gUiPresentW * 0.07f, h = (float)gUiPresentH * 0.011f + 2.0f, lift = 0.0f; // (over the head already)
+
+    for (int i = 0; i < n; i++) {
+        float x = (float)gUiPresentX + b[i].x * (float)gUiPresentW, y = (float)gUiPresentY + b[i].y * (float)gUiPresentH - lift;
+        float k = b[i].hpMax > 0 ? (float)b[i].hp / (float)b[i].hpMax : 0.0f;
+        k = k < 0.0f ? 0.0f : k > 1.0f ? 1.0f : k;
+        ImU32 fill = k > 0.5f ? IM_COL32(60, 220, 70, 255) : k > 0.25f ? IM_COL32(240, 200, 40, 255) : IM_COL32(230, 50, 40, 255);
+        ImU32 edge = b[i].ally ? IM_COL32(70, 150, 255, 255) : IM_COL32(255, 70, 60, 255);
+        ImVec2 a(x - w * 0.5f, y - h * 0.5f), z(x + w * 0.5f, y + h * 0.5f);
+        dl->AddRectFilled(ImVec2(a.x - 1.0f, a.y - 1.0f), ImVec2(z.x + 1.0f, z.y + 1.0f), IM_COL32(0, 0, 0, 200));
+        dl->AddRectFilled(a, ImVec2(a.x + (z.x - a.x) * k, z.y), fill);
+        dl->AddRect(ImVec2(a.x - 1.0f, a.y - 1.0f), ImVec2(z.x + 1.0f, z.y + 1.0f), edge, 0.0f, 0, 1.5f);
+    }
 }
 
 static void bars_draw(void) {
@@ -2325,6 +2348,7 @@ static bool frame_build(void) {
     if (bars) {
         bars_draw();
     }
+    multi_bars_draw();
     if (sOpen) {
         if (sNet) {
             build_net();

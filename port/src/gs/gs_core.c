@@ -26,6 +26,7 @@
 #include <time.h>
 #include "gs_internal.h"
 #include "../port_addr.h"
+#include "../multi_fighter.h"
 
 #define SURF_W 1024
 #define SURF_H 1024
@@ -1061,6 +1062,15 @@ static void screenshot(void) {
                 }
             }
             fclose(fp);
+            if (getenv("BT3_BARLOG") != NULL) { /* (tests: the multi-fighter bars of this picture, to lay over it) */
+                PortMultiBar bars[20];
+                int nb = PortMulti_ReadBars(bars, 20);
+
+                for (i = 0; i < nb; i++) {
+                    printf("bt3: bar: shot %u x %.4f y %.4f hp %d/%d ally %d\n", sFrame, bars[i].x, bars[i].y, bars[i].hp,
+                           bars[i].hpMax, bars[i].ally);
+                }
+            }
         }
     }
     for (i = 0; i < sTargetCount; i++) {

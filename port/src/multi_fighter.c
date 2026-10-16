@@ -17,6 +17,7 @@
 #include <string.h>
 #include <time.h>
 #include "port_host.h"
+#include "multi_fighter.h"
 
 #if (defined(__x86_64__) || defined(__aarch64__)) && defined(__clang__) /* (the 64-bit builds: game pointers are 4 bytes) */
 #undef __ptr32 /* the Windows headers of mingw define these two away */
@@ -413,6 +414,113 @@ int PortMulti_HudFighter(int side) {
     }
     t = sTarget[h];
     return t >= 0 && t < n && BattleSide_GetTeam(t) != BattleSide_GetTeam(h) ? t : side;
+}
+
+/* ------------------------------------------------------------------------------- health bars over the fighters */
+
+/* A small health bar over every fighter that no HUD panel shows (the extras, the teammates), as the Tag Team Mod's
+   guest_healthbars: Battle_Draw / Battle_DrawSplit call PortMulti_ProjectBars with each view's camera applied, just
+   before the view's Ot_Draw, and the head (node 0x11) is projected with that camera (Vu0Screen_StoreMtx +
+   Mtx_ProjectInt, as BtlObj's visibility test); kept when it falls inside the view's scissor. Published once per
+   frame for the render thread (ui.cpp draws them over the picture: drawing only, the game never reads any of it).
+   PORT_HOST; a re-simulated frame (rollback) is not drawn and does not come here. */
+PORT_HOST static PortMultiBar sBarBuild[2 * FIGHTER_MAX], sBarShown[2 * FIGHTER_MAX];
+PORT_HOST static int sBarBuilt, sBarCount;
+PORT_HOST static unsigned sBarSeq;
+
+void PortMulti_ProjectBars(int view, int last) {
+    extern void Vu0Screen_StoreMtx(float *dst);                        /* the view's world-to-screen matrix */
+    extern int Mtx_ProjectInt(int *out, const float *m, const float *v); /* to integer GS screen coordinates */
+    extern void BtlCharApi_GetNodePos(int objId, int node, float *out); /* src/battle/btl_capi_a.c */
+    extern int BtlCharApi_GetHp(int objId), BtlCharApi_GetHpMax(int objId);
+    extern char GAME_PTR gBtlCamView;                                  /* src/battle/btl_cam.c: the view drawn now */
+    float m[16] __attribute__((aligned(16))), v[4] __attribute__((aligned(16)));
+    int s[4] __attribute__((aligned(16)));
+    int n = BattleSide_GetCount(), i, x, y, x0, x1, y0, y1, me, them;
+
+    extern int gPortResim;          /* gs/state.c: blanks being run again (not drawn) */
+    extern char GAME_PTR gHud;      /* src/battle/hud_a.c: flags at + 0x30, 1 = the gauges are shown */
+
+    if (gPortResim) {
+        return;
+    }
+    if (view == 0) {
+        sBarBuilt = 0;
+    }
+    if (n > 2 && gBtlCamView != NULL && gHud != NULL && (*(unsigned GAME_PTR)(gHud + 0x30) & 1)) {
+        x0 = *(int GAME_PTR)(gBtlCamView + 0x200); /* BtlCamView.scissorX0 .. scissorY1 (battle/btl_cam.h) */
+        x1 = *(int GAME_PTR)(gBtlCamView + 0x204);
+        y0 = *(int GAME_PTR)(gBtlCamView + 0x208);
+        y1 = *(int GAME_PTR)(gBtlCamView + 0x20C);
+        sHudPass = 1; /* (whom the two panels show: those need no bar) */
+        me = PortMulti_HudFighter(0);
+        them = PortMulti_HudFighter(1);
+        sHudPass = 0;
+        Vu0Screen_StoreMtx(m);
+        for (i = 0; i < n && sBarBuilt < 2 * FIGHTER_MAX; i++) {
+            int hp = BtlCharApi_GetHp(BattleSide_GetObjId(i));
+
+            if (i == me || i == them || hp <= 0) {
+                continue;
+            }
+            int feet;
+
+            BtlCharApi_GetPos(BattleSide_GetObjId(i), v); /* the feet: how tall the fighter is on this picture */
+            v[3] = 1.0f;
+            Mtx_ProjectInt(s, m, v);
+            feet = s[1] - 0x720;
+            BtlCharApi_GetNodePos(BattleSide_GetObjId(i), 0x11, v); /* node 0x11: the neck */
+            v[3] = 1.0f;
+            Mtx_ProjectInt(s, m, v);
+            x = s[0] - 0x700; /* (the GS offset of a 512 x 448 frame, as BtlObj_UpdateVisibility) */
+            y = s[1] - 0x720;
+            if (s[2] < 0 || x < x0 || x > x1 || y < y0 || y > y1) {
+                continue; /* behind the camera, or outside this view */
+            }
+            y -= (feet - y) * 7 / 10; /* above the head: the head is about 0.6 of the neck-to-feet height over it */
+            sBarBuild[sBarBuilt].x = x / 512.0f;
+            sBarBuild[sBarBuilt].y = y / 448.0f;
+            sBarBuild[sBarBuilt].hp = hp;
+            sBarBuild[sBarBuilt].hpMax = BtlCharApi_GetHpMax(BattleSide_GetObjId(i));
+            sBarBuild[sBarBuilt].ally = BattleSide_GetTeam(i) == BattleSide_GetTeam(me);
+            sBarBuilt++;
+        }
+    }
+    if (last && getenv("BT3_BARLOG") != NULL) { /* (tests: the bars, to lay over a BT3_SHOT picture) */
+        static unsigned frames;
+
+        frames++;
+        for (i = 0; i < sBarBuilt; i++) {
+            printf("bt3: bar: draw %u x %.4f y %.4f hp %d/%d ally %d\n", frames, sBarBuild[i].x, sBarBuild[i].y,
+                   sBarBuild[i].hp, sBarBuild[i].hpMax, sBarBuild[i].ally);
+        }
+    }
+    if (last) {
+        __atomic_add_fetch(&sBarSeq, 1, __ATOMIC_ACQ_REL);
+        memcpy(sBarShown, sBarBuild, sizeof(sBarShown));
+        sBarCount = sBarBuilt;
+        __atomic_add_fetch(&sBarSeq, 1, __ATOMIC_ACQ_REL);
+    }
+}
+
+/* The render thread's copy of the last frame's bars (ui.cpp); the count. */
+int PortMulti_ReadBars(PortMultiBar *out, int max) {
+    unsigned a, b;
+    int tries, c;
+
+    for (tries = 0; tries < 64; tries++) {
+        a = __atomic_load_n(&sBarSeq, __ATOMIC_ACQUIRE);
+        if (a & 1) {
+            continue;
+        }
+        c = sBarCount < max ? sBarCount : max;
+        memcpy(out, sBarShown, c * sizeof(*out));
+        b = __atomic_load_n(&sBarSeq, __ATOMIC_ACQUIRE);
+        if (a == b) {
+            return c;
+        }
+    }
+    return 0;
 }
 
 /* ---------------------------------------------------------------------------------------- BT3_TECHTEST (tests) */
