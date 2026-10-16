@@ -441,7 +441,11 @@ BtlObj *BtlObj_Get(s32 id) {
 u8 *BtlObj_GetCharaWork(u32 id) {
     BtlObjTable *tbl = BtlObj_GetTable();
 
+#ifdef PORT
+    if (id < BTL_RES_FIXED_MAX) { /* (the console's test is id < 3 with two buffers: a third object overran) */
+#else
     if (id < 3) {
+#endif
         return tbl->charaWork[id];
     }
     return NULL;
@@ -1172,17 +1176,33 @@ void BtlRes_CommitReload(void) {
 }
 
 /* Clears the slots; with prealloc, allocates the buffers of the two fixed slots and the spare model buffer. */
+#ifdef PORT
+extern s32 BattleSide_GetCount(void); /* battle_load.c: the battle's fighters */
+/* (the fixed slots are the fighters': one per fighter the field can hold) */
+typedef char BtlResFixedIsFighterMax[BTL_RES_FIXED_MAX == BTL_FIGHTER_MAX ? 1 : -1];
+#endif
+
 void BtlRes_Init(s32 prealloc) {
     BtlResWork *res = BtlRes_GetWork();
     s32 number = 0;
+#ifdef PORT
+    s32 fighters;
+#endif
     BtlResSlot *slot;
     BtlResFile *spare;
     s32 i;
 
     memset(res, 0, sizeof(BtlResWork));
     res->prealloc = prealloc;
+#ifdef PORT
+    fighters = BattleSide_GetCount(); /* buffers for the battle's fighters only: two of them, as ever, in a 1v1 */
+#endif
     if (prealloc != 0) {
+#ifdef PORT
+        for (i = 0; i < fighters + 1; i++) {
+#else
         for (i = 0; i < 3; i++) {
+#endif
             res->spare[i].buf = Heap_Alloc(BTL_RES_MODEL_SIZE, 0x40, 0, HEAP_ANY);
             res->spare[i].size = 0;
             res->spare[i].id = -1;
@@ -1192,6 +1212,12 @@ void BtlRes_Init(s32 prealloc) {
         for (i = 0; i < BTL_RES_FIXED_MAX; i++) {
             slot = &res->fixed[i];
             spare = &res->spare[i];
+#ifdef PORT
+            if (i >= fighters) { /* a slot for a fighter this battle does not have: numbered, no buffers */
+                slot->number = number++;
+                continue;
+            }
+#endif
             slot->file[1].buf = Heap_Alloc(BTL_RES_ANIM0_SIZE, 0x40, 0, HEAP_ANY);
             slot->file[1].size = 0;
             slot->file[1].id = -1;
@@ -1203,7 +1229,11 @@ void BtlRes_Init(s32 prealloc) {
             BtlRes_CopyFile(&slot->file[0], spare);
             slot->number = number++;
         }
+#ifdef PORT
+        res->next = &res->spare[fighters];
+#else
         res->next = &res->spare[2];
+#endif
     }
     for (i = 0; i < BTL_RES_SLOT_MAX; i++) {
         slot = &res->slots[i];
@@ -1231,7 +1261,7 @@ void BtlRes_Term(void) {
         }
         slot++;
     }
-    for (i = 0; i < 3; i++) {
+    for (i = 0; i < BTL_RES_FIXED_MAX + 1; i++) { /* (3 on the console; unused spares are NULL) */
         if (res->spare[i].orig != NULL) {
             Heap_Free(res->spare[i].orig);
         }

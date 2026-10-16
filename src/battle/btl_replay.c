@@ -28,6 +28,11 @@ extern s32 gBtlReplayHudMode;
 void BtlReplay_Rewind(BtlReplayChr *chr) {
     BtlReplayTrack *trk = &BattleReplay_GetData()->track[chr->player];
 
+#ifdef PORT
+    if (chr->player >= 2) { /* a replay has two tracks: a fighter beyond the two (multi-fighter) is not in it */
+        return;
+    }
+#endif
     trk->pos = 0;
     if (!BattleReplay_IsActive()) {
         trk->count = 0;
@@ -39,6 +44,11 @@ void BtlReplay_Record(BtlReplayChr *chr, u32 buttons, u32 commands, u8 *stick) {
     BtlReplayTracks *data = BattleReplay_GetData();
     BtlReplayTrack *trk = &data->track[chr->player];
 
+#ifdef PORT
+    if (chr->player >= 2) { /* a replay has two tracks: a fighter beyond the two (multi-fighter) is not in it */
+        return;
+    }
+#endif
     if (trk->count >= BTL_REPLAY_FRAMES) {
         data->flags |= BTL_REPLAY_END;
         return;
@@ -54,6 +64,11 @@ void BtlReplay_Play(BtlReplayChr *chr, u32 *buttons, u8 *stick) {
     BtlReplayTracks *data = BattleReplay_GetData();
     BtlReplayTrack *trk = &data->track[chr->player];
 
+#ifdef PORT
+    if (chr->player >= 2) { /* a replay has two tracks: a fighter beyond the two (multi-fighter) is not in it */
+        return;
+    }
+#endif
     if (trk->pos >= trk->count) {
         data->flags |= BTL_REPLAY_END;
         *buttons = 0;

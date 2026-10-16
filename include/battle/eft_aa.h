@@ -193,13 +193,18 @@ typedef struct EftCharSlot {
     /* 0x4 */ s32 on;
 } EftCharSlot;
 
-/* gEftCharSlot (0x50 bytes): one slot per kind and fighter. */
+#ifdef PORT
+#define EFT_CHAR_SLOT_MAX 10 /* BTL_FIGHTER_MAX (battle/battle.h): one per fighter object */
+#else
+#define EFT_CHAR_SLOT_MAX 2
+#endif
+/* gEftCharSlot (0x50 bytes on the console): one slot per kind and fighter. */
 typedef struct EftCharSlots {
-    /* 0x00 */ EftCharSlot kind0[2];
-    /* 0x10 */ EftCharSlot kind1[2];
-    /* 0x20 */ EftCharSlot kind2[2];
-    /* 0x30 */ EftCharSlot kind3[2];
-    /* 0x40 */ EftCharSlot absorb[2]; /* the drain glow (EftAbsorb, eft_l_c.c) */
+    /* 0x00 */ EftCharSlot kind0[EFT_CHAR_SLOT_MAX];
+    /* 0x10 */ EftCharSlot kind1[EFT_CHAR_SLOT_MAX];
+    /* 0x20 */ EftCharSlot kind2[EFT_CHAR_SLOT_MAX];
+    /* 0x30 */ EftCharSlot kind3[EFT_CHAR_SLOT_MAX];
+    /* 0x40 */ EftCharSlot absorb[EFT_CHAR_SLOT_MAX]; /* the drain glow (EftAbsorb, eft_l_c.c) */
 } EftCharSlots;
 
 /* ---- blade trail ---------------------------------------------------------------------------------------- */

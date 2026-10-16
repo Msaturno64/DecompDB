@@ -93,6 +93,14 @@ enum {
 #define BTL_SETUP_MAGIC 0x736C7462 /* "btls" */
 #define BTL_SETUP_VERSION 7
 #define BTL_MEMBER_MAX 5
+#ifdef PORT
+/* Fighters on the field at once (branch multi-fighter): the two sides' leaders are fighters 0 and 1 as ever;
+   with every member on the field (gPortMultiAll) each other member is a fighter of its own, 2 and up, with a
+   battle side record of its own (battle_load.c: BattleSide_GetCount, BattleSide_GetTeam). */
+#define BTL_FIGHTER_MAX (2 * BTL_MEMBER_MAX)
+#else
+#define BTL_FIGHTER_MAX 2
+#endif
 #define BTL_POOL_MAX 50
 #define BTL_BGM_RANDOM 24      /* BattleSetup_SetRule: pick rand() % 24 */
 #define BTL_CPU_LEVEL_MAX 29   /* CpuLevel_FromSetting maps the 5 difficulty settings to 0, 6, 13, 21, 29 */

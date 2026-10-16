@@ -125,7 +125,9 @@ def compile_ee(cmd, src, o):
 def cc(f):
     o = OBJ / (str(f.relative_to(ROOT / "src")).replace("/", "_")[:-2] + ".o")
     src, done, missing = portsrc.prepare(f)
-    r = compile_ee(CC + [f"-I{f.parent}"], src, o)
+    # BT3_GAME_CFLAGS: extra flags for the game's own files only (diagnostics: e.g. -fsanitize=array-bounds
+    # -fsanitize-trap=array-bounds stops at the first index past a fixed-size array)
+    r = compile_ee(CC + [f"-I{f.parent}"] + os.environ.get("BT3_GAME_CFLAGS", "").split(), src, o)
     if missing:
         print("no C for:", f.name, " ".join(missing))
     return o if r.returncode == 0 else None, f, r.stderr, getattr(r, "pending", None)

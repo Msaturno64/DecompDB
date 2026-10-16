@@ -32,7 +32,11 @@
 
 #define BTL_OBJ_MAX 12
 #define BTL_OBJ_VIEW_MAX 2
+#ifdef PORT
+#define BTL_OBJ_WORK_SIZE sizeof(BtlObjWork) /* larger: a fighter work buffer and a fixed slot per fighter */
+#else
 #define BTL_OBJ_WORK_SIZE 0x6B740
+#endif
 
 /* BtlObj.type */
 #define BTL_OBJ_TYPE_CHARA 0 /* a fighter: gets a charaWork buffer, is drawn last in its own view */
@@ -207,7 +211,13 @@ typedef struct BtlResSlot {
 #define BTL_RES_SLOT_HEAP 2 /* the buffers came from the heap (File_Request allocated them) */
 
 #define BTL_RES_SLOT_MAX 12
+#ifdef PORT
+/* A fixed model slot per fighter on the field: BTL_FIGHTER_MAX (battle/battle.h; btl_obj.c checks they agree).
+   BtlRes_Init gives buffers to as many as the battle has fighters. */
+#define BTL_RES_FIXED_MAX 10
+#else
 #define BTL_RES_FIXED_MAX 2
+#endif
 #define BTL_RES_ID_KEEP (-99) /* BtlRes_SetFileId: leave the file as it is */
 
 /* Buffer sizes of a fixed slot. */
@@ -219,7 +229,7 @@ typedef struct BtlResSlot {
 typedef struct BtlResWork {
     /* 0x000 */ BtlResSlot slots[BTL_RES_SLOT_MAX];  /* heap-loaded models */
     /* 0x2A0 */ BtlResSlot fixed[BTL_RES_FIXED_MAX]; /* the two fighters, preallocated buffers */
-    /* 0x310 */ BtlResFile spare[3];  /* model buffers: [0], [1] start in fixed[0], fixed[1]; [2] is free */
+    /* 0x310 */ BtlResFile spare[BTL_RES_FIXED_MAX + 1]; /* model buffers: [i] starts in fixed[i]; the last is free */
     /* 0x340 */ BtlResFile *next;     /* the model buffer not in use: a character change loads into it */
     /* 0x344 */ s32 pending;          /* fixed slot waiting for BtlRes_CommitReload, -1 = none */
     /* 0x348 */ s32 prealloc;         /* argument of BtlObj_Init: 1 = the fixed slots exist */
@@ -239,7 +249,7 @@ typedef struct BtlObjTable {
     /* 0x10E00 */ List freeObjs;
     /* 0x10E0C */ List usedObjs;
     /* 0x10E18 */ u8 unk10E18[0x28];
-    /* 0x10E40 */ u8 charaWork[2][0x1A0C0];
+    /* 0x10E40 */ u8 charaWork[BTL_RES_FIXED_MAX][0x1A0C0]; /* a fighter object's big buffer (2 on the console) */
     /* 0x44FC0 */ s32 unk44FC0;
     /* 0x44FC4 */ f32 unk44FC4;
     /* 0x44FC8 */ u8 unk44FC8[0x38];

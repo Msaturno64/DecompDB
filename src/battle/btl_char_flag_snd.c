@@ -236,6 +236,13 @@ void BtlCharSnd_PlayRequests(void) {
         if (req->p.owner >= 0) {
             owner = req->p.owner;
         }
+#ifdef PORT
+        /* a fighter beyond the two (multi-fighter) has no voice channel and no sound bank of its own: of its
+           requests only the common ones play (kind 0 the battle bank, 1 the stage bank) */
+        if (owner >= 2 && req->p.kind >= 2) {
+            continue;
+        }
+#endif
         chr = BtlChar_Get(owner);
         chara = *(s32 *)((u8 *)BtlChar_GetObj(chr) + 0xC);
         if (BtlChar_TestMemberUnk70(chr)) {

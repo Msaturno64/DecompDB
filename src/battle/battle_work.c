@@ -105,6 +105,15 @@ s32 Battle_Load(void) {
     Load_RunBlocking();
     BattleSide_SetObjId(0, BtlObj_CreateChara(BattleSide_GetModelSlot(0)));
     BattleSide_SetObjId(1, BtlObj_CreateChara(BattleSide_GetModelSlot(1)));
+#ifdef PORT
+    {
+        s32 side;
+
+        for (side = 2; side < BTL_SIDE_COUNT; side++) { /* every member on the field: an object each */
+            BattleSide_SetObjId(side, BtlObj_CreateChara(BattleSide_GetModelSlot(side)));
+        }
+    }
+#endif
     return 1;
 }
 

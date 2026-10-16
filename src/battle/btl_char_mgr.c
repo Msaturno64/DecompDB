@@ -350,8 +350,14 @@ void BtlChar_Reset(BtlMgrChr *chr) {
         chr->unk99C = 100000;
     }
     res = BattleResult_GetPtr();
+#ifdef PORT
+    if (chr->side < 2) { /* the result keeps the two sides' values (multi-fighter) */
+#endif
     res->unk1C[chr->side] = 0;
     res->unk24[chr->side] = 0;
+#ifdef PORT
+    }
+#endif
     if (BtlMember_GetActiveGauge(chr)->unk20 != 0) {
         BtlChar_GetObj(chr)->flags |= 0x40000000;
     }
@@ -564,7 +570,7 @@ void BtlChar_ResetObjWork(BtlMgrChr *chr) {
 
 /* Decides which fighters are frozen (hit-stop) and counts the freeze timers down. */
 void BtlChars_UpdateFreeze(void) {
-    s32 level[2];
+    s32 level[BTL_FIGHTER_MAX]; /* (2 on the console: one per fighter) */
     s32 i;
     s32 max;
     u8 *bytes;
@@ -920,6 +926,9 @@ void BtlChar_RaiseEvents(BtlMgrChr *chr) {
         if (res->unk24[opp] < chr->unkD44) {
             res->unk24[opp] = chr->unkD44;
         }
+#ifdef PORT
+        if (chr->side < 2) /* the result keeps the two sides' values (multi-fighter) */
+#endif
         res->health[chr->side] = BtlMember_GetTeamHealthRatio(chr) * 100.0f;
         if (BtlMember_GetActiveGauge(chr)->health == 1) {
             if (BtlMember_CountAlive(BtlChar_Get(BtlOpp_GetPlayer(chr))) <= 0) {

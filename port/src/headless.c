@@ -327,6 +327,10 @@ void Port_Trace(unsigned vblanks) {
             Port_StateLog(vblanks, NULL, 0);
         }
     }
+    {
+        extern void PortMulti_Trace(unsigned vblank, int battle); /* multi_fighter.c: BT3_MFLOG, every fighter */
+        PortMulti_Trace(vblanks, (sBattles != 0 || sFromMenu) && gBtlSeq != NULL && gBtlSeq->state >= 2);
+    }
     if (sNetEntered && sNetArrivedAt == 0 && gProgress != NULL && !(gProgress->flags & 0x40)) {
         sNetArrivedAt = vblanks;
     }

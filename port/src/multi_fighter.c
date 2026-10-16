@@ -14,6 +14,7 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 #include "port_host.h"
 
@@ -28,6 +29,41 @@
 /* Every member of both teams on the field at once instead of one after the other. Game state (not PORT_HOST): a
    restored state must bring back the battle it belongs to. */
 int gPortMultiAll;
+
+/* ------------------------------------------------------------------------------------------- BT3_MFLOG (tests) */
+
+/* BT3_MFLOG=<file>: one line per vertical blank of a fight: the blank, then for every fighter its team, health
+   and position (x y z as the bits of the floats, hexadecimal): "<blank> | <team> <hp> <x> <y> <z> | ...". A blank
+   run again after a rollback is written again; the last line of a blank counts. Not game state (PORT_HOST). */
+void PortMulti_Trace(unsigned vblank, int battle) {
+    extern int BattleSide_GetCount(void);       /* src/battle/battle_load.c */
+    extern int BattleSide_GetTeam(int side);
+    extern int BattleSide_GetObjId(int side);
+    extern int BtlCharApi_GetHp(int objId);      /* src/battle/btl_capi_a.c */
+    extern void BtlCharApi_GetPos(int objId, float *out);
+    PORT_HOST static FILE *fp;
+    PORT_HOST static int tried;
+    float q[4] __attribute__((aligned(16)));
+    unsigned u[3];
+    int i, obj;
+
+    if (!tried) {
+        tried = 1;
+        fp = getenv("BT3_MFLOG") != NULL ? fopen(getenv("BT3_MFLOG"), "w") : NULL;
+    }
+    if (fp == NULL || !battle) {
+        return;
+    }
+    fprintf(fp, "%u", vblank);
+    for (i = 0; i < BattleSide_GetCount(); i++) {
+        obj = BattleSide_GetObjId(i);
+        BtlCharApi_GetPos(obj, q);
+        memcpy(u, q, sizeof(u)); /* (the bits: this file has no floating-point unit to print with) */
+        fprintf(fp, " | %d %d %08x %08x %08x", BattleSide_GetTeam(i), BtlCharApi_GetHp(obj), u[0], u[1], u[2]);
+    }
+    fputc('\n', fp);
+    fflush(fp);
+}
 
 /* ------------------------------------------------------------------------------------------- BT3_TEAMS (tests) */
 
@@ -134,9 +170,13 @@ void PortMulti_FrameMark(int where) {
 
 /* Battle_Term, before anything is freed. */
 void PortMulti_BattleEnd(void) {
+    extern int BattleResult_GetReason(void);     /* src/battle/battle_load.c: BTL_REASON_* (battle/battle.h) */
+    extern int BattleResult_GetWinnerSide(void);
+
     if (!on() || sFrames == 0) {
         return;
     }
+    printf("bt3: mfstat: result reason 0x%X, winner side %d\n", BattleResult_GetReason(), BattleResult_GetWinnerSide());
     printf("bt3: mfstat: fighters %d, heap free %d at setup, least %d (%d used in the battle), %llu frames, "
            "simulation us avg %llu max %llu, rest us avg %llu max %llu\n",
            BtlChar_GetCount(), sHeapStart, sHeapMin, sHeapStart - sHeapMin, sFrames, sSimSum / sFrames / 1000,

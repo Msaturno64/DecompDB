@@ -167,6 +167,16 @@ s32 Battle_GetRuleUnk10(void);
 s32 BattleSide_GetOptionA(s32 side);
 s32 BattleSide_GetOptionB(s32 side);
 s32 BattleSide_GetPad(s32 side);
+#ifdef PORT
+s32 BattleSide_GetCount(void);     /* battle side records = fighters: 2, more with every member on the field */
+s32 BattleSide_GetTeam(s32 side);  /* the original side (0 or 1) a side record fights for */
+void BattleSetup_PortSpread(void); /* Battle_Init: one side record per member when every member is on the field */
+#define BTL_SIDE_COUNT BattleSide_GetCount()
+#define BTL_SIDE_TEAM(side) BattleSide_GetTeam(side)
+#else
+#define BTL_SIDE_COUNT 2
+#define BTL_SIDE_TEAM(side) (side)
+#endif
 s32 BattleSide_GetControl(s32 side);
 s32 BattleSide_IsCpu(s32 side);
 s32 BattleSide_GetUnk200(s32 side);

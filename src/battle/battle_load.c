@@ -407,6 +407,9 @@ s32 BtlLoad_StepChara(BtlJob *job) {
             file9 = job->unk1C * 10 + (BTL_FILE_CHARA + 9);
             voice = job->voiceChara + ((gSaveData->flags & SAVE_FLAG_VOICE) ? BTL_FILE_VOICE_ALT : BTL_FILE_VOICE);
             BtlRes_Reload(BattleSide_GetModelSlot(job->side), model, file8, file9);
+#ifdef PORT
+            if (job->side < 2) /* (the sound unit has a voice bank for each of the two sides only: 0x10, 0x20) */
+#endif
             res->bank = File_Request3(voice, res->bank, res->bankSize);
             if (!BtlCtrl_IsSwitching(job->side)) {
                 BattleMember *next;
@@ -416,7 +419,7 @@ s32 BtlLoad_StepChara(BtlJob *job) {
                     member = BtlSide_GetActiveMember(job->side);
                 }
                 next = BattleSide_GetMember(job->side, member);
-                next->buf[1] = File_Request3(job->chara * 2 + job->side + BTL_FILE_CHARA_DATA, next->buf[1], BTL_MEMBER_BUF_SIZE);
+                next->buf[1] = File_Request3(job->chara * 2 + BTL_SIDE_TEAM(job->side) + BTL_FILE_CHARA_DATA, next->buf[1], BTL_MEMBER_BUF_SIZE);
             }
         } else {
             BtlRes_Reload(BattleSide_GetModelSlot(job->side), model, -1, -1);
@@ -451,7 +454,11 @@ s32 BtlLoad_StepChara(BtlJob *job) {
         }
         job->state++;
         BtlRes_CommitReload2();
+#ifdef PORT
+        if (job->modelOnly == 0 && job->side < 2) { /* (a fighter beyond the two has no voice bank: see state 0) */
+#else
         if (job->modelOnly == 0) {
+#endif
             if (job->side == 0) {
                 Snd_ReloadBank(0x10, res->bank, 0);
             } else {
@@ -468,6 +475,9 @@ s32 BtlLoad_StepChara(BtlJob *job) {
             break;
         }
         if (job->modelOnly == 0) {
+#ifdef PORT
+            if (job->side < 2) /* shortcut: the AI's work is two wide until multi-fighter T1.4 widens it */
+#endif
             BtlAiMgr_ResetSide(job->side);
             BtlScene_CreateChar(job->side);
             if (!BtlCtrl_IsSwitching(job->side)) {
@@ -535,6 +545,11 @@ s32 BtlLoad_StepInitial(BtlJob *job) {
         BattleSide_SetModelSlot(0, BtlObj_RequestCharaModel(0, BattleSide_GetStartChara(0), BattleSide_GetStartCostume(0), BattleSide_GetStartVariant(0)));
         BattleSide_SetModelSlot(1, BtlObj_RequestCharaModel(1, BattleSide_GetStartChara(1), BattleSide_GetStartCostume(1), BattleSide_GetStartVariant(1)));
 #ifdef PORT
+        for (side = 2; side < BTL_SIDE_COUNT; side++) { /* every member on the field: a fixed model slot each */
+            BattleSide_SetModelSlot(side, BtlObj_RequestCharaModel(side, BattleSide_GetStartChara(side), BattleSide_GetStartCostume(side), BattleSide_GetStartVariant(side)));
+        }
+#endif
+#ifdef PORT
         {
             /* PC build: the buffer is the game's own size unless a stage added from outside the disc is larger
                (port/src/plat_stages.c); a file larger than the buffer overruns it, and nothing on the way checks. */
@@ -565,7 +580,7 @@ s32 BtlLoad_StepInitial(BtlJob *job) {
         res->bankSize = BTL_BANK_BUF_SIZE;
         res->bank = Heap_Alloc(res->bankSize, 0x40, 0, HEAP_ANY);
         memset(res->bank, 0, res->bankSize);
-        for (side = 0; side < 2; side++) {
+        for (side = 0; side < BTL_SIDE_COUNT; side++) {
             for (i = 0; i < 5; i++) {
                 m = BattleSide_GetMember(side, i);
                 m->buf[0] = Heap_Alloc(BTL_MEMBER_BUF_SIZE, 0x40, 0, HEAP_ANY);
@@ -587,10 +602,10 @@ s32 BtlLoad_StepInitial(BtlJob *job) {
             id = Battle_GetStartStage() + BTL_FILE_STAGE;
         }
         res->stage = File_Request3(id, res->stage, res->stageSize);
-        for (side = 0; side < 2; side++) {
+        for (side = 0; side < BTL_SIDE_COUNT; side++) {
             for (i = 0; (u32)i < (u32)BattleSide_GetMemberCount(side); i++) {
                 m = BattleSide_GetMember(side, i);
-                m->buf[0] = File_Request3(m->chara * 2 + side + BTL_FILE_CHARA_DATA, m->buf[0], BTL_MEMBER_BUF_SIZE);
+                m->buf[0] = File_Request3(m->chara * 2 + BTL_SIDE_TEAM(side) + BTL_FILE_CHARA_DATA, m->buf[0], BTL_MEMBER_BUF_SIZE);
             }
         }
         res->unk8 = File_Request3(gProgress->unk0[0] + 6, NULL, 0);
@@ -600,7 +615,7 @@ s32 BtlLoad_StepInitial(BtlJob *job) {
         if (!File_UpdateRequests()) {
             return 0;
         }
-        for (side = 0; side < 2; side++) {
+        for (side = 0; side < BTL_SIDE_COUNT; side++) {
             for (i = 0; (u32)i < (u32)BattleSide_GetMemberCount(side); i++) {
                 m = BattleSide_GetMember(side, i);
                 Res_RelocateOffsets(&m->buf[0], m->buf[0], m->buf[0]);
@@ -763,7 +778,7 @@ void BtlLoad_Reload(void) {
     BtlJob_InitPool();
     /* The original passes a second argument (0) that the function does not have. */
     ((s32 (*)(s32, s32))BtlLoad_RequestStageReload)(Battle_GetStartStage(), 0);
-    for (side = 0; side < 2; side++) {
+    for (side = 0; side < BTL_SIDE_COUNT; side++) {
         if (BattleSide_IsFormChanged(side)) {
             chara = BattleSide_GetStartChara(side);
             costume = BattleSide_GetStartCostume(side);
@@ -791,7 +806,7 @@ void BtlLoad_Reload(void) {
     if (BtlJob_GetFreeCount() != BTL_JOB_COUNT) {
         Load_RunBlocking();
     }
-    for (side = 0; side < 2; side++) {
+    for (side = 0; side < BTL_SIDE_COUNT; side++) {
         for (i = 0; (u32)i < (u32)BattleSide_GetMemberCount(side); i++) {
             m = BattleSide_GetMember(side, i);
             m->data = m->buf[0];
@@ -827,7 +842,7 @@ void BtlLoad_FreeAll(void) {
         Heap_Free(res->script);
         res->script = NULL;
     }
-    for (side = 0; side < 2; side++) {
+    for (side = 0; side < BTL_SIDE_COUNT; side++) {
         for (i = 0; i < 5; i++) {
             m = BattleSide_GetMember(side, i);
             Heap_Free(m->buf[0]);
@@ -1055,9 +1070,22 @@ void ItemSet_GetStats(BattleItemSet *items, s32 *stats, s32 *ability, s32 chara)
  * last, which only comes out when the setup pointer and the element pointer are locals (as here);
  * `SETUP()->sides[n].field` written in one expression adds the operands the other way round.
  */
+#ifdef PORT
+/* Every member on the field (branch multi-fighter): the side records of fighters 2 and up, one member each, and
+   which original side (team) each record fights for. Game state, as the setup is. */
+static BattleSide sPortSides[BTL_FIGHTER_MAX - 2];
+static s32 sPortTeam[BTL_FIGHTER_MAX];
+static s32 sPortSideCount = 2;
+#endif
+
 static inline BattleSide *Side(s32 n) {
     BattleSetup *setup = SETUP();
 
+#ifdef PORT
+    if (n >= 2) {
+        return &sPortSides[n - 2];
+    }
+#endif
     return &setup->sides[n];
 }
 
@@ -1206,7 +1234,7 @@ void BtlEvent_Reset(void) {
 
 /* Raises event ev for a side; events 0x5A and 0x5B also notify the script module. */
 void BtlEvent_Raise(s32 side, s32 ev) {
-    BtlEvent_SetBit(Battle_GetEventWork()->set[side].now, ev);
+    BtlEvent_SetBit(Battle_GetEventWork()->set[BTL_SIDE_TEAM(side)].now, ev); /* (PORT: a fighter beyond the two raises its team's) */
     switch (ev) {
     case 0x5A:
     case 0x5B:
@@ -1875,6 +1903,60 @@ s32 BattleSide_GetOptionB(s32 side) {
 s32 BattleSide_GetPad(s32 side) {
     return Side(side)->pad;
 }
+
+#ifdef PORT
+/* Battle side records in use: one per fighter. */
+s32 BattleSide_GetCount(void) {
+    return sPortSideCount;
+}
+
+/* The original side a record fights for: itself for 0 and 1. */
+s32 BattleSide_GetTeam(s32 side) {
+    return side < 2 ? side : sPortTeam[side];
+}
+
+/* Battle_Init, before anything is loaded. With every member on the field (gPortMultiAll, port/src/multi_fighter.c)
+   each member of a side but its lead gets a side record of its own: a copy of the side (control, pad, options)
+   with that one member. The side keeps its lead alone, as member 0, so it never switches members. Without it, the
+   two sides are the only records, as on the console. */
+void BattleSetup_PortSpread(void) {
+    extern int gPortMultiAll;
+    BattleSide *side;
+    BattleSide *extra;
+    BattleMember lead;
+    s32 s;
+    s32 i;
+    s32 n = 2;
+
+    if (gPortMultiAll) {
+        for (s = 0; s < 2; s++) {
+            side = Side(s);
+            if (side->lead != 0) {
+                lead = side->members[side->lead];
+                side->members[side->lead] = side->members[0];
+                side->members[0] = lead;
+                side->lead = 0;
+            }
+            for (i = 1; i < side->memberCount && n < BTL_FIGHTER_MAX; i++) {
+                extra = &sPortSides[n - 2];
+                *extra = *side;
+                extra->members[0] = side->members[i];
+                extra->memberCount = 1;
+                extra->control = BTL_CONTROL_CPU; /* the side's pad stays its lead's (more players: multi-pad) */
+                extra->startForm.chara = extra->form.chara = side->members[i].chara;
+                extra->startForm.costume = extra->form.costume = side->members[i].costume;
+                extra->startForm.variant = extra->form.variant = side->members[i].variant;
+                extra->objId = 0;
+                extra->modelSlot = 0;
+                sPortTeam[n] = s;
+                n++;
+            }
+            side->memberCount = 1;
+        }
+    }
+    sPortSideCount = n;
+}
+#endif
 
 /* Returns who controls the side (0 pad, 2 CPU). */
 s32 BattleSide_GetControl(s32 side) {

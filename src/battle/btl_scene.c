@@ -129,7 +129,7 @@ void BtlScene_Init(s32 layerMask) {
     if (layerMask == 0) {
         gBtlScene->layerMask = BTL_SCENE_LAYER_ALL;
     }
-    BtlScene_SetCharCount(2);
+    BtlScene_SetCharCount(BTL_SIDE_COUNT); /* (PORT: one per fighter; 2 on the console) */
     if (Battle_IsSplitScreen()) {
         BtlScene_SetSingleView(0);
     } else {

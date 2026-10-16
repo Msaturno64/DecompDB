@@ -4,6 +4,9 @@
 #include "battle/battle.h"
 #include "sys/pad.h"
 #include "sys/save.h"
+#ifdef PORT
+extern s32 BattleSide_GetTeam(s32 side); /* battle_load.c: the side a fighter beyond the two fights for */
+#endif
 
 /*
  * Per-fighter battle input: 0x1D3B40..0x1D60A0.
@@ -493,7 +496,12 @@ u32 BtlInput_GetKeyMask(BtlInputChr *chr, s32 action) {
     s32 i;
 
     for (i = 0; i < SAVE_KEY_COUNT; i++) {
+#ifdef PORT
+        /* a fighter beyond the two (multi-fighter) uses its team's key config: a save has two */
+        if (gSaveData->key[chr->player < 2 ? chr->player : BattleSide_GetTeam(chr->player)][i] == action) {
+#else
         if (gSaveData->key[chr->player][i] == action) {
+#endif
             return padBit[i];
         }
     }

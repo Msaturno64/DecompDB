@@ -148,10 +148,22 @@ s32 Battle_Restart(void) {
 
 /* Loads the battle data, creates every battle subsystem, then starts the first match. */
 s32 Battle_Init(void) {
+#ifdef PORT
+    {
+        extern void BattleSetup_PortSpread(void); /* battle_load.c: every member on the field (multi-fighter) */
+        extern s32 BattleSide_GetCount(void);
+        BattleSetup_PortSpread();
+        Battle_Load();
+        StgFx_Init();
+        StgModel_InitStage();
+        BtlChar_AllocAll(BattleSide_GetCount()); /* one fighter per side record: 2 unless every member is on the field */
+    }
+#else
     Battle_Load();
     StgFx_Init();
     StgModel_InitStage();
     BtlChar_AllocAll(2);
+#endif
     BtlAiMgr_Init();
     BtlCam_Init();
     StgNav_Init();
