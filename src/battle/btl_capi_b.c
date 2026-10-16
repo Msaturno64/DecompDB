@@ -2152,6 +2152,29 @@ s32 BtlCtrl_IsTeamDead(s32 player) {
     s32 dead = 1;
     s32 i;
 
+#ifdef PORT
+    {
+        /* several fighters on the field: a side is out when every fighter of its team has no member with health */
+        extern s32 BattleSide_GetCount(void);
+        extern s32 BattleSide_GetTeam(s32 side);
+        s32 k;
+
+        if (BattleSide_GetCount() > 2) {
+            for (k = 0; k < BattleSide_GetCount(); k++) {
+                chr = BtlChar_Get(k);
+                if (BattleSide_GetTeam(k) != player || chr == NULL) {
+                    continue;
+                }
+                for (i = 0; i < chr->memberCount; i++) {
+                    if (BtlMember_GetGauge(chr, i)->hp > 0) {
+                        return 0;
+                    }
+                }
+            }
+            return 1;
+        }
+    }
+#endif
     if (chr != NULL) {
         for (i = 0; i < chr->memberCount; i++) {
             if (BtlMember_GetGauge(chr, i)->hp > 0) {

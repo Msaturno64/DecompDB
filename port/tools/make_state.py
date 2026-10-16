@@ -16,7 +16,8 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from toolchain import OBJ, DATA, EXE, MAC
 
 PORT_STATE = {"headless", "mathf_pc", "plat_file", "plat_libm", "plat_mc", "plat_mem", "plat_sndstate", "plat_stub", "plat_sys", "softfloat_ps2",
-              "vu0_a", "vu0_b", "gs_marker"}
+              "vu0_a", "vu0_b", "gs_marker",
+              "multi_fighter"}  # (several fighters on the field: every member on the field, each fighter's target)
 WRITABLE = (".data", ".bss", ".sdata", ".sbss", ".ldata", ".lbss", ".tbss", ".tdata")
 
 def is_game(obj):

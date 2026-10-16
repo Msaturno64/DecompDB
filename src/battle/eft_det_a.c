@@ -714,6 +714,24 @@ s32 BtlBodyHit_Test(EftDetObj *atk, EftDetObj *def) {
 void BtlBodyHit_Update(void) {
     EftDetObj *a;
 
+#ifdef PORT
+    {
+        /* several fighters on the field: every fighter's body hits against its target (with two: 0 against 1 and 1
+           against 0, as below). shortcut: a hit reaches the target only, not other enemies in the way; multi-contact
+           when teams grow (multi-fighter S2). */
+        extern s32 BattleSide_GetCount(void);
+        extern s32 PortMulti_TargetOf(s32 fighter);
+        s32 i;
+
+        if (BattleSide_GetCount() > 2) {
+            for (i = 0; i < BattleSide_GetCount(); i++) {
+                a = BtlObj_Get(BattleSide_GetObjId(i));
+                BtlBodyHit_Test(a, BtlObj_Get(BattleSide_GetObjId(PortMulti_TargetOf(i))));
+            }
+            return;
+        }
+    }
+#endif
     a = BtlObj_Get(BattleSide_GetObjId(0));
     BtlBodyHit_Test(a, BtlObj_Get(BattleSide_GetObjId(1)));
     a = BtlObj_Get(BattleSide_GetObjId(1));

@@ -95,6 +95,34 @@ static void heap_check(unsigned long long frame) {
     }
 }
 
+/* BT3_HEAPWHO=<address> (with BT3_HEAPCHECK=1): at the end of the battle, the heap block holding that address,
+   where in it, and who asked for it; for an address a BT3_SYNCTEST report names. */
+static void heap_who(void) {
+    const char *e = getenv("BT3_HEAPWHO");
+    unsigned want, at = gHeapStart[0], size;
+    const unsigned *b;
+
+    if (e == NULL || at == 0) {
+        return;
+    }
+    want = (unsigned)strtoul(e, NULL, 16);
+    while (at != gHeapEnd[0]) {
+        b = (const unsigned *)(uintptr_t)at;
+        size = b[4];
+        if (size < 0x20) {
+            break;
+        }
+        if (want >= at && want < at + size) {
+            fprintf(stderr, "bt3: heapwho: 0x%08X is byte 0x%X of block data 0x%08X (%d bytes asked, used %d), allocated from\n"
+                    "0x%016llX (Tenkaichi3Decomp.exe)\n", want, want - b[5], b[5], (int)b[6], (int)b[1],
+                    (unsigned long long)alloc_caller(b[5]));
+            return;
+        }
+        at += size;
+    }
+    fprintf(stderr, "bt3: heapwho: 0x%08X is not in the game heap\n", want);
+}
+
 /* ------------------------------------------------------------------------------------------------- targets */
 
 #define FIGHTER_MAX 10 /* BTL_FIGHTER_MAX, battle/battle.h (a game header: its pointers are not this file's) */
@@ -247,6 +275,24 @@ void PortMulti_DemoTeams(const char *teams) {
             BattleSide_GetMember(side, i)->word[2] = 0; /* variant */
         }
     }
+    /* BT3_TEAMS_HP=<percent>[,<percent>...] (tests): the share of its health a member starts with, for quick
+       knock-outs. One value: every member; a list: side 0's members, then side 1's, in order (the last repeats). */
+    if (getenv("BT3_TEAMS_HP") != NULL) {
+        const char *e = getenv("BT3_TEAMS_HP");
+        float pct;
+        int bits;
+
+        for (side = 0; side < 2; side++) {
+            for (i = 0; i < count[side]; i++) {
+                pct = (float)atoi(e);
+                memcpy(&bits, &pct, sizeof(bits));
+                BattleSide_GetMember(side, i)->word[4] = bits; /* BattleMember.health, a float percentage */
+                if (strchr(e, ',') != NULL) {
+                    e = strchr(e, ',') + 1;
+                }
+            }
+        }
+    }
     BattleSetup_Finish();
     gPortMultiAll = 1;
     printf("bt3: teams %dv%d, every member on the field\n", count[0], count[1]);
@@ -324,10 +370,26 @@ void PortMulti_BattleEnd(void) {
     extern int BattleResult_GetReason(void);     /* src/battle/battle_load.c: BTL_REASON_* (battle/battle.h) */
     extern int BattleResult_GetWinnerSide(void);
 
+    if (sHeapCheck > 0) {
+        heap_who();
+    }
     if (!on() || sFrames == 0) {
         return;
     }
     printf("bt3: mfstat: result reason 0x%X, winner side %d\n", BattleResult_GetReason(), BattleResult_GetWinnerSide());
+    {
+        extern int BtlPool_PortPeak(int slot), BtlPool_PortOver(int slot), BtlPool_PortSize(int slot); /* btl_pool.c */
+        int s;
+
+        printf("bt3: mfstat: pool arenas (most held/size):");
+        for (s = 0; s < 9; s++) {
+            printf(" %d:%X/%X", s, BtlPool_PortPeak(s), BtlPool_PortSize(s));
+            if (BtlPool_PortOver(s)) {
+                printf(" OVER by %X", BtlPool_PortOver(s));
+            }
+        }
+        printf("\n");
+    }
     printf("bt3: mfstat: fighters %d, heap free %d at setup, least %d (%d used in the battle), %llu frames, "
            "simulation us avg %llu max %llu, rest us avg %llu max %llu\n",
            BtlChar_GetCount(), sHeapStart, sHeapMin, sHeapStart - sHeapMin, sFrames, sSimSum / sFrames / 1000,

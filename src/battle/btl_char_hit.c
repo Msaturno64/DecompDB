@@ -1,5 +1,8 @@
 #include "common.h"
 #include "battle/btl_char_hit.h"
+#ifdef PORT
+extern s32 BattleSide_GetTeam(s32 side); /* battle_load.c: the team a fighter fights for */
+#endif
 
 /* Fighter hit resolution, 0x1C7B30-0x1CA6D0. The frame flow and the structures are in battle/btl_char_hit.h.
  *
@@ -1011,7 +1014,12 @@ void BtlHit_CheckProximityAll(void) {
 
     for (i = 0; i < BtlChar_GetCount(); i++) {
         for (j = 0; j < BtlChar_GetCount(); j++) {
+#ifdef PORT
+            /* (several fighters on the field: teammates neither grab nor push each other) */
+            if (i != j && (BtlChar_GetCount() <= 2 || BattleSide_GetTeam(i) != BattleSide_GetTeam(j))) {
+#else
             if (i != j) {
+#endif
                 HitChr *a = BtlChar_Get(i);
                 HitChr *b = BtlChar_Get(j);
 
