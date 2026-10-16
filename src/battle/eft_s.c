@@ -1,4 +1,8 @@
 #include "common.h"
+#ifdef PORT
+extern s32 BattleSide_GetCount(void);     /* battle_load.c */
+extern u32 BtlTask_PortOwnerTag(s32 chr); /* eft_ae.c */
+#endif
 #include "battle/eft_s.h"
 #include "sys/gfx_ot.h"
 
@@ -2107,9 +2111,15 @@ void EftRay_Init(EftTTask *task, EftRayArg *arg) {
     memset(w, 0, sizeof(EftRayWork));
     w->type = 2;
     EftRay_Setup(w, arg);
+#ifdef PORT
+    if ((u32)arg->objId < (u32)BattleSide_GetCount()) { /* (every fighter's: a tag of its own beyond the two) */
+        BtlTask_SetOwnerTag(task, BtlTask_PortOwnerTag(arg->objId));
+    }
+#else
     if ((u32)arg->objId < 2) {
         BtlTask_SetOwnerTag(task, arg->objId == 0 ? 0x800 : 0x1000);
     }
+#endif
 }
 
 /* Term callback. */

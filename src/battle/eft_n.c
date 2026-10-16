@@ -991,7 +991,11 @@ void EftAura_Show(s32 objId) {
     EftNTask *task;
     EftAuraWork *aura;
 
+#ifdef PORT
+    if (gEftAuraPool != NULL && (u32)objId < (u32)gPool->count) { /* (every fighter has an aura task slot) */
+#else
     if (gEftAuraPool != NULL && objId < 2) {
+#endif
         task = gPool->tasks[objId];
         if (task != NULL) {
             aura = task->work;
@@ -1007,7 +1011,11 @@ void EftAura_Hide(s32 objId) {
     EftNTask *task;
     EftAuraWork *aura;
 
+#ifdef PORT
+    if (gEftAuraPool != NULL && (u32)objId < (u32)gPool->count) { /* (every fighter has an aura task slot) */
+#else
     if (gEftAuraPool != NULL && objId < 2) {
+#endif
         task = gPool->tasks[objId];
         if (task != NULL) {
             aura = task->work;
@@ -1023,7 +1031,11 @@ void EftAura_MarkModelNew(s32 objId) {
     EftNTask *task;
     EftAuraWork *aura;
 
+#ifdef PORT
+    if (gEftAuraPool != NULL && (u32)objId < (u32)gPool->count) { /* (every fighter has an aura task slot) */
+#else
     if (gEftAuraPool != NULL && objId < 2) {
+#endif
         task = gPool->tasks[objId];
         if (task != NULL) {
             aura = task->work;
@@ -1040,7 +1052,11 @@ void EftAura_MarkModelNew(s32 objId) {
 s32 EftAura_ChangeType(s32 objId, s32 type, s32 paramFlags) {
     EftNTask *task;
 
+#ifdef PORT
+    if (gEftAuraPool != NULL && (u32)objId < (u32)gPool->count) { /* (every fighter has an aura task slot) */
+#else
     if (objId < 2) {
+#endif
         if (gEftAuraPool != NULL && type >= 0) {
             task = gPool->tasks[objId];
             if (task != NULL) {

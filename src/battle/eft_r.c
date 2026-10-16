@@ -1,5 +1,8 @@
 #include "common.h"
 #ifdef PORT
+extern s32 EftDet_PortDeflector(void *task, s32 fallback); /* eft_det_a.c: who knocked the shot away */
+#endif
+#ifdef PORT
 extern s32 BtlScene_PortCharReset(s32 chr); /* btl_scene.c: the BtlScene_Reset mode of one character's tasks */
 #endif
 #ifdef PORT
@@ -1101,14 +1104,26 @@ void EftKiBlast_Turn(EftRTask *task, EftKiBlast *w) {
 
     Vec3_Lerp(&w->pose.pos, &task->pos, &w->pose.prev, 0.7f);
     if (task->hit & EFT_R_HIT_DEFLECT) {
+#ifdef PORT
+        w->arg.objId = EftDet_PortDeflector(task, w->arg.objId ^ 1);
+        BtlCharApi_GetDeflectDir((s16)w->arg.objId, &dir);
+        Vec4_Copy(&w->pose.dir, &dir);
+#else
         BtlCharApi_GetDeflectDir((s16)(w->arg.objId ^ 1), &dir);
         Vec4_Copy(&w->pose.dir, &dir);
         w->arg.objId ^= 1;
+#endif
         w->flags = (w->flags & ~EFT_KIBLAST_HOMING) | EFT_KIBLAST_DEFLECTED;
     } else if (task->hit & EFT_R_HIT_REFLECT) {
+#ifdef PORT
+        w->arg.objId = EftDet_PortDeflector(task, w->arg.objId ^ 1);
+        BtlCharApi_GetDeflectDir((s16)w->arg.objId, &dir);
+        Vec4_Copy(&w->pose.dir, &dir);
+#else
         BtlCharApi_GetDeflectDir((s16)(w->arg.objId ^ 1), &dir);
         Vec4_Copy(&w->pose.dir, &dir);
         w->arg.objId ^= 1;
+#endif
         w->life = w->arg.life;
     }
 }
@@ -1959,14 +1974,26 @@ void EftKiObj_Turn(EftRTask *task, EftKiObj *w) {
 
     Vec3_Lerp(&w->b.pose.pos, &task->pos, &w->b.pose.prev, 0.7f);
     if (task->hit & EFT_R_HIT_DEFLECT) {
+#ifdef PORT
+        w->b.arg.objId = EftDet_PortDeflector(task, w->b.arg.objId ^ 1);
+        BtlCharApi_GetDeflectDir((s16)w->b.arg.objId, &dir);
+        Vec4_Copy(&w->b.pose.dir, &dir);
+#else
         BtlCharApi_GetDeflectDir((s16)(w->b.arg.objId ^ 1), &dir);
         Vec4_Copy(&w->b.pose.dir, &dir);
         w->b.arg.objId ^= 1;
+#endif
         w->b.flags |= EFT_KIBOMB_DEFLECTED;
     } else if (task->hit & EFT_R_HIT_REFLECT) {
+#ifdef PORT
+        w->b.arg.objId = EftDet_PortDeflector(task, w->b.arg.objId ^ 1);
+        BtlCharApi_GetDeflectDir((s16)w->b.arg.objId, &dir);
+        Vec4_Copy(&w->b.pose.dir, &dir);
+#else
         BtlCharApi_GetDeflectDir((s16)(w->b.arg.objId ^ 1), &dir);
         Vec4_Copy(&w->b.pose.dir, &dir);
         w->b.arg.objId ^= 1;
+#endif
         w->b.life = w->b.arg.life;
     }
 }

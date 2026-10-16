@@ -987,6 +987,36 @@ s32 EftDet_HitFighterMulti(EftDetRec *rec, s32 target, s32 idx) {
     }
 }
 
+#ifdef PORT
+/* Several fighters on the field: who knocked a shot away (deflect) or sent it back (reflect). The shot turns at its
+   next update (eft_r.c) and becomes that fighter's; the console's owner ^ 1 named a fighter 3 for an extra's shot
+   and the wrong fighter for one an extra knocked away. A few at once are plenty. Game state. */
+static struct {
+    void *task;
+    s32 by;
+} sPortDeflect[16];
+static s32 sPortDeflectNext;
+
+void EftDet_PortNoteDeflect(void *task, s32 by) {
+    sPortDeflect[sPortDeflectNext].task = task;
+    sPortDeflect[sPortDeflectNext].by = by;
+    sPortDeflectNext = (sPortDeflectNext + 1) % 16;
+}
+
+/* The fighter that turned this shot (and the note is spent), or `fallback` (with two fighters: owner ^ 1). */
+s32 EftDet_PortDeflector(void *task, s32 fallback) {
+    s32 i;
+
+    for (i = 0; i < 16; i++) {
+        if (sPortDeflect[i].task == task && task != NULL) {
+            sPortDeflect[i].task = NULL;
+            return sPortDeflect[i].by;
+        }
+    }
+    return fallback;
+}
+#endif
+
 /* Record against fighter. Each record is tested against ONE fighter: target = owner id ^ 1, and the object tested
  * is the active fighter of side (target != 0). A contact that lies behind a stage contact of the same record
  * (found by EftDet_StagePass, which ran before) is dropped. Then the fighter answers, first yes wins: dodge
@@ -1057,8 +1087,18 @@ void EftDet_FighterPass(void) {
                     }
                     if (BtlColl_TryDeflect(target, rec)) {
                         EftHit_SetTaskFlag(i, 0x40, rec->shape.contact);
+#ifdef PORT
+                        if (first >= 0) {
+                            EftDet_PortNoteDeflect(rec->task, target);
+                        }
+#endif
                     } else if (BtlColl_TryReflect(target, rec)) {
                         EftHit_SetTaskFlag(i, 0x80, rec->shape.contact);
+#ifdef PORT
+                        if (first >= 0) {
+                            EftDet_PortNoteDeflect(rec->task, target);
+                        }
+#endif
                     } else if (BtlColl_TryAbsorb(target, rec)) {
                         EftHit_SetTaskFlag(i, 0x20, rec->shape.contact);
                     } else if (EftHit_IsMultiHit(rec)) {
