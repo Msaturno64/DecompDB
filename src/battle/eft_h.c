@@ -1,4 +1,10 @@
 #include "common.h"
+#ifdef PORT
+extern s32 BtlScene_PortCharReset(s32 chr); /* btl_scene.c: the BtlScene_Reset mode of one character's tasks */
+#endif
+#ifdef PORT
+extern u32 BtlTask_PortOwnerTag(s32 chr); /* eft_ae.c: 0x800 / 0x1000, or a bit of its own for an extra fighter */
+#endif
 #include "battle/eft_h.h"
 
 /*
@@ -346,7 +352,11 @@ void EftShot_DestroyChar(s32 chr) {
     EftHChar *c = &gEftShot->chars[chr];
 
     if (c->task != NULL) {
+#ifdef PORT
+        BtlScene_Reset(BtlScene_PortCharReset(chr));
+#else
         BtlScene_Reset(chr == 0 ? 2 : 3);
+#endif
         EftShot_SetCharPool(chr);
         BtlTask_Kill(c->task);
         c->task = NULL;
@@ -744,7 +754,11 @@ void EftVolley_Init(EftHTask *task, EftHSlot *arg) {
     if ((u16)slot->param->id - 0x26E < 2U) {
         w->flags |= EFT_VOLLEY_800 | EFT_VOLLEY_1000;
     }
+#ifdef PORT
+    BtlTask_SetOwnerTag(task, BtlTask_PortOwnerTag(slot->arg.chr));
+#else
     BtlTask_SetOwnerTag(task, slot->arg.chr == 0 ? 0x800 : 0x1000);
+#endif
 }
 
 /* Instance term: releases the emitter state and, for a technique, sets the fighter's held flag 0xA8. */
@@ -1427,7 +1441,11 @@ void EftEmit_TagTask(void *task, s32 chr, s32 type) {
     s32 flags;
 
     if (task != NULL && type != 2 && type != 5) {
+#ifdef PORT
+        flags = BtlTask_PortOwnerTag(chr);
+#else
         flags = chr == 0 ? 0x800 : 0x1000;
+#endif
         BtlTask_SetOwnerTag(task, flags);
         flags = 0; /* dead store: the original does not tail-call here */
     }

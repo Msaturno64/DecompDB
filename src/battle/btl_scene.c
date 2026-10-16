@@ -5,6 +5,9 @@
 #include "battle/btl_scene.h"
 #include "sys/common.h"
 #include "sys/heap.h"
+#ifdef PORT
+extern u32 BtlTask_PortOwnerTag(s32 chr); /* eft_ae.c: 0x800 / 0x1000, or a bit of its own for an extra fighter */
+#endif
 
 /*
  * Battle effect scene, 0x12C9F0..0x12DD80: the task tree the fighter-attached effects run in and the services
@@ -203,8 +206,25 @@ void BtlScene_Reset(s32 mode) {
     case 4:
         BtlTaskList_Reset(gBtlScene->root, 0x2000);
         break;
+#ifdef PORT
+    default: /* BtlScene_PortCharReset: the tasks of one fighter beyond the two */
+        if (mode >= 0x102) {
+            BtlTaskList_Reset(gBtlScene->root, BtlTask_PortOwnerTag(mode - 0x100));
+        }
+        break;
+#endif
     }
 }
+
+#ifdef PORT
+/* The BtlScene_Reset mode that reaches the tasks of character chr: 2 / 3 as on the console, 0x100 + chr for a
+   fighter beyond the two (a tag of its own, BtlTask_PortOwnerTag). */
+s32 BtlScene_PortCharReset(s32 chr) {
+    u32 tag = BtlTask_PortOwnerTag(chr);
+
+    return tag == 0x800 ? 2 : tag == 0x1000 ? 3 : 0x100 + chr;
+}
+#endif
 
 /* Draws the scene for one view; the shared draw work is done for the first view only. */
 void BtlScene_Draw(s32 first) {

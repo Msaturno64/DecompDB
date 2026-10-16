@@ -693,7 +693,12 @@ void BtlLoad_PollObjectRequest(void) {
     s32 side;
     BtlJob *job;
 
+#ifdef PORT
+    for (side = 0; side < BTL_SIDE_COUNT; side++) { /* (every fighter: an extra's request waited for ever, and the
+                                                        whole queue with it: Hercule's ultimate never got its Buu) */
+#else
     for (side = 0; side < 2; side++) {
+#endif
         if (BtlChange_IsPendingType1(side)) {
             BtlChange_GetArgs(&id, &costume, &variant, NULL, NULL, NULL, &slot);
             job = BtlJob_Alloc();
@@ -723,7 +728,12 @@ void BtlLoad_PollCharaRequest(void) {
     s32 modelOnly;
     BtlJob *job;
 
+#ifdef PORT
+    for (side = 0; side < BTL_SIDE_COUNT; side++) { /* (every fighter: an extra's request waited for ever, and the
+                                                        whole queue with it: Hercule's ultimate never got its Buu) */
+#else
     for (side = 0; side < 2; side++) {
+#endif
         if (BtlChange_IsPendingType0(side)) {
             BtlChange_GetArgs(&chara, &costume, &variant, &animChara, &unk1C, &voiceChara, NULL);
             if (animChara < 0 && unk1C < 0 && voiceChara < 0) {

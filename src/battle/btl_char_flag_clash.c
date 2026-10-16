@@ -67,6 +67,11 @@ extern s32 PortMulti_TargetOf(s32 fighter);  /* port/src/multi_fighter.c */
 static s32 sClash[2] = {0, 1};
 #define CLASH_ID(role) sClash[role]
 #define CLASH_CHR(role) BtlChar_Get(sClash[role])
+
+/* The fighter of role 0 / 1 of the clash (eft_r.c: who loses a struggle). */
+s32 BtlClash_PortId(s32 role) {
+    return sClash[role];
+}
 #else
 #define CLASH_ID(role) (role)
 #define CLASH_CHR(role) BtlChar_Get(role)

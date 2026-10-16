@@ -1,6 +1,9 @@
 #include "common.h"
 #include "battle/eft_ae.h"
 #include "sys/gfx_ot.h"
+#ifdef PORT
+#include "battle/btl_multi.h"
+#endif
 
 /*
  * 0x1AA7E8..0x1AE2A8: the end of the effect code. See include/battle/eft_ae.h for the layouts.
@@ -1242,6 +1245,12 @@ void BtlTaskList_Reset(BtlTaskList *list, s32 mask) {
             if (task->cls->reset != NULL) {
                 task->cls->reset(task);
             }
+#ifdef PORT
+        } else if ((mask & 0xFF000000) && (task->tag & mask)) { /* a fighter beyond the two (BtlTask_PortOwnerTag) */
+            if (task->cls->reset != NULL) {
+                task->cls->reset(task);
+            }
+#endif
         }
         next = task->next;
         if (BTL_TASK_BITS(task)->dead) {
@@ -1537,6 +1546,24 @@ void BtlTask_SetTagBits(BtlTask *task, s32 bits) {
 void BtlTask_SetPos(BtlTask *task, EftAeVec pos) {
     Vec4_Copy(&task->pos, (Vec4 *)&pos);
 }
+
+#ifdef PORT
+/* The owner tag of a task of character chr: 0x800 for object 0 and 0x1000 for any other, as on the console; with
+   more than two fighters each one beyond the two has a bit of its own (0x01000000 << (chr - 2); the hit feedback
+   bits of eft_a.h end at 0x8000), so the reset of one (a character change, a lost struggle) is not also the reset of
+   fighter 1 and every other extra. Objects beyond the fighters (a partner) keep 0x1000. */
+extern s32 BattleSide_GetCount(void); /* battle_load.c */
+
+u32 BtlTask_PortOwnerTag(s32 chr) {
+    if (chr == 0) {
+        return 0x800;
+    }
+    if (chr >= 2 && chr < BattleSide_GetCount() && chr < BTL_FIGHTER_MAX) {
+        return 0x01000000u << (chr - 2);
+    }
+    return 0x1000;
+}
+#endif
 
 /* Sets bits of a task's tag word; used to tag a task with its owner (0x800 object id 0, else 0x1000). */
 void BtlTask_SetOwnerTag(BtlTask *task, s32 bits) {

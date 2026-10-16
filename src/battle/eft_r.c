@@ -1,4 +1,10 @@
 #include "common.h"
+#ifdef PORT
+extern s32 BtlScene_PortCharReset(s32 chr); /* btl_scene.c: the BtlScene_Reset mode of one character's tasks */
+#endif
+#ifdef PORT
+extern s32 BtlClash_PortId(s32 role); /* btl_char_flag_clash.c: the fighters of the clash */
+#endif
 #include "battle/eft_r.h"
 
 /*
@@ -223,6 +229,27 @@ void EftStruggle_End(s32 winner) {
         return;
     }
     w->flags |= EFT_STRUGGLE_END;
+#ifdef PORT
+    {
+        /* the two of the struggle (with more than two fighters not always 0 and 1): their technique timers and their
+           tasks (BtlScene_PortCharReset); with two fighters what follows below */
+        s32 a = BtlClash_PortId(0);
+        s32 b = BtlClash_PortId(1);
+
+        if (winner == -1) {
+            EftTechEvt_RequestExpire(a);
+            EftTechEvt_RequestExpire(b);
+            BtlScene_Reset(BtlScene_PortCharReset(a));
+            BtlScene_Reset(BtlScene_PortCharReset(b));
+        } else {
+            loser = winner == a ? b : a;
+            EftTechEvt_RequestExpire(loser);
+            BtlScene_Reset(BtlScene_PortCharReset(loser));
+        }
+        (void)layer;
+        return;
+    }
+#endif
     if (winner == -1) {
         EftTechEvt_RequestExpire(0);
         EftTechEvt_RequestExpire(1);

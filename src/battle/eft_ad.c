@@ -1,4 +1,7 @@
 #include "common.h"
+#ifdef PORT
+extern u32 BtlTask_PortOwnerTag(s32 chr); /* eft_ae.c: 0x800 / 0x1000, or a bit of its own for an extra fighter */
+#endif
 #include "battle/eft_ad.h"
 
 /*
@@ -399,7 +402,11 @@ void EftShock_Init(EftAdTask *task, s32 *arg) {
 
     memset(w, 0, sizeof(EftShock));
     w->objId = arg[0];
+#ifdef PORT
+    BtlTask_SetOwnerTag(task, BtlTask_PortOwnerTag(arg[0]));
+#else
     BtlTask_SetOwnerTag(task, arg[0] == 0 ? 0x800 : 0x1000);
+#endif
     w->timer = 2;
 }
 
@@ -447,7 +454,11 @@ void EftShock_Update(EftAdTask *task) {
             BtlCharApi_GetDir(*objId, (Vec4 *)&arg.dir);
             part[w->count + 4] = EftAnimPart_Create(&arg);
             EftAnimPart_SetType(part[w->count + 4], 3);
+#ifdef PORT
+            BtlTask_SetOwnerTag(part[w->count + 4], BtlTask_PortOwnerTag(*objId));
+#else
             BtlTask_SetOwnerTag(part[w->count + 4], *objId == 0 ? 0x800 : 0x1000);
+#endif
             w->count++;
             w->flags |= EFT_SHOCK_WAIT;
         }

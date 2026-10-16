@@ -1,4 +1,7 @@
 #include "common.h"
+#ifdef PORT
+extern u32 BtlTask_PortOwnerTag(s32 chr); /* eft_ae.c: 0x800 / 0x1000, or a bit of its own for an extra fighter */
+#endif
 #include "battle/eft_i.h"
 
 /*
@@ -1570,7 +1573,11 @@ void EftSweep_Init(EftTask *task, EftOwner *owner) {
     }
     w->life = EftEmit_GetEndFrames(w->set);
     EftSweep_InitPath(task);
+#ifdef PORT
+    BtlTask_SetOwnerTag(task, BtlTask_PortOwnerTag(owner->objId));
+#else
     BtlTask_SetOwnerTag(task, owner->objId == 0 ? 0x800 : 0x1000);
+#endif
 }
 
 /* Instance term. */
@@ -1836,7 +1843,11 @@ void EftFollow_Init(EftTask *task, EftOwner *owner) {
         w->flags |= EFT_FOLLOW_OWN_WIDTH;
     }
     w->life = EftEmit_GetEndFrames(w->set);
+#ifdef PORT
+    BtlTask_SetOwnerTag(task, BtlTask_PortOwnerTag(owner->objId));
+#else
     BtlTask_SetOwnerTag(task, owner->objId == 0 ? 0x800 : 0x1000);
+#endif
 }
 
 /* Instance term. */

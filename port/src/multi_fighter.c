@@ -292,6 +292,8 @@ int PortMulti_NextEnemyAfter(int fighter, int skip, int prev) {
      - a computer fighter takes the nearest enemy again every CPU_REPICK_FRAMES frames (each at its own frame), and
        at once when it is hurt while another enemy is nearer than its target (it turns to whoever is on it).
    Everything here is game state: a rollback brings it back. */
+static void tech_test(void); /* (BT3_TECHTEST, below) */
+
 void PortMulti_UpdateTargets(void) {
     extern int BattleSide_GetControl(int side); /* src/battle/battle_load.c: 0 a pad, 2 the computer */
     extern int BtlCharApi_GetHp(int objId);
@@ -333,6 +335,110 @@ void PortMulti_UpdateTargets(void) {
         if (k >= 0) {
             sTarget[i] = k;
         }
+    }
+    tech_test();
+}
+
+/* ---------------------------------------------------------------------------------------- BT3_TECHTEST (tests) */
+
+/* BT3_TECHTEST=1 (tests, with BT3_TEAMS=1v2): fighters 0 and 2 take turns at every technique of theirs on each other
+   (BtlCtrl_UseTechnique, as a story script does: blast 1 kinds 0 and 1, blast 2 kinds 2 and 3, ultimate 4), twice
+   each; everyone's health is kept up. Lines "bt3: techtest: ..." on stdout: each technique with its action, frames
+   and the health it took; STUCK when a fighter stays in one technique, reaction or load for 30 s (the game goes on
+   but the fight does not: what a player sees as a hang); then the program ends. Off: nothing here runs. */
+#define TT_ROUNDS 10         /* uses per fighter: kinds 2, 3, 4, 0, 1, twice */
+#define TT_STUCK 900         /* 30 s */
+static const int kTtKind[5] = {2, 3, 4, 0, 1};
+
+static void tech_test(void) {
+    extern int BtlCtrl_UseTechnique(int player, int kind); /* src/battle/btl_capi_b.c */
+    extern int BtlCtrl_CanAct(int player);
+    extern void BtlCtrl_RaiseHp(int player, int member, float percent);
+    extern int BtlCharApi_GetAction(int objId);
+    extern int BtlCharApi_GetHp(int objId);
+    extern char GAME_PTR Battle_GetWork(void); /* src/battle/battle_work.c */
+    static int on = -1, frame, turn, used[3], wait, startAt, dmg, startAction, kind, since[3], last[3], prevHp[3];
+    extern int BtlChange_IsPendingType0(int player), BtlChange_IsPendingType1(int player); /* btl_capi_b.c */
+    extern int BtlChange_IsLoadedFor(int player), BtlChange_IsReady(void); /* btl_char_ctl_b.c, btl_capi_b.c */
+    static int loadSince, reported, queue = -1;
+    int f, other, a, i, hp, q;
+
+    if (on < 0) {
+        on = getenv("BT3_TECHTEST") != NULL && BattleSide_GetCount() == 3;
+    }
+    if (!on) {
+        return;
+    }
+    frame++;
+    f = turn;
+    other = f == 0 ? 2 : 0;
+    for (q = BtlChange_IsReady(), i = 0; i < 3; i++) { /* the change queue (models, partners), each time it moves */
+        q = q << 3 | BtlChange_IsPendingType0(i) << 2 | BtlChange_IsPendingType1(i) << 1 | BtlChange_IsLoadedFor(i);
+    }
+    if (q != queue) {
+        printf("bt3: techtest: frame %d change queue: ready %d, pending0/pending1/loaded of each fighter %d%d%d %d%d%d %d%d%d\n",
+               frame, q >> 9 & 1, q >> 8 & 1, q >> 7 & 1, q >> 6 & 1, q >> 5 & 1, q >> 4 & 1, q >> 3 & 1, q >> 2 & 1,
+               q >> 1 & 1, q & 1);
+        queue = q;
+    }
+    for (i = 0; i < 3; i++) { /* the health a technique takes is counted before nobody is let fall below 60% */
+        hp = BtlCharApi_GetHp(BattleSide_GetObjId(i));
+        if (i == other && startAt > 0 && hp < prevHp[i]) {
+            dmg += prevHp[i] - hp;
+        }
+        BtlCtrl_RaiseHp(i, 0, 60.0f);
+        if (BtlCharApi_GetHp(BattleSide_GetObjId(i)) != hp) {
+            BtlCtrl_RaiseHp(i, 0, 100.0f);
+        }
+        prevHp[i] = BtlCharApi_GetHp(BattleSide_GetObjId(i));
+    }
+    sTarget[0] = 2;
+    sTarget[2] = 0;
+    /* stuck: one action (technique, reaction, down) for 30 s, or a model load that does not end */
+    for (i = 0; i < 3; i++) {
+        a = BtlCharApi_GetAction(BattleSide_GetObjId(i));
+        if (a != last[i]) {
+            last[i] = a;
+            since[i] = frame;
+        } else if (ENGAGED_ACTION(a) && frame - since[i] == TT_STUCK) {
+            printf("bt3: techtest: STUCK fighter %d in action %X for 30 s (kind %d of fighter %d)\n", i, a, kind, turn);
+            reported++;
+        }
+    }
+    if ((*(unsigned GAME_PTR)(Battle_GetWork() + 0x19F0) & 0x1800) == 0) { /* BattleWork.flags: LOAD_CHARA, _OBJECT */
+        loadSince = frame;
+    } else if (frame - loadSince == TT_STUCK) {
+        printf("bt3: techtest: STUCK loading a model for 30 s (kind %d of fighter %d)\n", kind, turn);
+        reported++;
+    }
+    a = BtlCharApi_GetAction(BattleSide_GetObjId(f));
+    if (startAt > 0) { /* a technique was asked for */
+        if (startAction == 0 && ENGAGED_ACTION(a) && a >= 0x105) {
+            startAction = a;
+        }
+        if ((startAction != 0 && BtlCtrl_CanAct(f)) || frame - startAt > 300 + (startAction ? 3 * TT_STUCK : 0)) {
+            printf("bt3: techtest: frame %d fighter %d kind %d: %s action %X, %d frames, %d health of fighter %d\n",
+                   frame, f, kind,
+                   startAction ? "ran" : "did not start:", startAction, frame - startAt,
+                   dmg, other);
+            startAt = 0;
+            used[f]++;
+            turn = used[0] > used[2] ? 2 : 0;
+            wait = frame + 45;
+        }
+        return;
+    }
+    if (used[0] >= TT_ROUNDS && used[2] >= TT_ROUNDS) {
+        printf("bt3: techtest: done, %d stuck\n", reported);
+        fflush(stdout);
+        exit(reported ? 3 : 0);
+    }
+    if (frame >= wait && BtlCtrl_CanAct(f) && BtlCtrl_CanAct(other)) {
+        kind = kTtKind[used[f] % 5];
+        dmg = 0;
+        BtlCtrl_UseTechnique(f, kind);
+        startAt = frame;
+        startAction = 0;
     }
 }
 
@@ -483,6 +589,21 @@ void PortMulti_DemoTeams(const char *teams) {
             }
         }
     }
+    /* BT3_TEAMS_CHARS=<id>,<id>.../<id>,<id>... (tests): the characters of side 0's members, then side 1's (ids
+       0..160, the game's character numbers); a member not listed keeps the demo's */
+    if (getenv("BT3_TEAMS_CHARS") != NULL) {
+        const char *e = getenv("BT3_TEAMS_CHARS");
+
+        for (side = 0; side < 2 && e != NULL; side++) {
+            for (i = 0; i < count[side] && *e != '\0' && *e != '/'; i++) {
+                BattleSide_GetMember(side, i)->word[0] = atoi(e);
+                e += strcspn(e, ",/");
+                e += *e == ',';
+            }
+            e = strchr(e, '/');
+            e = e != NULL ? e + 1 : NULL;
+        }
+    }
     /* BT3_TEAMS_CPU=<level> (tests): every member's computer level, 0..29 (the demo's is low: few techniques) */
     if (getenv("BT3_TEAMS_CPU") != NULL) {
         for (side = 0; side < 2; side++) {
@@ -496,6 +617,11 @@ void PortMulti_DemoTeams(const char *teams) {
     if (getenv("BT3_TEAMS_MODE") != NULL) {
         extern int GAME_PTR Battle_GetSetup(void); /* src/battle/battle_work.c: the setup's words */
         Battle_GetSetup()[2] = atoi(getenv("BT3_TEAMS_MODE"));
+    }
+    /* BT3_TEAMS_TIME=<n> (tests): the time limit (BattleRule.timeLimit, setup + 0x10): 0 none, 1..5 60..45 s */
+    if (getenv("BT3_TEAMS_TIME") != NULL) {
+        extern int GAME_PTR Battle_GetSetup(void); /* src/battle/battle_work.c */
+        Battle_GetSetup()[4] = atoi(getenv("BT3_TEAMS_TIME"));
     }
     BattleSetup_Finish();
     gPortMultiAll = 1;

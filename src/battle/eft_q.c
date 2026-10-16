@@ -1,4 +1,7 @@
 #include "common.h"
+#ifdef PORT
+extern s32 BtlScene_PortCharReset(s32 chr); /* btl_scene.c: the BtlScene_Reset mode of one character's tasks */
+#endif
 #include "battle/eft_q.h"
 #include "sys/gfx_ot.h"
 
@@ -877,7 +880,11 @@ void EftChar_Kill(s32 chr) {
     EftCharEntry *c = &gEftChar->chars[chr];
 
     if (c->task != NULL) {
+#ifdef PORT
+        BtlScene_Reset(BtlScene_PortCharReset(chr));
+#else
         BtlScene_Reset(chr == 0 ? 2 : 3);
+#endif
         EftChar_SetPool(chr);
         BtlTask_Kill(c->task);
         c->task = NULL;
