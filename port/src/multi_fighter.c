@@ -345,8 +345,11 @@ void PortMulti_UpdateTargets(void) {
    (BtlCtrl_UseTechnique, as a story script does: blast 1 kinds 0 and 1, blast 2 kinds 2 and 3, ultimate 4), twice
    each; everyone's health is kept up. Lines "bt3: techtest: ..." on stdout: each technique with its action, frames
    and the health it took; STUCK when a fighter stays in one technique, reaction or load for 30 s (the game goes on
-   but the fight does not: what a player sees as a hang); then the program ends. Off: nothing here runs. */
-#define TT_ROUNDS 10         /* uses per fighter: kinds 2, 3, 4, 0, 1, twice */
+   but the fight does not: what a player sees as a hang); then the program ends. Off: nothing here runs.
+   BT3_TECHTEST=2: the transformations instead: each fighter takes the form of each of its four transformation slots
+   in turn (BtlCtrl_Transform; "kind" 10 + slot in the lines), each time followed by its ultimate in that form. */
+#define TT_ROUNDS 10         /* uses per fighter: kinds 2, 3, 4, 0, 1, twice (BT3_TECHTEST=2: 4 forms, 4 ultimates) */
+#define TT_BUSY(a) (ENGAGED_ACTION(a) || ((a) >= 0xEC && (a) <= 0xF8)) /* (and the character changes) */
 #define TT_STUCK 900         /* 30 s */
 static const int kTtKind[5] = {2, 3, 4, 0, 1};
 
@@ -364,7 +367,7 @@ static void tech_test(void) {
     int f, other, a, i, hp, q;
 
     if (on < 0) {
-        on = getenv("BT3_TECHTEST") != NULL && BattleSide_GetCount() == 3;
+        on = getenv("BT3_TECHTEST") != NULL && BattleSide_GetCount() == 3 ? atoi(getenv("BT3_TECHTEST")) : 0;
     }
     if (!on) {
         return;
@@ -400,7 +403,7 @@ static void tech_test(void) {
         if (a != last[i]) {
             last[i] = a;
             since[i] = frame;
-        } else if (ENGAGED_ACTION(a) && frame - since[i] == TT_STUCK) {
+        } else if (TT_BUSY(a) && frame - since[i] == TT_STUCK) {
             printf("bt3: techtest: STUCK fighter %d in action %X for 30 s (kind %d of fighter %d)\n", i, a, kind, turn);
             reported++;
         }
@@ -413,7 +416,7 @@ static void tech_test(void) {
     }
     a = BtlCharApi_GetAction(BattleSide_GetObjId(f));
     if (startAt > 0) { /* a technique was asked for */
-        if (startAction == 0 && ENGAGED_ACTION(a) && a >= 0x105) {
+        if (startAction == 0 && TT_BUSY(a) && (a >= 0x105 || a >= 0xEC)) {
             startAction = a;
         }
         if ((startAction != 0 && BtlCtrl_CanAct(f)) || frame - startAt > 300 + (startAction ? 3 * TT_STUCK : 0)) {
@@ -428,15 +431,32 @@ static void tech_test(void) {
         }
         return;
     }
-    if (used[0] >= TT_ROUNDS && used[2] >= TT_ROUNDS) {
+    if (used[0] >= (on == 2 ? 8 : TT_ROUNDS) && used[2] >= (on == 2 ? 8 : TT_ROUNDS)) {
         printf("bt3: techtest: done, %d stuck\n", reported);
         fflush(stdout);
         exit(reported ? 3 : 0);
     }
     if (frame >= wait && BtlCtrl_CanAct(f) && BtlCtrl_CanAct(other)) {
-        kind = kTtKind[used[f] % 5];
+        kind = on == 2 ? (used[f] % 2 ? 4 : 10 + used[f] / 2) : kTtKind[used[f] % 5];
         dmg = 0;
-        BtlCtrl_UseTechnique(f, kind);
+        if (kind >= 10) {
+            /* (what a story script's flag 0x116 + slot does, BtlAct_CheckStoryForced: that one is for mode 1 only) */
+            extern int BtlParam_GetSlotId(void *chr, int slot);                          /* src/battle/btl_tech_a.c */
+            extern int BtlAct_CanTransform(void *chr, unsigned slot, int needBlast, int needAllowed); /* btl_act_j.c */
+            extern int BtlAct_QueueTransform(void *chr, int slot);
+            int id = BtlParam_GetSlotId(BtlChar_Get(f), kind - 10);
+
+            if (BtlAct_CanTransform(BtlChar_Get(f), kind - 10, 0, 0)) {
+                BtlAct_QueueTransform(BtlChar_Get(f), kind - 10);
+            } else {
+                printf("bt3: techtest: frame %d fighter %d kind %d: no transformation (slot id %d)\n", frame, f, kind, id);
+                used[f] += 2; /* (and the ultimate that would follow it) */
+                turn = used[0] > used[2] ? 2 : 0;
+                return;
+            }
+        } else {
+            BtlCtrl_UseTechnique(f, kind);
+        }
         startAt = frame;
         startAction = 0;
     }
