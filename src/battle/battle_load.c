@@ -475,9 +475,6 @@ s32 BtlLoad_StepChara(BtlJob *job) {
             break;
         }
         if (job->modelOnly == 0) {
-#ifdef PORT
-            if (job->side < 2) /* shortcut: the AI's work is two wide until multi-fighter T1.4 widens it */
-#endif
             BtlAiMgr_ResetSide(job->side);
             BtlScene_CreateChar(job->side);
             if (!BtlCtrl_IsSwitching(job->side)) {

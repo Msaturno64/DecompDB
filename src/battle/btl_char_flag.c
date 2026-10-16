@@ -178,6 +178,31 @@ void BtlChars_UpdateSightFlag(void) {
     BtlFlagChr *chr0 = BtlChar_Get(0);
     BtlFlagChr *chr1 = BtlChar_Get(1);
 
+#ifdef PORT
+    {
+        /* several fighters on the field: each fighter and its target (with two, the console's code below) */
+        extern s32 BattleSide_GetCount(void);
+        extern s32 PortMulti_TargetOf(s32 fighter);
+        s32 i;
+
+        if (BattleSide_GetCount() > 2) {
+            for (i = 0; i < BattleSide_GetCount(); i++) {
+                BtlChar_ClearFlag(BtlChar_Get(i), 0xBA);
+            }
+            for (i = 0; i < BattleSide_GetCount(); i++) {
+                chr0 = BtlChar_Get(i);
+                chr1 = BtlChar_Get(PortMulti_TargetOf(i));
+                BtlCharApi_GetNodePos(chr0->objId, 0x2F, &a);
+                BtlCharApi_GetNodePos(chr1->objId, 0x2F, &b);
+                ColSeg_Set(seg, &a, &b);
+                if (StgCol_TraceSegment(seg)) {
+                    BtlChar_SetHeldFlag(chr0, 0xBA);
+                }
+            }
+            return;
+        }
+    }
+#endif
     BtlChar_ClearFlag(chr0, 0xBA);
     BtlChar_ClearFlag(chr1, 0xBA);
     BtlCharApi_GetNodePos(chr0->objId, 0x2F, &a);
@@ -208,6 +233,18 @@ void BtlChar_SetFrameBits(BtlFlagChr *chr, u64 bits) {
 
 /* The first clash won in a battle (by either side): set-once bit 0, flag 0xE3 and battle event 0x3C for this fighter. */
 void BtlChar_RaiseFirstClash(BtlFlagChr *chr) {
+#ifdef PORT
+    {
+        extern s32 BattleSide_GetCount(void);
+        s32 i;
+
+        for (i = 2; i < BattleSide_GetCount(); i++) { /* several fighters: any of them won one before */
+            if (BtlChar_TestOnceBit(BtlChar_Get(i), 0)) {
+                return;
+            }
+        }
+    }
+#endif
     if (!BtlChar_TestOnceBit(BtlChar_Get(0), 0) && !BtlChar_TestOnceBit(BtlChar_Get(1), 0)) {
         BtlChar_SetOnceBit(chr, 0);
         BtlChar_SetFlag(chr, 0xE3);

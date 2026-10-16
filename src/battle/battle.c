@@ -376,6 +376,12 @@ void Battle_Loop(void) {
         Snd_SendFighters();
         BtlGame_PreUpdate();
         Battle_UpdateWork();
+#ifdef PORT
+        {
+            extern void PortMulti_UpdateTargets(void); /* port/src/multi_fighter.c: several fighters on the field */
+            PortMulti_UpdateTargets();
+        }
+#endif
         BtlAiMgr_Update();
         BtlChars_SampleInput();
         draw = Battle_Update();

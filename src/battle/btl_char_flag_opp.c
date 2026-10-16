@@ -37,7 +37,13 @@ extern s32 BtlParam_GetUnk0(BtlFlagChr *chr);                        /* u16 at +
 extern s32 BtlParam_GetUnk2(BtlFlagChr *chr);                        /* s8 at +2 of the object's parameter block */
 extern f32 BtlParam_GetUnkC7Scale(BtlFlagChr *chr);
 
+#ifdef PORT
+/* (several fighters on the field: the fighter's target, port/src/multi_fighter.c; the other one of two) */
+extern s32 PortMulti_TargetOf(s32 fighter);
+#define OPPONENT(chr) BtlChar_Get(PortMulti_TargetOf((chr)->player))
+#else
 #define OPPONENT(chr) ((chr)->player == 0 ? BtlChar_Get(1) : BtlChar_Get(0))
+#endif
 
 /* Where to aim at the opponent: its override position 6 when set, else its position. */
 void BtlOpp_GetTargetPos(BtlFlagChr *chr, Vec4 *out) {
@@ -318,11 +324,15 @@ s32 BtlOpp_GetClashCountB(BtlFlagChr *chr) {
 void BtlOpp_MirrorFlags(BtlFlagChr *chr) {
     BtlFlagChr *opp;
 
+#ifdef PORT
+    opp = OPPONENT(chr);
+#else
     if (chr->player == 0) {
         opp = BtlChar_Get(1);
     } else {
         opp = BtlChar_Get(0);
     }
+#endif
     BtlChar_ClearFlagRange(chr, 0xAC, 0xB9);
     if (BtlChar_TestFlag(opp, 0xB)) {
         BtlChar_SetHeldFlag(chr, 0xAC);

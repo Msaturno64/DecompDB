@@ -30,10 +30,157 @@
    restored state must bring back the battle it belongs to. */
 int gPortMultiAll;
 
+/* ----------------------------------------------------------------------------------- BT3_HEAPCHECK (diagnostics) */
+
+/* BT3_HEAPCHECK=1: at the end of every battle frame the game heap's blocks are walked. The first block whose header
+   or trailer is not whole is reported once, with the block before it (the one that ran over its end) and who asked
+   for that one: Heap_Alloc notes its caller (PortMulti_NoteAlloc). Not game state. */
+#define HEAP_MAGIC_WORD 0x53484254u /* HEAP_MAGIC, include/sys/heap.h */
+extern unsigned gHeapStart[2], gHeapEnd[2]; /* src/sys/heap.c: HeapBlock *, 4 bytes each in the game's memory */
+PORT_HOST static int sHeapCheck = -1, sHeapReported;
+PORT_HOST static unsigned sAllocData[8192], sAllocCaller[8192];
+
+/* src/sys/heap.c Heap_Alloc: a block's data address and who asked for it (both as numbers: game addresses). */
+void PortMulti_NoteAlloc(unsigned data, unsigned caller) {
+    unsigned h;
+
+    if (sHeapCheck < 0) {
+        sHeapCheck = getenv("BT3_HEAPCHECK") != NULL;
+    }
+    if (!sHeapCheck || data == 0) {
+        return;
+    }
+    for (h = (data >> 4) % 8192; sAllocData[h] != 0 && sAllocData[h] != data; h = (h + 1) % 8192) {
+    }
+    sAllocData[h] = data;
+    sAllocCaller[h] = caller;
+}
+
+static unsigned alloc_caller(unsigned data) {
+    unsigned h;
+
+    for (h = (data >> 4) % 8192; sAllocData[h] != 0; h = (h + 1) % 8192) {
+        if (sAllocData[h] == data) {
+            return sAllocCaller[h];
+        }
+    }
+    return 0;
+}
+
+static void heap_check(unsigned long long frame) {
+    const unsigned *b;
+    unsigned at = gHeapStart[0], prev = 0, size;
+
+    if (sHeapReported || at == 0) {
+        return;
+    }
+    while (at != gHeapEnd[0]) {
+        b = (const unsigned *)(uintptr_t)at;
+        size = b[4];
+        if (b[0] != HEAP_MAGIC_WORD || size < 0x20 || at + size > gHeapEnd[0] ||
+            *(const unsigned *)(uintptr_t)(at + size - 4) != size) {
+            const unsigned *p = (const unsigned *)(uintptr_t)prev;
+            sHeapReported = 1;
+            fprintf(stderr, "bt3: heapcheck: block at 0x%08X broken (magic %08X size %X) after battle frame %llu\n", at,
+                    b[0], size, frame);
+            if (prev != 0) {
+                fprintf(stderr, "bt3: heapcheck: the block before: 0x%08X, data 0x%08X, %d bytes asked, used %d, "
+                        "allocated from\n0x%016llX (Tenkaichi3Decomp.exe)\n", prev, p[5], (int)p[6], (int)p[1],
+                        (unsigned long long)alloc_caller(p[5]));
+            }
+            return;
+        }
+        prev = at;
+        at += size;
+    }
+}
+
+/* ------------------------------------------------------------------------------------------------- targets */
+
+#define FIGHTER_MAX 10 /* BTL_FIGHTER_MAX, battle/battle.h (a game header: its pointers are not this file's) */
+
+extern int BattleSide_GetCount(void);  /* src/battle/battle_load.c */
+extern int BattleSide_GetTeam(int side);
+extern int BattleSide_GetObjId(int side);
+extern void BtlCharApi_GetPos(int objId, float *out); /* src/battle/btl_capi_a.c */
+extern void GAME_PTR BtlChar_Get(int i);              /* src/battle/btl_char_mgr.c */
+extern int BtlChar_IsDead(void *chr);
+
+/* Each fighter's opponent beyond the two: the enemy it is set on. Game state (not PORT_HOST): a rollback brings it
+   back with the fighters. -1: none yet. */
+static int sTarget[FIGHTER_MAX];
+
+/* The opponent of fighter i (BTL_OPP, battle/battle.h). With two fighters the other one, as on the console; with
+   more the target, or the first enemy while there is none yet (before the first PortMulti_UpdateTargets). */
+int PortMulti_TargetOf(int i) {
+    int n = BattleSide_GetCount(), t, k;
+
+    if (n <= 2 || i < 0 || i >= n) {
+        return i ^ 1;
+    }
+    t = sTarget[i];
+    if (t < 0 || t >= n || BattleSide_GetTeam(t) == BattleSide_GetTeam(i)) {
+        for (k = 0; k < n && BattleSide_GetTeam(k) == BattleSide_GetTeam(i); k++) {
+        }
+        t = k < n ? k : i ^ 1;
+    }
+    return t;
+}
+
+/* BtlChar_ResetAll: a fight starts (or starts again): nobody is set on anyone. */
+void PortMulti_ResetTargets(void) {
+    int i;
+
+    for (i = 0; i < FIGHTER_MAX; i++) {
+        sTarget[i] = -1;
+    }
+}
+
+/* Battle_Loop, once a frame before the AI: a fighter keeps its target while that one can fight; otherwise it takes
+   the nearest enemy that can (the lowest index of equally near ones, so both players' copies agree). With nobody
+   left to fight the target stays as it is. */
+void PortMulti_UpdateTargets(void) {
+    int n = BattleSide_GetCount(), i, k, best;
+    float p[FIGHTER_MAX][4] __attribute__((aligned(16)));
+    float d, bestD, dx, dy, dz;
+
+    if (n <= 2) {
+        return;
+    }
+    for (i = 0; i < n; i++) {
+        BtlCharApi_GetPos(BattleSide_GetObjId(i), p[i]);
+    }
+    for (i = 0; i < n; i++) {
+        k = sTarget[i];
+        if (k >= 0 && k < n && BattleSide_GetTeam(k) != BattleSide_GetTeam(i) && !BtlChar_IsDead(BtlChar_Get(k))) {
+            continue;
+        }
+        best = -1;
+        bestD = 0.0f;
+        for (k = 0; k < n; k++) {
+            if (BattleSide_GetTeam(k) == BattleSide_GetTeam(i) || BtlChar_IsDead(BtlChar_Get(k))) {
+                continue;
+            }
+            dx = p[k][0] - p[i][0];
+            dy = p[k][1] - p[i][1];
+            dz = p[k][2] - p[i][2];
+            d = dx * dx + dy * dy + dz * dz;
+            if (best < 0 || d < bestD) {
+                best = k;
+                bestD = d;
+            }
+        }
+        if (best >= 0) {
+            sTarget[i] = best;
+        }
+    }
+}
+
 /* ------------------------------------------------------------------------------------------- BT3_MFLOG (tests) */
 
 /* BT3_MFLOG=<file>: one line per vertical blank of a fight: the blank, then for every fighter its team, health
-   and position (x y z as the bits of the floats, hexadecimal): "<blank> | <team> <hp> <x> <y> <z> | ...". A blank
+   and position (x y z as the bits of the floats, hexadecimal) and its target: "<blank> | <team> <hp> <x> <y> <z>
+   <target> | ...". A blank
    run again after a rollback is written again; the last line of a blank counts. Not game state (PORT_HOST). */
 void PortMulti_Trace(unsigned vblank, int battle) {
     extern int BattleSide_GetCount(void);       /* src/battle/battle_load.c */
@@ -59,7 +206,8 @@ void PortMulti_Trace(unsigned vblank, int battle) {
         obj = BattleSide_GetObjId(i);
         BtlCharApi_GetPos(obj, q);
         memcpy(u, q, sizeof(u)); /* (the bits: this file has no floating-point unit to print with) */
-        fprintf(fp, " | %d %d %08x %08x %08x", BattleSide_GetTeam(i), BtlCharApi_GetHp(obj), u[0], u[1], u[2]);
+        fprintf(fp, " | %d %d %08x %08x %08x %d", BattleSide_GetTeam(i), BtlCharApi_GetHp(obj), u[0], u[1], u[2],
+                PortMulti_TargetOf(i));
     }
     fputc('\n', fp);
     fflush(fp);
@@ -158,6 +306,9 @@ void PortMulti_FrameMark(int where) {
         sSimMax = d > sSimMax ? d : sSimMax;
         sMark = t;
         return;
+    }
+    if (sHeapCheck > 0) {
+        heap_check(sFrames);
     }
     d -= gPortSleptNs - sSlept; /* (the wait for the vertical blank is not work) */
     sRestSum += d;

@@ -918,7 +918,7 @@ void BtlChar_RaiseEvents(BtlMgrChr *chr) {
     }
     if (BtlChar_TestFlag(chr, 3)) {
         BattleResult *res = BattleResult_GetPtr();
-        s32 opp = BtlOpp_GetPlayer(chr);
+        s32 opp = BTL_SIDE_TEAM(BtlOpp_GetPlayer(chr)); /* (PORT: a target beyond the two counts for its team) */
 
         if (res->unk1C[opp] < chr->unkD40) {
             res->unk1C[opp] = chr->unkD40;
@@ -1337,6 +1337,12 @@ void BtlChar_ResetAll(void) {
     memset(gBtlChars->chars, 0, BtlChar_GetCount() * 0x1600);
     BtlChange_Reset();
     BtlReplay_ResetViewer();
+#ifdef PORT
+    {
+        extern void PortMulti_ResetTargets(void); /* port/src/multi_fighter.c */
+        PortMulti_ResetTargets();
+    }
+#endif
     for (i = 0; i < BtlChar_GetCount(); i++) {
         chr = BtlChar_Get(i);
         chr->side = i;

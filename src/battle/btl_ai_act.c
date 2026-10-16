@@ -122,7 +122,7 @@ extern s32 BtlSide_IsPoweredUp(s32 side);                    /* fighter flag 6 *
    (s32 state[2]; s8 cls[2]; index 0 own, 1 opponent). */
 #define AIACT_GET_STATES(s, tbl, state, cls)                                   \
     (state)[0] = BtlCharApi_GetUnk974((s)->side);                              \
-    (state)[1] = BtlCharApi_GetUnk974((s)->side ^ 1);                          \
+    (state)[1] = BtlCharApi_GetUnk974(BTL_OPP((s)->side));                          \
     (cls)[0] = ((AiActTables8 *)((u8 *)(tbl) + 8))->stateClass[(state)[0]];    \
     (cls)[1] = ((AiActTables8 *)((u8 *)(tbl) + 8))->stateClass[(state)[1]]
 
@@ -304,7 +304,7 @@ void BtlAiAtk_Reset(s32 side, AiActAtk *atk) {
 f32 BtlAiAtk_RollCharge(AiActSide *s, s8 base, s8 range) {
     s32 roll = Rand_Range(100);
     s32 chance[5] = { 10, 20, 30, 40, 50 };
-    AiActSide *opp = &gBtlAi->side[s->side ^ 1];
+    AiActSide *opp = &gBtlAi->side[BTL_OPP(s->side)];
     s32 kind = opp->atk.oppKind;
     f32 ret = 0.0f;
     s32 thr;
@@ -939,7 +939,7 @@ s32 BtlAiSense_CheckBit60(AiActSide *s) {
 
 /* Situation bit 61: the opponent's parameter byte +2 is 4. */
 s32 BtlAiSense_CheckBit61(AiActSide *s) {
-    return BtlCharApi_GetParamByte2(s->side ^ 1) == 4;
+    return BtlCharApi_GetParamByte2(BTL_OPP(s->side)) == 4;
 }
 
 /* 1 when the opponent's facing direction and the direction from this fighter to the opponent agree: this
@@ -951,14 +951,14 @@ s32 BtlAiSense_IsBehindOpponent(AiActSide *s) {
     AiActVec opp;
     AiActVec dir;
 
-    BtlCharApi_GetRot(s->side ^ 1, &v);
+    BtlCharApi_GetRot(BTL_OPP(s->side), &v);
     face.x = sinf(v.y);
     face.y = 0.0f;
     face.z = cosf(v.y);
     face.w = 0.0f;
     Vec3_Normalize(&face, &face);
     BtlCharApi_GetPos(s->side, &pos);
-    BtlCharApi_GetPos(s->side ^ 1, &opp);
+    BtlCharApi_GetPos(BTL_OPP(s->side), &opp);
     Vec3_Sub(&v, &opp, &pos);
     v.y = 0.0f;
     Vec3_Normalize(&dir, &v);
@@ -974,12 +974,12 @@ s32 BtlAiSense_IsBehindOpponent(AiActSide *s) {
    +0x106C < -29 and react bit 0x40 clear. */
 s32 BtlAiSense_CheckBit32(AiActSide *s) {
     AiActStatus *st = &s->st;
-    f32 progress = BtlCharApi_GetTechniqueProgress(s->side ^ 1);
-    u32 attr = BtlCharApi_GetAttackAttr(s->side ^ 1);
+    f32 progress = BtlCharApi_GetTechniqueProgress(BTL_OPP(s->side));
+    u32 attr = BtlCharApi_GetAttackAttr(BTL_OPP(s->side));
     s32 kind = BtlCharApi_GetOppSkillKind(s->side);
     s32 sub = BtlCharApi_GetOppMoveKind(s->side);
     f32 radius = BtlCharApi_GetRadius(s->side);
-    f32 speed = BtlCharApi_GetSpeed(s->side ^ 1);
+    f32 speed = BtlCharApi_GetSpeed(BTL_OPP(s->side));
     s32 ready = BtlCharApi_IsUnk106CLow(s->side);
     s32 ret;
 
@@ -1222,9 +1222,9 @@ s32 BtlAiSense_CheckBit40(AiActSide *s) {
     AiActStatus *st = &s->st;
     AiActSeq *act = &s->act;
     AiActEntry *e = &s->act.stack[0];
-    AiActSide *opp = &gBtlAi->side[s->side ^ 1];
+    AiActSide *opp = &gBtlAi->side[BTL_OPP(s->side)];
     AiActTables *tbl = gBtlAi->data->tables;
-    s32 oppState = BtlCharApi_GetUnk974(s->side ^ 1);
+    s32 oppState = BtlCharApi_GetUnk974(BTL_OPP(s->side));
     s32 cls = tbl->stateClass[oppState];
     u64 w = BtlCharApi_GetUnk1288(s->side);
 
@@ -1265,7 +1265,7 @@ s32 BtlAiSense_CheckBit41(AiActSide *s) {
     AiActSeq *act = &s->act;
     AiActEntry *e = &s->act.stack[0];
 
-    if (!BtlAiSense_IsBehindOpponent(&gBtlAi->side[s->side ^ 1])) {
+    if (!BtlAiSense_IsBehindOpponent(&gBtlAi->side[BTL_OPP(s->side)])) {
         return 0;
     }
     if (m->dist[1] < gBtlAi->dist) {
@@ -1300,7 +1300,7 @@ s32 BtlAiSense_CheckBit28(AiActSide *s) {
     if ((u8)(cls[0] - 13) < 11) {
         return 0;
     }
-    if (BtlAiSense_IsBehindOpponent(&gBtlAi->side[s->side ^ 1])) {
+    if (BtlAiSense_IsBehindOpponent(&gBtlAi->side[BTL_OPP(s->side)])) {
         return 0;
     }
     if (!((u32)((u8)cls[1] - 13) < 5)) {
@@ -1317,7 +1317,7 @@ s32 BtlAiSense_CheckBit28(AiActSide *s) {
 
 /* Situation bit 29: close range, the opponent in state class 15..17, react bit 0x200 clear. */
 s32 BtlAiSense_CheckBit29(AiActSide *s) {
-    s32 cls = gBtlAi->data->tables->stateClass[BtlCharApi_GetUnk974(s->side ^ 1)];
+    s32 cls = gBtlAi->data->tables->stateClass[BtlCharApi_GetUnk974(BTL_OPP(s->side))];
     AiActStatus *st = &s->st;
 
     if (st->react & 0x200) {
@@ -1336,7 +1336,7 @@ s32 BtlAiSense_CheckBit29(AiActSide *s) {
    1, fighter +0x1070 is -30, react bit 0x400 clear. */
 s32 BtlAiSense_CheckBit35(AiActSide *s) {
     AiActStatus *st = &s->st;
-    f32 progress = BtlCharApi_GetTechniqueProgress(s->side ^ 1);
+    f32 progress = BtlCharApi_GetTechniqueProgress(BTL_OPP(s->side));
 
     if (!BtlCharApi_GetOppSkillKind(s->side)) {
         return 0;
@@ -1360,9 +1360,9 @@ s32 BtlAiSense_CheckBit35(AiActSide *s) {
    with the opponent in state class 0x18 and progress 1..3; react bit 0x80 clear. */
 s32 BtlAiSense_CheckBit31(AiActSide *s) {
     AiActStatus *st = &s->st;
-    f32 progress = BtlCharApi_GetTechniqueProgress(s->side ^ 1);
+    f32 progress = BtlCharApi_GetTechniqueProgress(BTL_OPP(s->side));
     AiActTables *tbl = gBtlAi->data->tables;
-    s32 cls = tbl->stateClass[BtlCharApi_GetUnk974(s->side ^ 1)];
+    s32 cls = tbl->stateClass[BtlCharApi_GetUnk974(BTL_OPP(s->side))];
 
     if (!BtlCharApi_GetOppSkillKind(s->side)) {
         if (progress < 0.0f) {
@@ -1605,7 +1605,7 @@ s32 BtlAiSense_IsSteep(AiActSide *s) {
     f32 a;
 
     BtlCharApi_GetPos(s->side, &pos);
-    BtlCharApi_GetPos(s->side ^ 1, &opp);
+    BtlCharApi_GetPos(BTL_OPP(s->side), &opp);
     if (Vec3_Dist(&opp, &pos) < 30.0f) {
         return 0;
     }
@@ -1629,7 +1629,7 @@ void BtlAiSense_Derived(AiActSide *s) {
     s8 cls[2];
     AiActStatus *st = &s->st;
     u64 w = BtlCharApi_GetUnk1288(s->side);
-    s32 oppBusy = BtlCharApi_GetStunTimer(s->side ^ 1);
+    s32 oppBusy = BtlCharApi_GetStunTimer(BTL_OPP(s->side));
 
     AIACT_GET_STATES(s, tbl, state, cls);
     if (st->react & 1) {
@@ -1700,7 +1700,7 @@ void BtlAiSense_Derived(AiActSide *s) {
 void BtlAiSense_Update(AiActSide *s) {
     AiActStatus *st = &s->st;
     AiActTables *tbl = gBtlAi->data->tables;
-    s32 cls = tbl->stateClass[BtlCharApi_GetUnk974(s->side ^ 1)];
+    s32 cls = tbl->stateClass[BtlCharApi_GetUnk974(BTL_OPP(s->side))];
     s32 react;
     s32 i;
 

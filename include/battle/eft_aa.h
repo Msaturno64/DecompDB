@@ -4,6 +4,7 @@
 #include "types.h"
 #include "sys/math3d.h"
 #include "sys/list.h"
+#include "battle/btl_multi.h"
 
 /*
  * Effect modules, 0x199F28..0x19E0C0 (src/battle/eft_aa.c). Six small modules, all drawing or sound only:
@@ -193,11 +194,7 @@ typedef struct EftCharSlot {
     /* 0x4 */ s32 on;
 } EftCharSlot;
 
-#ifdef PORT
-#define EFT_CHAR_SLOT_MAX 10 /* BTL_FIGHTER_MAX (battle/battle.h): one per fighter object */
-#else
-#define EFT_CHAR_SLOT_MAX 2
-#endif
+#define EFT_CHAR_SLOT_MAX BTL_FIGHTER_MAX /* one per fighter object */
 /* gEftCharSlot (0x50 bytes on the console): one slot per kind and fighter. */
 typedef struct EftCharSlots {
     /* 0x00 */ EftCharSlot kind0[EFT_CHAR_SLOT_MAX];

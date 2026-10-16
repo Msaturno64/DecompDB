@@ -107,7 +107,7 @@ void BtlAiMgr_Reset(void) {
             gBtlAi->data = NULL;
         }
     }
-    for (s = gBtlAi->work; s != &gBtlAi->work[2]; s++) {
+    for (s = gBtlAi->work; s != &gBtlAi->work[BTL_FIGHTER_MAX]; s++) {
         if (s->flags & 1) {
             if (s->param != NULL) {
                 Heap_Free(s->param);
@@ -116,7 +116,11 @@ void BtlAiMgr_Reset(void) {
         }
     }
     AiThink_BindData(0);
+#ifdef PORT
+    for (i = 0; i < BtlChar_GetCount(); i++) { /* every fighter's controller (2 on the console) */
+#else
     for (i = 0; i < 2; i++) {
+#endif
         AiThink_ResetSide(i, 0);
     }
 }
@@ -129,7 +133,11 @@ void BtlAiMgr_ResetSide(s32 side) {
 /* Allocates the manager block if needed and resets it. */
 void BtlAiMgr_Init(void) {
     if (gBtlAi == NULL) {
+#ifdef PORT
+        memset(gBtlAi = Heap_Alloc(sizeof(BtlAi), 0x20, 0, 2), 0, sizeof(BtlAi)); /* (a controller per fighter) */
+#else
         memset(gBtlAi = Heap_Alloc(0xA60, 0x20, 0, 2), 0, 0xA60);
+#endif
     }
     BtlAiMgr_Reset();
 }
@@ -144,7 +152,7 @@ void BtlAiMgr_Term(void) {
             gBtlAi->data = NULL;
         }
     }
-    for (s = gBtlAi->work; s != &gBtlAi->work[2]; s++) {
+    for (s = gBtlAi->work; s != &gBtlAi->work[BTL_FIGHTER_MAX]; s++) {
         if (s->flags & 1) {
             if (s->param != NULL) {
                 Heap_Free(s->param);
@@ -240,6 +248,33 @@ void BtlAiMgr_UpdateSight(void) {
     }
 }
 
+#ifdef PORT
+/* Several fighters on the field: the same for fighter a and its target b, before a's controller runs (the distance
+   and the sight are the controller's own then, not one pair's). */
+static void BtlAiMgr_UpdateSightPair(s32 ia, s32 ib) {
+    BtlAiVec a;
+    BtlAiVec b;
+    BtlAiVec d;
+    BtlAiSegment seg;
+
+    BtlCharApi_GetPos(ia, &a);
+    a.y -= BtlCharApi_GetHeight(ia) * 0.5f;
+    BtlCharApi_GetPos(ib, &b);
+    b.y -= BtlCharApi_GetHeight(ib) * 0.5f;
+    Vec3_Sub(&d, &a, &b);
+    gBtlAi->dist = Vec3_Length(&d);
+    seg.from = a;
+    seg.to = b;
+    gBtlAi->sight = 0;
+    if (StgCol_TraceSegment(&seg)) {
+        gBtlAi->sight |= BTLAI_SIGHT_BLOCKED;
+        if (StgCol_GetHit()->id != -1) {
+            gBtlAi->sight |= BTLAI_SIGHT_BLOCKED_ID;
+        }
+    }
+}
+#endif
+
 /* Returns the number of frames the AI has run. */
 s32 BtlAiMgr_GetFrame(void) {
     return gBtlAi->frame;
@@ -266,10 +301,15 @@ void BtlAiMgr_Update(void) {
     }
     BtlAiMgr_UpdateSight();
     gBtlAi->frame++;
-    for (i = 0; i < BtlChar_GetCount() && i < 2; i++) {
+    for (i = 0; i < BtlChar_GetCount() && i < BTL_FIGHTER_MAX; i++) {
         BtlAiWork *s = &gBtlAi->work[i];
 
         if (BtlCharApi_IsInputInjected(i) && s->param != NULL) {
+#ifdef PORT
+            if (BtlChar_GetCount() > 2) {
+                BtlAiMgr_UpdateSightPair(i, BTL_OPP(i));
+            }
+#endif
             BtlAiSense_Update(s);
             AiThink_Think(s);
             BtlAi_RunSeq(s);
@@ -296,7 +336,7 @@ s32 BtlAiMove_PickDir(BtlAiWork *s, s32 mode) {
     f32 rad = BtlStage_GetInnerRadius() - 100.0f;
 
     BtlCharApi_GetPos(s->objId, &pos);
-    BtlCharApi_GetPos(s->objId ^ 1, &opp);
+    BtlCharApi_GetPos(BTL_OPP(s->objId), &opp);
     list = &cand;
     list->v[0] = 0;
     if (mode == 2) {
@@ -304,7 +344,7 @@ s32 BtlAiMove_PickDir(BtlAiWork *s, s32 mode) {
             cand.v[1] = 1;
             n = 2;
         }
-        if (pos.y < BtlCharApi_GetGroundY(s->objId) - 20.0f || opp.y < BtlCharApi_GetGroundY(s->objId ^ 1) - 20.0f) {
+        if (pos.y < BtlCharApi_GetGroundY(s->objId) - 20.0f || opp.y < BtlCharApi_GetGroundY(BTL_OPP(s->objId)) - 20.0f) {
             list->v[n++] = 2;
         }
     }
@@ -354,7 +394,7 @@ void BtlAiMove_CalcTarget(BtlAiWork *s) {
 
     BtlCharApi_GetPos(s->objId, &pos);
     a = pos;
-    BtlCharApi_GetPos(s->objId ^ 1, &opp);
+    BtlCharApi_GetPos(BTL_OPP(s->objId), &opp);
     a.y = pos.y;
     Vec3_Sub(&dir, &a, &opp);
     Vec3_Normalize(&dir, &dir);
@@ -487,7 +527,7 @@ s32 BtlAiMove_Check(BtlAiWork *s) {
             m->remain = Vec3_Length(&d);
         }
         if (m->pathTimer == 0) {
-            BtlCharApi_GetPos(s->objId ^ 1, &opp);
+            BtlCharApi_GetPos(BTL_OPP(s->objId), &opp);
             Vec3_Sub(&d, &opp, (BtlAiVec *)path);
             if (50.0f < Vec3_Length(&d)) {
                 if (BtlAiMove_BuildPath(s)) {
@@ -542,7 +582,7 @@ void BtlAiMove_Steer(BtlAiWork *s, BtlAiVec *to, s32 kind) {
     cls = tbl->actClass[BtlCharApi_GetUnk974(side)];
     fly = BtlCharApi_TestFlag0F(s->objId);
     BtlCharApi_GetPos(s->objId, &pos);
-    BtlCharApi_GetPos(s->objId ^ 1, &opp);
+    BtlCharApi_GetPos(BTL_OPP(s->objId), &opp);
     dy = to->y - pos.y;
     Vec3_Sub(&d, to, &pos);
     d.y = d.w = 0.0f;
@@ -586,7 +626,7 @@ void BtlAiMove_Steer(BtlAiWork *s, BtlAiVec *to, s32 kind) {
     if (cls == 11) {
         press &= ~BTLAI_BTN_DASH;
     }
-    if (BtlCharApi_TestFlag0F(s->objId) && !BtlCharApi_TestFlag0F(s->objId ^ 1)) {
+    if (BtlCharApi_TestFlag0F(s->objId) && !BtlCharApi_TestFlag0F(BTL_OPP(s->objId))) {
         if (pos.y > opp.y) {
             hold |= BTLAI_BTN_ASCEND;
         }

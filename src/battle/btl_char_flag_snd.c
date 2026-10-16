@@ -279,6 +279,15 @@ void BtlCharSnd_PlayRequests(void) {
     }
     BtlCharSnd_StopUnrequestedLoops(BtlChar_Get(0));
     BtlCharSnd_StopUnrequestedLoops(BtlChar_Get(1));
+#ifdef PORT
+    {
+        extern s32 BattleSide_GetCount(void);
+
+        for (i = 2; i < BattleSide_GetCount(); i++) { /* several fighters on the field */
+            BtlCharSnd_StopUnrequestedLoops(BtlChar_Get(i));
+        }
+    }
+#endif
 }
 
 /* Queues a sound that belongs to no fighter. */

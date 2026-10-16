@@ -2,6 +2,7 @@
 #define BATTLE_BTL_AI_THINK_H
 
 #include "types.h"
+#include "battle/btl_multi.h"
 
 /*
  * CPU opponent: rule conditions 35..117, the rule evaluator, the thinker and the data / side binding
@@ -198,7 +199,7 @@ typedef struct AiThMgr {
     /* 0x004 */ f32 distance;       /* (m) */
     /* 0x008 */ f32 radiusSum;      /* (m) */
     /* 0x00C */ s32 sight;
-    /* 0x010 */ AiThWork work[2];   /* (m) */
+    /* 0x010 */ AiThWork work[BTL_FIGHTER_MAX];   /* (m) */ /* one per fighter (2 on the console) */
     /* 0xA50 */ s32 frame;          /* (m) */
     /* 0xA54 */ s32 own;            /* (m) bit 0: data is a heap block owned by the manager */
     /* 0xA58 */ s32 unkA58[2];

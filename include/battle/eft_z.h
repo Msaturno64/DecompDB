@@ -4,6 +4,7 @@
 #include "types.h"
 #include "sys/math3d.h"
 #include "sys/list.h"
+#include "battle/btl_multi.h"
 
 /*
  * Effect tasks, 0x195EE8..0x199F28 (src/battle/eft_z.c 0x195EE8..0x198BC0, eft_z_b.c ..0x199500, eft_z_c.c
@@ -249,8 +250,8 @@ typedef struct EftGndDustWork {
     /* 0x62B4 */ s32 count;               /* live particles */
     /* 0x62B8 */ u8 unk62B8[8];
     /* 0x62C0 */ EftGndDustArg tmpl;         /* the stage's debris dust */
-    /* 0x6330 */ EftZTask *slide[2];      /* per fighter object id */
-    /* 0x6338 */ EftZTask *dash[2];
+    /* 0x6330 */ EftZTask *slide[BTL_FIGHTER_MAX]; /* per fighter object id (2 on the console) */
+    /* 0x6338 */ EftZTask *dash[BTL_FIGHTER_MAX];
 } EftGndDustWork; /* size 0x6340 */
 
 /* Stage dust record (BtlStage_GetList68). */

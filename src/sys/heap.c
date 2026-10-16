@@ -252,6 +252,13 @@ void *Heap_Alloc(s32 size, u32 align, s32 fromTail, s32 heap) {
     if (block != NULL) {
         data = (void *)block->data;
     }
+#ifdef PORT
+    {
+        /* port/src/multi_fighter.c: BT3_HEAPCHECK names who asked for a block that ran over its end */
+        extern void PortMulti_NoteAlloc(u32 data, u32 caller);
+        PortMulti_NoteAlloc((u32)data, (u32)__builtin_return_address(0));
+    }
+#endif
     return data;
 }
 

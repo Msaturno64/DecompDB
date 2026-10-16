@@ -299,10 +299,22 @@ void MapBgm_FadeOutStep(void) {
     Adx_FadeOutStep(ADX_CH_MAP);
 }
 
+#ifdef PORT
+/* Voice and streamed-SE players are two each, one per fighter of the two: a fighter beyond them (multi-fighter)
+   has none. Its player n would be another channel (SE player 2 is voice 0) or none at all: nothing plays,
+   and the player counts as stopped. */
+#define NO_PLAYER(n) ((u32)(n) >= 2)
+#endif
+
 /* Plays line `line` of character `chara` on voice player `voice`, from the voice set chosen in the options. */
 void Voice_PlayCharaEx(s32 voice, s32 chara, s32 line, s32 vol, s32 pan) {
     s32 id;
 
+#ifdef PORT
+    if (NO_PLAYER(voice)) {
+        return;
+    }
+#endif
     if (gSaveData->flags & SAVE_FLAG_ALT_VOICE) {
         id = VOICE_CHARA_BASE_ALT + (chara * VOICE_CHARA_LINES + line);
     } else {
@@ -318,6 +330,11 @@ void Voice_PlayChara(s32 voice, s32 chara, s32 line) {
 
 /* Plays file `id` on voice player `voice` (0 or 1). */
 void Voice_Play(s32 voice, s32 id, s32 vol, s32 pan) {
+#ifdef PORT
+    if (NO_PLAYER(voice)) {
+        return;
+    }
+#endif
     Adx_Play(voice + ADX_CH_VOICE0, id, vol, pan);
 }
 
@@ -328,6 +345,11 @@ void Voice_PlayDefault(s32 voice, s32 id) {
 
 /* Starts file `id` on a voice player in the paused state. */
 void Voice_PlayPaused(s32 voice, s32 id, s32 vol, s32 pan) {
+#ifdef PORT
+    if (NO_PLAYER(voice)) {
+        return;
+    }
+#endif
     Adx_PlayPaused(voice + ADX_CH_VOICE0, id, vol, pan);
 }
 
@@ -338,31 +360,61 @@ void Voice_PlayPausedDefault(s32 voice, s32 id) {
 
 /* Takes a voice player out of pause. */
 void Voice_Resume(s32 voice) {
+#ifdef PORT
+    if (NO_PLAYER(voice)) {
+        return;
+    }
+#endif
     Adx_Resume(voice + ADX_CH_VOICE0);
 }
 
 /* Stops a voice player. */
 void Voice_Stop(s32 voice) {
+#ifdef PORT
+    if (NO_PLAYER(voice)) {
+        return;
+    }
+#endif
     Adx_Stop(voice + ADX_CH_VOICE0);
 }
 
 /* ADXT status of a voice player. */
 s32 Voice_GetStat(s32 voice) {
+#ifdef PORT
+    if (NO_PLAYER(voice)) {
+        return ADXT_STAT_STOP;
+    }
+#endif
     return Adx_GetStat(voice + ADX_CH_VOICE0);
 }
 
 /* Returns 1 when a voice player is stopped or finished. */
 s32 Voice_IsStopped(s32 voice) {
+#ifdef PORT
+    if (NO_PLAYER(voice)) {
+        return 1;
+    }
+#endif
     return Adx_IsStopped(voice + ADX_CH_VOICE0);
 }
 
 /* One fade-out step of a voice player. */
 void Voice_FadeOutStep(s32 voice) {
+#ifdef PORT
+    if (NO_PLAYER(voice)) {
+        return;
+    }
+#endif
     Adx_FadeOutStep(voice + ADX_CH_VOICE0);
 }
 
 /* Plays file `id` on streamed-SE player `se` (0 or 1). */
 void StreamSe_Play(s32 se, s32 id, s32 vol, s32 pan) {
+#ifdef PORT
+    if (NO_PLAYER(se)) {
+        return;
+    }
+#endif
     Adx_Play(se + ADX_CH_SE0, id, vol, pan);
 }
 
@@ -373,6 +425,11 @@ void StreamSe_PlayDefault(s32 se, s32 id) {
 
 /* Starts file `id` on a streamed-SE player in the paused state. */
 void StreamSe_PlayPaused(s32 se, s32 id, s32 vol, s32 pan) {
+#ifdef PORT
+    if (NO_PLAYER(se)) {
+        return;
+    }
+#endif
     Adx_PlayPaused(se + ADX_CH_SE0, id, vol, pan);
 }
 
@@ -383,25 +440,50 @@ void StreamSe_PlayPausedDefault(s32 se, s32 id) {
 
 /* Takes a streamed-SE player out of pause. */
 void StreamSe_Resume(s32 se) {
+#ifdef PORT
+    if (NO_PLAYER(se)) {
+        return;
+    }
+#endif
     Adx_Resume(se + ADX_CH_SE0);
 }
 
 /* Stops a streamed-SE player. */
 void StreamSe_Stop(s32 se) {
+#ifdef PORT
+    if (NO_PLAYER(se)) {
+        return;
+    }
+#endif
     Adx_Stop(se + ADX_CH_SE0);
 }
 
 /* ADXT status of a streamed-SE player. */
 s32 StreamSe_GetStat(s32 se) {
+#ifdef PORT
+    if (NO_PLAYER(se)) {
+        return ADXT_STAT_STOP;
+    }
+#endif
     return Adx_GetStat(se + ADX_CH_SE0);
 }
 
 /* Returns 1 when a streamed-SE player is stopped or finished. */
 s32 StreamSe_IsStopped(s32 se) {
+#ifdef PORT
+    if (NO_PLAYER(se)) {
+        return 1;
+    }
+#endif
     return Adx_IsStopped(se + ADX_CH_SE0);
 }
 
 /* One fade-out step of a streamed-SE player. */
 void StreamSe_FadeOutStep(s32 se) {
+#ifdef PORT
+    if (NO_PLAYER(se)) {
+        return;
+    }
+#endif
     Adx_FadeOutStep(se + ADX_CH_SE0);
 }

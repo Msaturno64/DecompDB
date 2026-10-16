@@ -4,6 +4,7 @@
 #include "types.h"
 #include "sys/list.h"
 #include "sys/math3d.h"
+#include "battle/btl_multi.h"
 
 /*
  * Battle objects: every animated model of a battle (the two fighters and the extra models loaded by
@@ -211,13 +212,9 @@ typedef struct BtlResSlot {
 #define BTL_RES_SLOT_HEAP 2 /* the buffers came from the heap (File_Request allocated them) */
 
 #define BTL_RES_SLOT_MAX 12
-#ifdef PORT
-/* A fixed model slot per fighter on the field: BTL_FIGHTER_MAX (battle/battle.h; btl_obj.c checks they agree).
-   BtlRes_Init gives buffers to as many as the battle has fighters. */
-#define BTL_RES_FIXED_MAX 10
-#else
-#define BTL_RES_FIXED_MAX 2
-#endif
+/* A fixed model slot per fighter on the field (2 on the console; PC: BtlRes_Init gives buffers to as many as the
+   battle has fighters). */
+#define BTL_RES_FIXED_MAX BTL_FIGHTER_MAX
 #define BTL_RES_ID_KEEP (-99) /* BtlRes_SetFileId: leave the file as it is */
 
 /* Buffer sizes of a fixed slot. */

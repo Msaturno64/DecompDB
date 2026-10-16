@@ -1178,8 +1178,6 @@ void BtlRes_CommitReload(void) {
 /* Clears the slots; with prealloc, allocates the buffers of the two fixed slots and the spare model buffer. */
 #ifdef PORT
 extern s32 BattleSide_GetCount(void); /* battle_load.c: the battle's fighters */
-/* (the fixed slots are the fighters': one per fighter the field can hold) */
-typedef char BtlResFixedIsFighterMax[BTL_RES_FIXED_MAX == BTL_FIGHTER_MAX ? 1 : -1];
 #endif
 
 void BtlRes_Init(s32 prealloc) {
