@@ -133,6 +133,7 @@ extern int BattleSide_GetObjId(int side);
 extern void BtlCharApi_GetPos(int objId, float *out); /* src/battle/btl_capi_a.c */
 extern void GAME_PTR BtlChar_Get(int i);              /* src/battle/btl_char_mgr.c */
 extern int BtlChar_IsDead(void *chr);
+extern int BtlCharApi_GetAction(int objId);            /* src/battle/btl_capi_b.c */
 
 /* Each fighter's opponent beyond the two: the enemy it is set on. Game state (not PORT_HOST): a rollback brings it
    back with the fighters. -1: none yet. */
@@ -222,6 +223,18 @@ int PortMulti_TargetOf(int i) {
     }
     if (sOverride[i] >= 0) {
         return sOverride[i];
+    }
+    if (PAIR_ACTION(BtlCharApi_GetAction(BattleSide_GetObjId(i)))) {
+        /* in a rush sequence or a throw: the other fighter of its throw block (fighter + 0xE90: the attacker's side at
+           + 4, the victim's at + 8; both ends of the pair hold the same), as the Tag Team Mod; the lock-on and the
+           last hitter may be someone else (the victim of an extra's rush took its animations from fighter 1's file
+           and ran through its steps alone: the attacker waited for ever for a model swap already done) */
+        int GAME_PTR thr = (int GAME_PTR)((char GAME_PTR)BtlChar_Get(i) + 0xE90);
+
+        k = thr[1] == i ? thr[2] : thr[2] == i ? thr[1] : -1;
+        if (k >= 0 && k < n && BattleSide_GetTeam(k) != BattleSide_GetTeam(i)) {
+            return k;
+        }
     }
     if (sEngaged[i] >= 0 && sEngaged[i] < n) {
         return sEngaged[i];
@@ -401,12 +414,18 @@ static void tech_test(void) {
                q >> 1 & 1, q & 1);
         queue = q;
     }
-    for (i = 0; i < BattleSide_GetCount(); i++) { /* the health a technique takes is counted before nobody is let fall below 60% */
+    for (i = 0; i < BattleSide_GetCount(); i++) { /* the health a technique takes is counted before nobody is let fall below 95% */
         hp = BtlCharApi_GetHp(BattleSide_GetObjId(i));
         if (i == other && startAt > 0 && hp < prevHp[i]) {
             dmg += prevHp[i] - hp;
         }
-        BtlCtrl_RaiseHp(i, 0, 60.0f);
+        if (hp <= 0) { /* (a technique that takes more than that: the fight is over, not stuck) */
+            printf("bt3: techtest: done, %d stuck (fighter %d knocked out by kind %d of fighter %d)\n", reported, i, kind,
+                   turn);
+            fflush(stdout);
+            exit(reported ? 3 : 0);
+        }
+        BtlCtrl_RaiseHp(i, 0, 95.0f);
         if (BtlCharApi_GetHp(BattleSide_GetObjId(i)) != hp) {
             BtlCtrl_RaiseHp(i, 0, 100.0f);
         }
