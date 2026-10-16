@@ -927,7 +927,32 @@ void BtlChar_RaiseEvents(BtlMgrChr *chr) {
             res->unk24[opp] = chr->unkD44;
         }
 #ifdef PORT
-        if (chr->side < 2) /* the result keeps the two sides' values (multi-fighter) */
+        if (BtlChar_GetCount() > 2) {
+            /* several fighters on the field: a side's health (what a time-up is judged by) is its whole team's,
+               sum over sum as for a side's members; in a free for all its best fighter's, so the healthiest one
+               wins. The result keeps the two sides' values. */
+            extern s32 BattleSide_GetTeam(s32 side), PortMulti_Ffa(void);
+            extern s32 BtlCharApi_GetHp(s32 objId), BtlCharApi_GetHpMax(s32 objId);
+            s32 team = BTL_SIDE_TEAM(chr->side);
+            s32 cur = 0;
+            s32 max = 0;
+            f32 best = 0.0f;
+            s32 k;
+
+            for (k = 0; k < BtlChar_GetCount(); k++) {
+                s32 hp = BtlCharApi_GetHp(BtlChar_Get(k)->objId);
+                s32 hpMax = BtlCharApi_GetHpMax(BtlChar_Get(k)->objId);
+
+                if (BattleSide_GetTeam(k) == team && hpMax > 0) {
+                    cur += hp > 0 ? hp : 0;
+                    max += hpMax;
+                    if (best < (f32)hp / (f32)hpMax) {
+                        best = (f32)hp / (f32)hpMax;
+                    }
+                }
+            }
+            res->health[team] = (PortMulti_Ffa() ? best : max > 0 ? (f32)cur / (f32)max : 0.0f) * 100.0f;
+        } else
 #endif
         res->health[chr->side] = BtlMember_GetTeamHealthRatio(chr) * 100.0f;
         if (BtlMember_GetActiveGauge(chr)->health == 1) {
