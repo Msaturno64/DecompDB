@@ -734,6 +734,34 @@ void PortMulti_SettingSet(int on) {
     Port_SettingsWrite();
 }
 
+/* "Starting health" of each team (settings multi_hp0 / multi_hp1, percent, 100 unless set): every member of the
+   team starts with that share of its health, over 100 too (BtlMember_LoadParams raises the maximum with it), for
+   uneven teams (multi-fighter T1.9: no automatic handicap, it is a setting). Read when a battle is set up. */
+PORT_HOST static int sHandicap[2] = {-1, -1};
+
+int PortMulti_Handicap(int team) {
+    static const char *const kName[2] = {"multi_hp0", "multi_hp1"};
+
+    if (team < 0 || team > 1) {
+        return 100;
+    }
+    if (sHandicap[team] < 0) {
+        sHandicap[team] = Port_Setting(kName[team], 100);
+        sHandicap[team] = sHandicap[team] < 25 ? 25 : sHandicap[team] > 400 ? 400 : sHandicap[team];
+    }
+    return sHandicap[team];
+}
+
+void PortMulti_HandicapSet(int team, int percent) {
+    static const char *const kName[2] = {"multi_hp0", "multi_hp1"};
+
+    if (team >= 0 && team <= 1) {
+        sHandicap[team] = percent < 25 ? 25 : percent > 400 ? 400 : percent;
+        Port_SettingSave(kName[team], sHandicap[team]);
+        Port_SettingsWrite();
+    }
+}
+
 /* battle_load.c BattleSetup_PortSpread, as a battle is set up: whether every member goes on the field. The test
    variable decides when it is there (BT3_TEAMS); otherwise the setting, in a versus battle (the game's own team
    battle among them) played on this machine. Online the two copies would have to agree: the host's rules are to

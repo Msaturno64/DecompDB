@@ -1937,7 +1937,12 @@ void BattleSetup_PortSpread(void) {
 
     if (PortMulti_WantAll()) {
         for (s = 0; s < 2; s++) {
+            extern s32 PortMulti_Handicap(s32 team); /* port/src/multi_fighter.c: the team's starting health, % */
+
             side = Side(s);
+            for (i = 0; i < side->memberCount; i++) {
+                side->members[i].health = side->members[i].health * PortMulti_Handicap(s) / 100.0f;
+            }
             if (side->lead != 0) {
                 lead = side->members[side->lead];
                 side->members[side->lead] = side->members[0];

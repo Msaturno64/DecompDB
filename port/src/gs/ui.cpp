@@ -72,6 +72,8 @@ int Port_ClashSquareX(void);                   // what a press is worth, in quar
 void Port_ClashSquareXSet(int quarters);
 int PortMulti_Setting(void);                   // multi_fighter.c: team battle, every member on the field
 void PortMulti_SettingSet(int on);
+int PortMulti_Handicap(int team);              // multi_fighter.c: a team's starting health in such a battle, %
+void PortMulti_HandicapSet(int team, int percent);
 extern int gsInterp;                           // gs_draw.c: in-between pictures on (1) / off (0); -1 before the first frame
 void Port_SettingsWrite(void);
 int Port_LobbyStart(int host, const char *address, int port); // gs/net.c
@@ -1381,6 +1383,19 @@ static void misc_tab(void) {
                               "You play your team's lead; the others are computer fighters. A fallen fighter stays\n"
                               "where it fell; a team is out when all of its fighters are. Not in online matches yet.\n"
                               "Applies from the next battle.");
+        if (all) {
+            for (int team = 0; team < 2; team++) {
+                int pct = PortMulti_Handicap(team);
+                char label[48];
+                snprintf(label, sizeof(label), team == 0 ? "Starting health, team 1##mhp0" : "Starting health, team 2##mhp1");
+                ImGui::SetNextItemWidth(220.0f);
+                if (ImGui::SliderInt(label, &pct, 25, 400, "%d%%")) {
+                    PortMulti_HandicapSet(team, (pct + 12) / 25 * 25);
+                }
+                ImGui::SetItemTooltip("Every fighter of this team starts the battle with this share of its health (more than\n"
+                                      "100%% gives it more). For uneven teams: for example 200%% for the one fighting 1 against 2.");
+            }
+        }
     }
     {
         bool chk = sUpdCheck != 0;
