@@ -69,7 +69,17 @@ extern s32 CpuLevel_FromSetting(s32 setting); /* menu difficulty 0..4 -> interna
 
 /* Draws the battle's 2D layers: the HUD, the script's view update, then the pause menu. */
 void BtlGame_Draw(void) {
+#ifdef PORT
+    {
+        extern void PortMulti_HudPass(s32 on); /* port/src/multi_fighter.c: the by-side questions are the panels' */
+
+        PortMulti_HudPass(1);
+        Hud_Draw();
+        PortMulti_HudPass(0);
+    }
+#else
     Hud_Draw();
+#endif
 #ifdef PORT
     {
         extern void Port_GsMarker(s32 effect);

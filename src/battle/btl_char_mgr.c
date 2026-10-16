@@ -1219,7 +1219,17 @@ void BtlChar_PostScene(BtlMgrChr *chr) {
         return;
     }
     BtlChar_ObjToPose(chr);
+#ifdef PORT
+    {
+        extern void PortMulti_CamPass(s32 fighter); /* port/src/multi_fighter.c: the camera keeps the lock-on target */
+
+        PortMulti_CamPass(chr->side);
+        ChrCam_Update(chr);
+        PortMulti_CamPass(-1);
+    }
+#else
     ChrCam_Update(chr);
+#endif
     BtlFx_UpdatePostScene(chr);
     if (BtlMember_GetActiveGauge(chr)->health < 10000) {
         BtlMember_GetActiveGauge(chr)->lowHealth = 1;

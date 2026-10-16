@@ -212,6 +212,16 @@ int PortMulti_InPair(int fighter) {
     return PAIR_ACTION(BtlCharApi_GetAction(BattleSide_GetObjId(fighter)));
 }
 
+/* While fighter i's camera is worked out (btl_char_mgr.c, around ChrCam_Update), its opponent is its lock-on target
+   and not the one it is in an exchange with: being hit by another enemy turned the camera to that one (the user:
+   "the target must not change when I am hit"). The rush and throw pair still counts (the cut frames the pair). -1:
+   no camera pass. Raised and lowered within one call. */
+static int sCamPass = -1;
+
+void PortMulti_CamPass(int fighter) {
+    sCamPass = fighter;
+}
+
 /* The opponent of fighter i (BTL_OPP, battle/battle.h). With two fighters the other one, as on the console; with
    more the one it is in an exchange with, else the target, or the first enemy while there is none yet (before the
    first PortMulti_UpdateTargets). */
@@ -236,7 +246,7 @@ int PortMulti_TargetOf(int i) {
             return k;
         }
     }
-    if (sEngaged[i] >= 0 && sEngaged[i] < n) {
+    if (sEngaged[i] >= 0 && sEngaged[i] < n && sCamPass != i) {
         return sEngaged[i];
     }
     t = sTarget[i];
@@ -365,7 +375,44 @@ void PortMulti_UpdateTargets(void) {
             sTarget[i] = k;
         }
     }
+    if (getenv("BT3_MF_TARGET0") != NULL && atoi(getenv("BT3_MF_TARGET0")) < n) { /* (tests: fighter 0's lock-on) */
+        sTarget[0] = atoi(getenv("BT3_MF_TARGET0"));
+    }
     tech_test();
+}
+
+/* ------------------------------------------------------------------------------------------ the HUD's panels */
+
+/* Whose health, ki and stocks each of the two panels shows (as the Tag Team Mod's hud_subject): the watching
+   player's panel keeps that player's fighter, the other one shows the fighter it is set on (L3), so an extra's
+   health and ki can be seen. Only while the HUD updates or draws (btl_tech_b.c and hud_0.c raise sHudPass around
+   Hud_PreUpdate and Hud_Draw): the AI asks the same by-side questions and keeps the side's own fighter. With two
+   players, or none (the demo), the panels are the console's. sHudPass is raised and lowered within one frame. */
+static int sHudPass;
+
+void PortMulti_HudPass(int on) {
+    sHudPass = on;
+}
+
+int PortMulti_HudFighter(int side) {
+    extern int BattleSide_GetControl(int side); /* src/battle/battle_load.c: 0 a pad, 2 the computer */
+    int n = BattleSide_GetCount(), h, t;
+
+    if (!sHudPass || n <= 2 || side < 0 || side > 1) {
+        return side;
+    }
+    if (BattleSide_GetControl(0) == 0 && BattleSide_GetControl(1) != 0) {
+        h = 0;
+    } else if (BattleSide_GetControl(1) == 0 && BattleSide_GetControl(0) != 0) {
+        h = 1;
+    } else {
+        return side;
+    }
+    if (side == h) {
+        return h;
+    }
+    t = sTarget[h];
+    return t >= 0 && t < n && BattleSide_GetTeam(t) != BattleSide_GetTeam(h) ? t : side;
 }
 
 /* ---------------------------------------------------------------------------------------- BT3_TECHTEST (tests) */
@@ -619,7 +666,9 @@ void PortMulti_DemoTeams(const char *teams) {
         exit(2);
     }
     for (side = 0; side < 2; side++) {
-        BattleSetup_SetSide(side, 2, side, count[side], 1, 1, 0, NULL); /* as Demo_SetupBattle: CPU, pad = side */
+        /* as Demo_SetupBattle: CPU, pad = side. BT3_TEAMS_PAD=1 (tests): side 0 is a player's (no buttons pressed),
+           for what only a player's fighter has: its HUD panel, its lock-on */
+        BattleSetup_SetSide(side, side == 0 && getenv("BT3_TEAMS_PAD") != NULL ? 0 : 2, side, count[side], 1, 1, 0, NULL);
         for (i = 1; i < count[side]; i++) {
             *BattleSide_GetMember(side, i) = *BattleSide_GetMember(side, 0);
             BattleSide_GetMember(side, i)->word[0] = kDemoExtra[side][i - 1];

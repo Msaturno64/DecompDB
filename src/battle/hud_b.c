@@ -1126,6 +1126,18 @@ void HudGauge_ShakeKi(s32 side, u16 count, u16 amp) {
 }
 
 void HudGauge_SetFighter(s32 side, HudBObj *obj) {
+#ifdef PORT
+    {
+        extern s32 BattleSide_GetCount(void); /* battle_load.c */
+
+        /* several fighters on the field: the panel shows another fighter (its player's target changed): its bars at
+           once, not draining toward it over seconds (as the Tag Team Mod's hud_subject) */
+        if (BattleSide_GetCount() > 2 && gHudGauge->obj[side] != NULL && gHudGauge->obj[side] != obj) {
+            gHudGauge->hpShown[side] = gHudGauge->hp[side];
+            gHudGauge->kiShown[side] = gHudGauge->ki[side];
+        }
+    }
+#endif
     gHudGauge->obj[side] = obj;
 }
 

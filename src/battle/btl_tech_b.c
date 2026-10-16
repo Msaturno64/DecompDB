@@ -1686,7 +1686,17 @@ void BtlGame_Term(void) {
 
 /* Before the fighters are updated: HUD pre-update, then the sequence's. */
 void BtlGame_PreUpdate(void) {
+#ifdef PORT
+    {
+        extern void PortMulti_HudPass(s32 on); /* port/src/multi_fighter.c: the by-side questions are the panels' */
+
+        PortMulti_HudPass(1);
+        Hud_PreUpdate();
+        PortMulti_HudPass(0);
+    }
+#else
     Hud_PreUpdate();
+#endif
     BtlSeq_PreUpdate();
 }
 

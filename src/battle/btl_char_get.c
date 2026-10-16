@@ -187,6 +187,13 @@ BtlCharGetChr *BtlChar_FindByObjId(s32 objId) {
 BtlCharGetChr *BtlChar_FindBySide(s32 side) {
     s32 i;
 
+#ifdef PORT
+    {
+        extern s32 PortMulti_HudFighter(s32 side); /* port/src/multi_fighter.c: while the HUD runs, whose panel */
+
+        side = PortMulti_HudFighter(side);
+    }
+#endif
     if (gBtlChars == NULL) {
         return NULL;
     }
