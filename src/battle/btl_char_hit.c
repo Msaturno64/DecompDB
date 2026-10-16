@@ -4,6 +4,8 @@
 #ifdef PORT
 extern s32 BattleSide_GetTeam(s32 side); /* battle_load.c: the team a fighter fights for */
 extern void PortMulti_SetOverride(s32 fighter, s32 opponent); /* port/src/multi_fighter.c: -1 ends it */
+extern void PortMulti_Engage(s32 victim, s32 attacker);        /* the two are in an exchange while it lasts */
+extern s32 PortMulti_CanContact(s32 attacker, s32 victim);     /* 0: a rush keeps them apart */
 extern u32 BtlBodyHit_PortContacts(s32 fighter);                /* eft_det_a.c: the contact matrix */
 extern s32 BtlChar_IsDead(HitChr *chr);
 void BtlHit_PortExtraContacts(void);
@@ -1451,7 +1453,7 @@ void BtlHit_PortExtraContacts(void) {
         }
         mask = BtlBodyHit_PortContacts(i) & ~sPortLatch[i];
         for (e = 0; mask != 0 && e < BtlChar_GetCount(); e++) {
-            if (!(mask & (1u << e))) {
+            if (!(mask & (1u << e)) || !PortMulti_CanContact(i, e)) {
                 continue;
             }
             sPortLatch[i] |= 1u << e;
@@ -1472,6 +1474,7 @@ void BtlHit_PortExtraContacts(void) {
                     saved = atk->status.target;
                     atk->status.target = e;
                     BtlHit_ApplyHit(atk);
+                    PortMulti_Engage(e, i);
                     atk->status.target = saved;
                 }
             }
@@ -1511,6 +1514,7 @@ void BtlColl_Update(void) {
 #ifdef PORT
             if (BtlChar_GetCount() > 2 && BtlChar_Get(i)->status.target >= 0) {
                 PortMulti_SetOverride(BtlChar_Get(i)->status.target, -1);
+                PortMulti_Engage(BtlChar_Get(i)->status.target, i);
             }
 #endif
         }

@@ -143,13 +143,62 @@ static int sTargetFrame, sL3Prev[FIGHTER_MAX], sHpPrev[FIGHTER_MAX]; /* (see Por
 static int sOverride[FIGHTER_MAX] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
 
 void PortMulti_SetOverride(int fighter, int opponent) {
-    if (fighter >= 0 && fighter < FIGHTER_MAX) {
+    int k;
+
+    if (fighter < 0) { /* every one ends (eft_det_a.c: a pass that can leave one set through a `continue`) */
+        for (k = 0; k < FIGHTER_MAX; k++) {
+            sOverride[k] = -1;
+        }
+    } else if (fighter < FIGHTER_MAX) {
         sOverride[fighter] = opponent;
     }
 }
 
+/* The fighter each one is in an exchange with, -1: none. The game's hit actions outlast the lock-on, so both ends of
+   a hit must agree on the pair (as the Tag Team Mod): a fighter that is hit takes its attacker as opponent while it
+   reacts (ENGAGED_ACTION), one that hits with a technique takes its victim while the technique lasts. Before, the
+   victim of an extra's rush kept its lock-on as opponent and stayed in the rush's hits after the rush. Game state. */
+static int sEngaged[FIGHTER_MAX] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1}, sEngagedAt[FIGHTER_MAX];
+#define ENGAGE_GRACE 15 /* frames an exchange holds anyway: the reaction starts at the victim's next action update */
+/* hit reactions, throws, down and getting up (0xB4..0xEB); techniques and their receiving end (0x105..0x13B) */
+#define ENGAGED_ACTION(a) (((a) >= 0xB4 && (a) <= 0xEB) || ((a) >= 0x105 && (a) <= 0x13B))
+
+/* A hit of `attacker` reached `victim` (btl_char_hit.c, eft_det_a.c). */
+void PortMulti_Engage(int victim, int attacker) {
+    extern int BtlCharApi_IsInTechnique(int objId); /* src/battle/btl_capi_a.c */
+    int n = BattleSide_GetCount();
+
+    if (n <= 2 || victim < 0 || victim >= n || attacker < 0 || attacker >= n ||
+        BattleSide_GetTeam(victim) == BattleSide_GetTeam(attacker)) {
+        return;
+    }
+    sEngaged[victim] = attacker;
+    sEngagedAt[victim] = sTargetFrame;
+    if (BtlCharApi_IsInTechnique(BattleSide_GetObjId(attacker))) {
+        sEngaged[attacker] = victim;
+        sEngagedAt[attacker] = sTargetFrame;
+    }
+}
+
+/* Whether a hit of `attacker` may reach `victim`. A rush sequence (BtlCharApi_IsInRushSequence: its attacker and its
+   receiving end) is between its two fighters only: no outside contact reaches either, and neither touches anyone else
+   (as the Tag Team Mod's cinematic contact guard; before, a rush also hit the bystanders and its attacker turned to
+   them). btl_char_hit.c, eft_det_a.c. */
+int PortMulti_TargetOf(int i);
+
+int PortMulti_CanContact(int attacker, int victim) {
+    extern int BtlCharApi_IsInRushSequence(int objId); /* src/battle/btl_capi_a.c */
+
+    if (BattleSide_GetCount() <= 2) {
+        return 1;
+    }
+    return (!BtlCharApi_IsInRushSequence(BattleSide_GetObjId(attacker)) || PortMulti_TargetOf(attacker) == victim) &&
+           (!BtlCharApi_IsInRushSequence(BattleSide_GetObjId(victim)) || PortMulti_TargetOf(victim) == attacker);
+}
+
 /* The opponent of fighter i (BTL_OPP, battle/battle.h). With two fighters the other one, as on the console; with
-   more the target, or the first enemy while there is none yet (before the first PortMulti_UpdateTargets). */
+   more the one it is in an exchange with, else the target, or the first enemy while there is none yet (before the
+   first PortMulti_UpdateTargets). */
 int PortMulti_TargetOf(int i) {
     int n = BattleSide_GetCount(), t, k;
 
@@ -158,6 +207,9 @@ int PortMulti_TargetOf(int i) {
     }
     if (sOverride[i] >= 0) {
         return sOverride[i];
+    }
+    if (sEngaged[i] >= 0 && sEngaged[i] < n) {
+        return sEngaged[i];
     }
     t = sTarget[i];
     if (t < 0 || t >= n || BattleSide_GetTeam(t) == BattleSide_GetTeam(i)) {
@@ -174,6 +226,7 @@ void PortMulti_ResetTargets(void) {
 
     for (i = 0; i < FIGHTER_MAX; i++) {
         sTarget[i] = -1;
+        sEngaged[i] = -1;
         sL3Prev[i] = 1; /* (an L3 held into the fight is not a tap) */
         sHpPrev[i] = 0x7FFFFFFF;
     }
@@ -215,7 +268,20 @@ static int next_enemy(int i, int n, int from) {
     return -1;
 }
 
-#define PAD_L3_BIT 0x2          /* PAD_L3, include/sys/pad.h */
+/* The enemies of a fighter that are not down, in order, without `skip` (its target, which is tested first): the
+   first one after `prev` (-1: from the start), -1 when none is left. eft_det_a.c: what a shot is tested against. */
+int PortMulti_NextEnemyAfter(int fighter, int skip, int prev) {
+    int e;
+
+    for (e = prev + 1; e < BattleSide_GetCount(); e++) {
+        if (e != skip && BattleSide_GetTeam(e) != BattleSide_GetTeam(fighter) && !BtlChar_IsDead(BtlChar_Get(e))) {
+            return e;
+        }
+    }
+    return -1;
+}
+
+#define PAD_L3_BIT 0x2         /* PAD_L3, include/sys/pad.h */
 #define CHR_RAW_HELD 0x570      /* the fighter's input block: rawHeld, its pad as it was read (battle/btl_input.h) */
 #define CPU_REPICK_FRAMES 90    /* a computer fighter looks again for the nearest enemy every 3 seconds */
 
@@ -229,6 +295,7 @@ static int next_enemy(int i, int n, int from) {
 void PortMulti_UpdateTargets(void) {
     extern int BattleSide_GetControl(int side); /* src/battle/battle_load.c: 0 a pad, 2 the computer */
     extern int BtlCharApi_GetHp(int objId);
+    extern int BtlCharApi_GetAction(int objId); /* src/battle/btl_capi_b.c */
     int n = BattleSide_GetCount(), i, k, l3, hp;
     float p[FIGHTER_MAX][4] __attribute__((aligned(16)));
 
@@ -238,6 +305,12 @@ void PortMulti_UpdateTargets(void) {
     sTargetFrame++;
     for (i = 0; i < n; i++) {
         BtlCharApi_GetPos(BattleSide_GetObjId(i), p[i]);
+        k = sEngaged[i];
+        if (k >= 0 && (k >= n || BtlChar_IsDead(BtlChar_Get(i)) || BtlChar_IsDead(BtlChar_Get(k)) ||
+                       (sTargetFrame - sEngagedAt[i] > ENGAGE_GRACE &&
+                        !ENGAGED_ACTION(BtlCharApi_GetAction(BattleSide_GetObjId(i)))))) {
+            sEngaged[i] = -1; /* the exchange is over: back to the target */
+        }
     }
     for (i = 0; i < n; i++) {
         k = sTarget[i];

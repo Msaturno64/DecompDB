@@ -77,6 +77,13 @@ extern void BtlCharApi_ShakeCamsNear(EftDetVec *pos, f32 near, f32 far, f32 arg3
 extern void BtlCharApi_RumbleNear(EftDetVec *pos, f32 near, f32 far, f32 power, f32 time);
 extern s32 BtlSeq_GetState(void);
 extern s32 BattleSide_GetObjId(s32 side);
+#ifdef PORT
+extern s32 BattleSide_GetCount(void);                                   /* battle_load.c: fighters on the field */
+extern void PortMulti_SetOverride(s32 fighter, s32 opponent);           /* port/src/multi_fighter.c: -1 ends them all */
+extern s32 PortMulti_NextEnemyAfter(s32 fighter, s32 skip, s32 prev);   /* the next enemy that is not down, or -1 */
+extern void PortMulti_Engage(s32 victim, s32 attacker);                 /* the two are in an exchange while it lasts */
+extern s32 PortMulti_CanContact(s32 attacker, s32 victim);              /* 0: a rush keeps them apart */
+#endif
 extern EftDetObj *BtlObj_Get(s32 objId);
 extern EftDetNodeMtx *BtlObj_GetNode(EftDetObj *obj, s32 node);
 
@@ -740,10 +747,13 @@ void BtlBodyHit_Update(void) {
         if (BattleSide_GetCount() > 2) {
             for (i = 0; i < BattleSide_GetCount(); i++) {
                 a = BtlObj_Get(BattleSide_GetObjId(i));
-                BtlBodyHit_Test(a, BtlObj_Get(BattleSide_GetObjId(PortMulti_TargetOf(i))));
+                if (PortMulti_CanContact(i, PortMulti_TargetOf(i))) {
+                    BtlBodyHit_Test(a, BtlObj_Get(BattleSide_GetObjId(PortMulti_TargetOf(i))));
+                }
                 sPortContacts[i] = 0;
                 for (e = 0; e < BattleSide_GetCount(); e++) {
-                    if (e == PortMulti_TargetOf(i) || BattleSide_GetTeam(e) == BattleSide_GetTeam(i)) {
+                    if (e == PortMulti_TargetOf(i) || BattleSide_GetTeam(e) == BattleSide_GetTeam(i) ||
+                        !PortMulti_CanContact(i, e)) {
                         continue;
                     }
                     d = BtlObj_Get(BattleSide_GetObjId(e));
@@ -998,12 +1008,34 @@ void EftDet_FighterPass(void) {
             s32 target = list->rec[i].objId ^ 1;
             s32 ok;
             EftDetObj *obj;
+#ifdef PORT
+            /* several fighters on the field: the owner's target first, then each other enemy that is not down, until
+               one is touched (the console tests owner ^ 1 only: an extra's shots went through everyone, and nobody's
+               touched an extra). shortcut: one fighter per record and frame, a beam does not go through two at once. */
+            s32 first = BattleSide_GetCount() > 2 && (u32)list->rec[i].objId < (u32)BattleSide_GetCount()
+                            ? PortMulti_TargetOf(list->rec[i].objId)
+                            : -1;
+
+            PortMulti_SetOverride(-1, -1);
+            if (first >= 0) {
+                target = first;
+            }
+        port_next:
+#endif
 
             if (target == 0) {
                 obj = BtlObj_Get(BattleSide_GetObjId(0));
             } else {
                 obj = BtlObj_Get(BattleSide_GetObjId(1));
             }
+#ifdef PORT
+            if (first >= 0) {
+                obj = BtlObj_Get(BattleSide_GetObjId(target));
+                if (!PortMulti_CanContact(list->rec[i].objId, target)) {
+                    goto port_skip;
+                }
+            }
+#endif
             if (test[list->rec[i].shape.type](obj, &rec->shape)) {
                 ok = 0;
                 if (!(list->rec[i].shape.hitFlags & EFT_DET_HIT_STAGE) ||
@@ -1011,6 +1043,13 @@ void EftDet_FighterPass(void) {
                     ok = 1;
                 }
                 if (ok) {
+#ifdef PORT
+                    if (first >= 0) { /* the answers look at the pair: which way the victim flies, the facing */
+                        PortMulti_SetOverride(target, list->rec[i].objId);
+                        PortMulti_SetOverride(list->rec[i].objId, target);
+                        PortMulti_Engage(target, list->rec[i].objId);
+                    }
+#endif
                     list->rec[i].shape.hitFlags |= EFT_DET_HIT_FIGHTER;
                     EftHit_MarkLastHit(rec);
                     if (BtlColl_TryDodge(target, rec)) {
@@ -1029,8 +1068,20 @@ void EftDet_FighterPass(void) {
                     }
                 }
             }
+#ifdef PORT
+            else {
+            port_skip:
+                if (first >= 0 &&
+                    (target = PortMulti_NextEnemyAfter(list->rec[i].objId, first, target == first ? -1 : target)) >= 0) {
+                    goto port_next;
+                }
+            }
+#endif
         }
     }
+#ifdef PORT
+    PortMulti_SetOverride(-1, -1);
+#endif
 }
 
 /* Two type 0 shapes: both spheres swept over the frame. On contact stores each one's centre and contact point. */
