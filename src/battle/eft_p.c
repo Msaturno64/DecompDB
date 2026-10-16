@@ -284,6 +284,17 @@ void EftDisc_AddHit(EftPTask *task) {
     EftHit_Add(rec);
 }
 
+#ifdef PORT
+/* The manager's size here (eft_o_c.c allocates it; the console's 0x660) and where the port's lists start (zeroed). */
+u32 EftDisc_PortMgrSize(void) {
+    return sizeof(EftDiscMgr) > 0x660 ? sizeof(EftDiscMgr) : 0x660;
+}
+
+u32 EftDisc_PortListsAt(void) {
+    return __builtin_offsetof(EftDiscMgr, portHead);
+}
+#endif
+
 /* Copies the ki blast parameters into the first held disc of the fighter they name. */
 void EftDisc_SetHeldAtk(EftPTask *task, EftDiscAtk *atk) {
     EftDiscNode *n;
@@ -293,7 +304,7 @@ void EftDisc_SetHeldAtk(EftPTask *task, EftDiscAtk *atk) {
     if (gEftDisc == NULL) {
         return;
     }
-    n = gEftDisc->mgr->head[atk->objId];
+    n = EFT_DISC_HEAD(gEftDisc->mgr, atk->objId);
     if (n == NULL) {
         return;
     }
@@ -450,12 +461,12 @@ s32 EftDiscMgr_PushHeld(EftPTask *task, s32 objId, u8 kind) {
     if (kind == 1) {
         n->flags |= 0x10;
     }
-    if (mgr->head[objId] == NULL) {
-        mgr->head[objId] = n;
-        mgr->tail[objId] = n;
+    if (EFT_DISC_HEAD(mgr, objId) == NULL) {
+        EFT_DISC_HEAD(mgr, objId) = n;
+        EFT_DISC_TAIL(mgr, objId) = n;
     } else {
-        mgr->tail[objId]->next = n;
-        mgr->tail[objId] = n;
+        EFT_DISC_TAIL(mgr, objId)->next = n;
+        EFT_DISC_TAIL(mgr, objId) = n;
     }
     return 1;
 }
@@ -472,9 +483,9 @@ s32 EftDiscMgr_PopHeld(s32 objId) {
     if (mgr == NULL) {
         return 0;
     }
-    n = mgr->head[objId];
+    n = EFT_DISC_HEAD(mgr, objId);
     if (n != NULL) {
-        mgr->head[objId] = n->next;
+        EFT_DISC_HEAD(mgr, objId) = n->next;
         n->flags = 0;
         n->next = NULL;
         n->task = NULL;
@@ -556,7 +567,7 @@ s32 EftDisc_Throw(EftDiscAtk *a) {
     if (gEftDisc == NULL) {
         return 0;
     }
-    n = gEftDisc->mgr->head[a->objId];
+    n = EFT_DISC_HEAD(gEftDisc->mgr, a->objId);
     while (n != NULL && (n->flags & 0x30)) {
         n = n->next;
     }
@@ -649,7 +660,7 @@ s32 EftDisc_DropHeld(s32 objId) {
         return 0;
     }
     mgr = gEftDisc->mgr;
-    n = mgr->head[objId];
+    n = EFT_DISC_HEAD(mgr, objId);
     if (n == NULL) {
         return 0;
     }
@@ -663,7 +674,7 @@ s32 EftDisc_DropHeld(s32 objId) {
     }
     if (w->flags & EFT_DISC_ALIVE) {
         w->flags |= EFT_DISC_DEAD;
-        mgr->head[objId] = n->next;
+        EFT_DISC_HEAD(mgr, objId) = n->next;
         n->flags = 0;
         n->next = NULL;
         n->task = NULL;

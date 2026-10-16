@@ -1,5 +1,8 @@
 #include "common.h"
 #include "battle/eft_o.h"
+#ifdef PORT
+#include "battle/btl_multi.h"
+#endif
 
 /*
  * Effect tasks, 0x16AE78..0x16C2E0. Two modules:
@@ -303,7 +306,17 @@ s32 EftBodyFx_Stop(s32 objId) {
 void EftDiscMgr_Init(EftOTask *task) {
     gEftDisc = BtlPool_Alloc(BtlPool_GetCurrent(), sizeof(EftODiscMgr));
     gEftDisc->res = NULL;
+#ifdef PORT
+    {
+        extern u32 EftDisc_PortMgrSize(void); /* eft_p.c: with the held-disc lists of the fighters beyond the two */
+        extern u32 EftDisc_PortListsAt(void);
+
+        gEftDisc->res = BtlPool_Alloc(BtlPool_GetCurrent(), EftDisc_PortMgrSize());
+        memset((u8 *)gEftDisc->res + EftDisc_PortListsAt(), 0, EftDisc_PortMgrSize() - EftDisc_PortListsAt());
+    }
+#else
     gEftDisc->res = BtlPool_Alloc(BtlPool_GetCurrent(), 0x660);
+#endif
     gEftDisc->res->packTexA = BtlScene_GetCommonEntry(0x238);
     gEftDisc->res->packTexB = BtlScene_GetCommonEntry(0x23A);
     gEftDisc->res->packModelA = BtlScene_GetCommonEntry(0x239);

@@ -3,6 +3,9 @@
 
 #include "types.h"
 #include "sys/math3d.h"
+#ifdef PORT
+#include "battle/btl_multi.h"
+#endif
 
 /*
  * Views local to src/battle/eft_p.c (0x16C2E0..0x16DCA0, the tail of the "disc" projectile module) and
@@ -194,7 +197,21 @@ typedef struct EftDiscMgr {
     /* 0x55C */ EftDiscNode *tail[2];
     /* 0x564 */ EftDiscNode node[20];
     /* 0x654 */ u8 cursor;
+#ifdef PORT
+    EftDiscNode *portHead[BTL_FIGHTER_MAX - 2]; /* the held discs of the fighters beyond the two: head[2] was tail[0]
+                                                   (multi-fighter); EFT_DISC_HEAD. Allocated: EftDisc_PortMgrSize */
+    EftDiscNode *portTail[BTL_FIGHTER_MAX - 2];
+#endif
 } EftDiscMgr;
+
+#ifdef PORT
+/* The first / last held disc of fighter id, as an lvalue (head[] / tail[] for the two, the port's lists beyond). */
+#define EFT_DISC_HEAD(mgr, id) (*((id) < 2 ? &(mgr)->head[id] : &(mgr)->portHead[(id) - 2]))
+#define EFT_DISC_TAIL(mgr, id) (*((id) < 2 ? &(mgr)->tail[id] : &(mgr)->portTail[(id) - 2]))
+#else
+#define EFT_DISC_HEAD(mgr, id) ((mgr)->head[id])
+#define EFT_DISC_TAIL(mgr, id) ((mgr)->tail[id])
+#endif
 
 typedef struct EftDiscRoot {
     /* 0x0 */ EftDiscMgr *mgr;

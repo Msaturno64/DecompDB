@@ -166,7 +166,8 @@ static int sEngaged[FIGHTER_MAX] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1}, sEn
 /* A hit of `attacker` reached `victim` (btl_char_hit.c, eft_det_a.c). */
 void PortMulti_Engage(int victim, int attacker) {
     extern int BtlCharApi_IsInTechnique(int objId); /* src/battle/btl_capi_a.c */
-    int n = BattleSide_GetCount();
+    extern int BtlCharApi_GetAction(int objId);     /* src/battle/btl_capi_b.c */
+    int n = BattleSide_GetCount(), a;
 
     if (n <= 2 || victim < 0 || victim >= n || attacker < 0 || attacker >= n ||
         BattleSide_GetTeam(victim) == BattleSide_GetTeam(attacker)) {
@@ -174,26 +175,31 @@ void PortMulti_Engage(int victim, int attacker) {
     }
     sEngaged[victim] = attacker;
     sEngagedAt[victim] = sTargetFrame;
-    if (BtlCharApi_IsInTechnique(BattleSide_GetObjId(attacker))) {
+    a = BtlCharApi_GetAction(BattleSide_GetObjId(attacker));
+    if (BtlCharApi_IsInTechnique(BattleSide_GetObjId(attacker)) || (a >= 0xB4 && a <= 0xBF)) { /* (and a throw) */
         sEngaged[attacker] = victim;
         sEngagedAt[attacker] = sTargetFrame;
     }
 }
 
-/* Whether a hit of `attacker` may reach `victim`. A rush sequence (BtlCharApi_IsInRushSequence: its attacker and its
-   receiving end) is between its two fighters only: no outside contact reaches either, and neither touches anyone else
-   (as the Tag Team Mod's cinematic contact guard; before, a rush also hit the bystanders and its attacker turned to
-   them). btl_char_hit.c, eft_det_a.c. */
+/* Whether a hit of `attacker` may reach `victim`. A rush sequence (attacker 0x12D..0x12F, receiving end
+   0x139..0x13B) and a throw (thrower and thrown 0xB5..0xBC, the carry pair 0xBE / 0xBF; not the grab dash 0xB4) are
+   between their two fighters only: no outside contact reaches either, and neither touches anyone else (as the Tag
+   Team Mod's cinematic contact guard; before, a rush also hit the bystanders and its attacker turned to them, and two
+   could grab one fighter at once). btl_char_hit.c, eft_det_a.c. */
+#define PAIR_ACTION(a)                                                                                                 \
+    (((a) >= 0xB5 && (a) <= 0xBC) || (a) == 0xBE || (a) == 0xBF || ((a) >= 0x12D && (a) <= 0x12F) ||                   \
+     ((a) >= 0x139 && (a) <= 0x13B))
 int PortMulti_TargetOf(int i);
 
 int PortMulti_CanContact(int attacker, int victim) {
-    extern int BtlCharApi_IsInRushSequence(int objId); /* src/battle/btl_capi_a.c */
+    extern int BtlCharApi_GetAction(int objId); /* src/battle/btl_capi_b.c */
 
     if (BattleSide_GetCount() <= 2) {
         return 1;
     }
-    return (!BtlCharApi_IsInRushSequence(BattleSide_GetObjId(attacker)) || PortMulti_TargetOf(attacker) == victim) &&
-           (!BtlCharApi_IsInRushSequence(BattleSide_GetObjId(victim)) || PortMulti_TargetOf(victim) == attacker);
+    return (!PAIR_ACTION(BtlCharApi_GetAction(BattleSide_GetObjId(attacker))) || PortMulti_TargetOf(attacker) == victim) &&
+           (!PAIR_ACTION(BtlCharApi_GetAction(BattleSide_GetObjId(victim))) || PortMulti_TargetOf(victim) == attacker);
 }
 
 /* The opponent of fighter i (BTL_OPP, battle/battle.h). With two fighters the other one, as on the console; with
