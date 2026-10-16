@@ -1,5 +1,6 @@
 #include "common.h"
 #include "battle/eft_det_a.h"
+#include "battle/btl_multi.h"
 
 /*
  * 0x1AE2A8..0x1B16F0: effect texture tail, volley aim, fighter-against-fighter volumes, the hit detection over
@@ -711,22 +712,46 @@ s32 BtlBodyHit_Test(EftDetObj *atk, EftDetObj *def) {
 }
 
 /* Fighter against fighter: the object of side 0 against the object of side 1, then the reverse. */
+#ifdef PORT
+/* Several fighters on the field: what each fighter's attack touched this frame beyond its target, one bit per
+   fighter (BtlHit_PortExtraContacts, btl_char_hit.c, hits them too). Game state. */
+static u32 sPortContacts[BTL_FIGHTER_MAX];
+
+u32 BtlBodyHit_PortContacts(s32 fighter) {
+    return sPortContacts[fighter];
+}
+#endif
+
 void BtlBodyHit_Update(void) {
     EftDetObj *a;
 
 #ifdef PORT
     {
-        /* several fighters on the field: every fighter's body hits against its target (with two: 0 against 1 and 1
-           against 0, as below). shortcut: a hit reaches the target only, not other enemies in the way; multi-contact
-           when teams grow (multi-fighter S2). */
+        /* several fighters on the field: every fighter's attack against its target as on the console (the hit flags,
+           which hold four fighters at most), and against every other enemy into the contact matrix, without the
+           flags (with two fighters: 0 against 1 and 1 against 0, as below) */
         extern s32 BattleSide_GetCount(void);
+        extern s32 BattleSide_GetTeam(s32 side);
         extern s32 PortMulti_TargetOf(s32 fighter);
+        EftDetObj *d;
         s32 i;
+        s32 e;
 
         if (BattleSide_GetCount() > 2) {
             for (i = 0; i < BattleSide_GetCount(); i++) {
                 a = BtlObj_Get(BattleSide_GetObjId(i));
                 BtlBodyHit_Test(a, BtlObj_Get(BattleSide_GetObjId(PortMulti_TargetOf(i))));
+                sPortContacts[i] = 0;
+                for (e = 0; e < BattleSide_GetCount(); e++) {
+                    if (e == PortMulti_TargetOf(i) || BattleSide_GetTeam(e) == BattleSide_GetTeam(i)) {
+                        continue;
+                    }
+                    d = BtlObj_Get(BattleSide_GetObjId(e));
+                    if (a->unkCAD >= 0 && a->work != NULL && d->work != NULL && ColBox_Overlaps(&a->work->atkBounds, &d->box) &&
+                        BtlBodyHit_TestVolumes(a->work, &d->parts)) {
+                        sPortContacts[i] |= 1u << e;
+                    }
+                }
             }
             return;
         }

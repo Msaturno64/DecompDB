@@ -1,7 +1,12 @@
 #include "common.h"
 #include "battle/btl_char_hit.h"
+#include "battle/btl_multi.h"
 #ifdef PORT
 extern s32 BattleSide_GetTeam(s32 side); /* battle_load.c: the team a fighter fights for */
+extern void PortMulti_SetOverride(s32 fighter, s32 opponent); /* port/src/multi_fighter.c: -1 ends it */
+extern u32 BtlBodyHit_PortContacts(s32 fighter);                /* eft_det_a.c: the contact matrix */
+extern s32 BtlChar_IsDead(HitChr *chr);
+void BtlHit_PortExtraContacts(void);
 #endif
 
 /* Fighter hit resolution, 0x1C7B30-0x1CA6D0. The frame flow and the structures are in battle/btl_char_hit.h.
@@ -1415,6 +1420,68 @@ void BtlHit_ApplyHit(HitChr *atk) {
  * effect scene's hit detection, BtlBodyHit_Update): guard-direction bookkeeping per fighter, then the clash test, the
  * rush test (each ends the step when it fires), the proximity test, per fighter the hit test, the trade
  * resolution, and per fighter the hit application. */
+#ifdef PORT
+/* Several fighters on the field: an ordinary attack hits every enemy it touches, as the Tag Team Mod's multi-contact
+   does. The target goes through the console's path above; each other enemy the attack touched (the contact
+   matrix, eft_det_a.c) through the same tests here, with the two set on each other while it runs (the facing, the
+   guard and the reaction see the real pair). Once per enemy and swing: a swing is an attack id, and the latch
+   empties when it changes. A throw (attack 0x55) keeps its one recipient; rushes and clashes never come here. */
+static s32 sPortSwing[BTL_FIGHTER_MAX];
+static u32 sPortLatch[BTL_FIGHTER_MAX];
+
+void BtlHit_PortExtraContacts(void) {
+    s32 i;
+    s32 e;
+    s32 id;
+    s32 full;
+    s32 saved;
+    u32 mask;
+    HitChr *atk;
+    HitChr *def;
+
+    for (i = 0; i < BtlChar_GetCount(); i++) {
+        atk = BtlChar_Get(i);
+        id = BtlAtk_GetId(atk);
+        if (id != sPortSwing[i]) {
+            sPortSwing[i] = id;
+            sPortLatch[i] = 0;
+        }
+        if (id == -1 || id == 0x55) {
+            continue;
+        }
+        mask = BtlBodyHit_PortContacts(i) & ~sPortLatch[i];
+        for (e = 0; mask != 0 && e < BtlChar_GetCount(); e++) {
+            if (!(mask & (1u << e))) {
+                continue;
+            }
+            sPortLatch[i] |= 1u << e;
+            def = BtlChar_Get(e);
+            if (BtlChar_IsDead(def)) {
+                continue;
+            }
+            PortMulti_SetOverride(i, e);
+            PortMulti_SetOverride(e, i);
+            if (__builtin_fabsf(BtlOpp_GetYawFromFacing(atk)) < 1.5707963f || (BtlAtk_GetFlags(atk) & 8)) {
+                if (BtlHit_IsVoid(atk, def) || BtlHit_CheckDodge(atk, def) || BtlHit_CheckArmor(atk, def) ||
+                    BtlHit_CheckRepel(atk, def)) {
+                } else if (BtlHit_CheckGuard(atk, def, &full)) {
+                    if (full) {
+                        BtlMember_Damage(def, BtlAtk_GetGuardDamage(atk), 0xC);
+                    }
+                } else if (!BtlHit_CheckThrowBreak(atk, def)) {
+                    saved = atk->status.target;
+                    atk->status.target = e;
+                    BtlHit_ApplyHit(atk);
+                    atk->status.target = saved;
+                }
+            }
+            PortMulti_SetOverride(i, -1);
+            PortMulti_SetOverride(e, -1);
+        }
+    }
+}
+#endif
+
 void BtlColl_Update(void) {
     s32 i;
     HitChr *chr;
@@ -1434,8 +1501,24 @@ void BtlColl_Update(void) {
         }
         BtlHit_ResolveTrades();
         for (i = 0; i < BtlChar_GetCount(); i++) {
+#ifdef PORT
+            /* (several fighters on the field: the victim's opponent is its attacker while the hit is applied) */
+            if (BtlChar_GetCount() > 2 && BtlChar_Get(i)->status.target >= 0) {
+                PortMulti_SetOverride(BtlChar_Get(i)->status.target, i);
+            }
+#endif
             BtlHit_ApplyHit(BtlChar_Get(i));
+#ifdef PORT
+            if (BtlChar_GetCount() > 2 && BtlChar_Get(i)->status.target >= 0) {
+                PortMulti_SetOverride(BtlChar_Get(i)->status.target, -1);
+            }
+#endif
         }
+#ifdef PORT
+        if (BtlChar_GetCount() > 2) {
+            BtlHit_PortExtraContacts();
+        }
+#endif
     }
 }
 

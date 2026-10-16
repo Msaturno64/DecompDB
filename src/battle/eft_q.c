@@ -55,6 +55,10 @@ extern EftQBattleWork *Battle_GetWork(void);
 extern s32 Battle_IsSplitScreen(void);
 extern s32 BtlPool_GetCurrent(void);
 extern void BtlPool_SetCurrent(s32 slot);
+#ifdef PORT
+extern s32 BtlPool_PortCharPool(s32 chr, s32 kind); /* btl_pool.c: a fighter beyond the two has pools of its own */
+extern void BtlPool_PortResetExtra(s32 kind);
+#endif
 extern void BtlPool_Reset(s32 slot);
 extern void *BtlPool_Alloc(s32 slot, s32 size);
 extern void BtlPool_Free(s32 slot, void *ptr);
@@ -765,6 +769,9 @@ void EftCharRoot_Term(EftQTask *task) {
     BtlPool_Reset(6);
     BtlPool_Reset(7);
     BtlPool_Reset(8);
+#ifdef PORT
+    BtlPool_PortResetExtra(1); /* (several fighters on the field: their own character effect pools) */
+#endif
 }
 
 /* Root update: nothing. */
@@ -830,7 +837,11 @@ void EftChar_Update(EftQTask *task) {
 
 /* Makes the character's pool (7 for character 0, 8 for the others) the current one. */
 void EftChar_SetPool(s32 chr) {
+#ifdef PORT
+    BtlPool_SetCurrent(BtlPool_PortCharPool(chr, 1)); /* (a fighter beyond the two has a pool of its own) */
+#else
     BtlPool_SetCurrent(chr == 0 ? 7 : 8);
+#endif
 }
 
 /* Empties the character's pool. */

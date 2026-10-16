@@ -138,6 +138,15 @@ extern int BtlChar_IsDead(void *chr);
    back with the fighters. -1: none yet. */
 static int sTarget[FIGHTER_MAX];
 static int sTargetFrame, sL3Prev[FIGHTER_MAX], sHpPrev[FIGHTER_MAX]; /* (see PortMulti_UpdateTargets) */
+/* While one hit between two fighters is tested or applied (btl_char_hit.c), each one's opponent is the other one,
+   whoever its target is; -1: none. Set and cleared within one call, so it is never left over in a saved state. */
+static int sOverride[FIGHTER_MAX] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
+
+void PortMulti_SetOverride(int fighter, int opponent) {
+    if (fighter >= 0 && fighter < FIGHTER_MAX) {
+        sOverride[fighter] = opponent;
+    }
+}
 
 /* The opponent of fighter i (BTL_OPP, battle/battle.h). With two fighters the other one, as on the console; with
    more the target, or the first enemy while there is none yet (before the first PortMulti_UpdateTargets). */
@@ -146,6 +155,9 @@ int PortMulti_TargetOf(int i) {
 
     if (n <= 2 || i < 0 || i >= n) {
         return i ^ 1;
+    }
+    if (sOverride[i] >= 0) {
+        return sOverride[i];
     }
     t = sTarget[i];
     if (t < 0 || t >= n || BattleSide_GetTeam(t) == BattleSide_GetTeam(i)) {
@@ -258,6 +270,8 @@ void PortMulti_UpdateTargets(void) {
    a technique: "<blank> ts <time stopped> pv <priority view> | <team> <hp> <x> <y> <z> <target> <action> <skill> |
    ...". A blank
    run again after a rollback is written again; the last line of a blank counts. Not game state (PORT_HOST). */
+void PortMulti_BattleEnd(void); /* (below: the measuring part) */
+
 void PortMulti_Trace(unsigned vblank, int battle) {
     extern int BattleSide_GetCount(void);       /* src/battle/battle_load.c */
     extern int BattleSide_GetTeam(int side);
@@ -277,6 +291,7 @@ void PortMulti_Trace(unsigned vblank, int battle) {
     /* BT3_MF_STOPAT=<blank> (tests): the program ends there (a versus battle without players waits at its end) */
     if (getenv("BT3_MF_STOPAT") != NULL && vblank >= (unsigned)atoi(getenv("BT3_MF_STOPAT"))) {
         printf("bt3: stopped at vertical blank %u (BT3_MF_STOPAT)\n", vblank);
+        PortMulti_BattleEnd(); /* (BT3_MFSTAT's lines, as at the end of a battle) */
         fflush(stdout);
         if (fp != NULL) {
             fclose(fp);
@@ -498,7 +513,10 @@ void PortMulti_BattleEnd(void) {
         int s;
 
         printf("bt3: mfstat: pool arenas (most held/size):");
-        for (s = 0; s < 9; s++) {
+        for (s = 0; s < 25; s++) { /* BTL_POOL_SLOT_COUNT: the console's nine, then the extra fighters' pairs */
+            if (BtlPool_PortSize(s) == 0) {
+                continue;
+            }
             printf(" %d:%X/%X", s, BtlPool_PortPeak(s), BtlPool_PortSize(s));
             if (BtlPool_PortOver(s)) {
                 printf(" OVER by %X", BtlPool_PortOver(s));

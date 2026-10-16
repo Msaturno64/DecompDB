@@ -2,8 +2,18 @@
 #define BATTLE_BTL_POOL_H
 
 #include "types.h"
+#include "battle/btl_multi.h"
 
+#ifdef PORT
+/* Slots 4 / 5 (shots) and 7 / 8 (character effects) are characters 0 / 1's own; several fighters on the field: each
+   fighter beyond the two has a pair of its own from slot 9 on (BtlPool_PortCharPool). */
+#define BTL_POOL_SLOT_EXTRA 9
+#define BTL_POOL_SLOT_COUNT (BTL_POOL_SLOT_EXTRA + 2 * (BTL_FIGHTER_MAX - 2))
+s32 BtlPool_PortCharPool(s32 chr, s32 kind); /* kind 0: shots (4 / 5), 1: character effects (7 / 8) */
+void BtlPool_PortResetExtra(s32 kind);      /* empties that kind's pools of every fighter beyond the two */
+#else
 #define BTL_POOL_SLOT_COUNT 9
+#endif
 /* Bit in BtlPool.arenaMask saying that a slot is a bump arena. */
 #define BTL_POOL_ARENA_BIT(slot) (1 << ((slot) + 1)) /* arenaMask is unsigned: a signed mask compiles to srav/andi */
 

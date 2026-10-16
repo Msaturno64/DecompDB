@@ -40,13 +40,37 @@ s32 BtlPool_PortSize(s32 slot) {
 /* What one fighter beyond the two adds to each arena, from BT3_MFSTAT's "most held" of a 1v1 and a 2v1 demo with
    about half again for margin (slot 1: +0x9A00 measured, 3: +0x600, 8: +0x14EC0, 0 and 6: a little; the others
    did not grow). A 1v1 gets the console's sizes. */
-static const s32 kPortArenaPerFighter[BTL_POOL_SLOT_COUNT] = {0x400, 0x10000, 0, 0x400, 0, 0, 0x100, 0, 0x20000};
+static const s32 kPortArenaPerFighter[9] = {0x400, 0x10000, 0, 0x400, 0, 0, 0x100, 0, 0};
 
-static s32 BtlPool_PortArenaSize(s32 slot, s32 size) {
+static s32 BtlPool_PortFighters(void) {
     extern s32 BattleSide_GetCount(void); /* battle_load.c: the battle's fighters */
 
-    return size + (BattleSide_GetCount() - 2) * kPortArenaPerFighter[slot];
+    return BattleSide_GetCount();
 }
+
+static s32 BtlPool_PortArenaSize(s32 slot, s32 size) {
+    return size + (BtlPool_PortFighters() - 2) * kPortArenaPerFighter[slot];
+}
+
+/* The pool of a character's shots (kind 0) or character effects (kind 1): 4 / 7 for character 0 and 5 / 8 for
+   character 1, as the console has them; a pair of its own for each fighter beyond the two. */
+s32 BtlPool_PortCharPool(s32 chr, s32 kind) {
+    if (chr < 2 || chr >= BTL_FIGHTER_MAX) {
+        return kind == 0 ? (chr == 0 ? 4 : 5) : (chr == 0 ? 7 : 8);
+    }
+    return BTL_POOL_SLOT_EXTRA + (chr - 2) * 2 + kind;
+}
+
+void BtlPool_PortResetExtra(s32 kind) {
+    s32 k;
+
+    for (k = 2; k < BtlPool_PortFighters(); k++) {
+        BtlPool_Reset(BtlPool_PortCharPool(k, kind));
+    }
+}
+
+/* Size of an arena of a fighter beyond the two: as large as the leads' own of that kind (0x19000 both). */
+#define PORT_EXTRA_ARENA 0x19000
 #define PORT_ARENA(slot, size) BtlPool_PortArenaSize(slot, size)
 #else
 #define PORT_ARENA(slot, size) (size)
@@ -64,6 +88,15 @@ void BtlPool_Init(s32 arg) {
     gBtlPool = Heap_Alloc(sizeof(BtlPool), 0x20, 0, HEAP_ANY);
     memset(gBtlPool, 0, sizeof(BtlPool));
     gBtlPool->arenaMask = 0x3FE;
+#ifdef PORT
+    {
+        s32 k;
+
+        for (k = 2; k < BtlPool_PortFighters(); k++) {
+            gBtlPool->arenaMask |= BTL_POOL_ARENA_BIT(BtlPool_PortCharPool(k, 0)) | BTL_POOL_ARENA_BIT(BtlPool_PortCharPool(k, 1));
+        }
+    }
+#endif
     size = BtlPool_CalcArenaSize();
     if (size > 0) {
         ARENA_MEM = Heap_Alloc(size, 0x20, 0, HEAP_ANY);
@@ -180,6 +213,15 @@ s32 BtlPool_CalcArenaSize(void) {
     if (gBtlPool->arenaMask & BTL_POOL_ARENA_BIT(8)) {
         total += BtlPool_AlignUp32(PORT_ARENA(8, 0x19000));
     }
+#ifdef PORT
+    {
+        s32 k;
+
+        for (k = 2; k < BtlPool_PortFighters(); k++) {
+            total += 2 * BtlPool_AlignUp32(PORT_EXTRA_ARENA);
+        }
+    }
+#endif
     return total;
 }
 
@@ -214,6 +256,16 @@ void BtlPool_CarveArenas(void) {
     if (gBtlPool->arenaMask & BTL_POOL_ARENA_BIT(7)) {
         mem = BtlPool_InitSlot(&gBtlPool->slots[8], BtlPool_AlignUp32(PORT_ARENA(8, 0x19000)), mem);
     }
+#ifdef PORT
+    {
+        s32 k;
+
+        for (k = 2; k < BtlPool_PortFighters(); k++) {
+            mem = BtlPool_InitSlot(&gBtlPool->slots[BtlPool_PortCharPool(k, 0)], BtlPool_AlignUp32(PORT_EXTRA_ARENA), mem);
+            mem = BtlPool_InitSlot(&gBtlPool->slots[BtlPool_PortCharPool(k, 1)], BtlPool_AlignUp32(PORT_EXTRA_ARENA), mem);
+        }
+    }
+#endif
 }
 
 /* Points a slot at its arena memory and returns the address just past it. */

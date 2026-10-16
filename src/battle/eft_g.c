@@ -1698,6 +1698,20 @@ void EftShotMgr_Init(EftTask *task) {
     memset(gEftShot->chr, 0, size);
     gEftShot->list = BtlTask_CreateChildList(task, gEftShot->count + 1, 0);
     BtlTaskList_AddTail(gEftShot->list, gEftTechEvtClass, NULL);
+#ifdef PORT
+    {
+        /* several fighters on the field: a character task for each one (without its task an extra's technique has
+           no shot slots: the animation runs, nothing comes out) */
+        s32 ids[BTL_FIGHTER_MAX];
+        s32 i;
+
+        for (i = 0; i < gEftShot->count; i++) {
+            ids[i] = i;
+            gEftShot->chr[i].task = BtlTaskList_AddTail(gEftShot->list, gEftShotCharClass, &ids[i]);
+        }
+        return;
+    }
+#endif
     arg[0] = 0;
     arg[1] = 1;
     c = gEftShot->chr;
@@ -1715,6 +1729,9 @@ void EftShotMgr_Term(void) {
     BtlPool_Reset(3);
     BtlPool_Reset(4);
     BtlPool_Reset(5);
+#ifdef PORT
+    BtlPool_PortResetExtra(0); /* (several fighters on the field: their own shot pools) */
+#endif
 }
 
 /* Shot layer update callback: nothing. */
@@ -1761,6 +1778,10 @@ void EftShotChar_Update(void) {
 void EftShot_SetCharPool(s32 chr) {
     s32 pool;
 
+#ifdef PORT
+    BtlPool_SetCurrent(BtlPool_PortCharPool(chr, 0)); /* (a fighter beyond the two has a pool of its own) */
+    return;
+#endif
     if (chr == 0) {
         pool = 4;
     } else {
@@ -1773,6 +1794,10 @@ void EftShot_SetCharPool(s32 chr) {
 void EftShot_ResetCharPool(s32 chr) {
     s32 pool;
 
+#ifdef PORT
+    BtlPool_Reset(BtlPool_PortCharPool(chr, 0)); /* (a fighter beyond the two has a pool of its own) */
+    return;
+#endif
     if (chr == 0) {
         pool = 4;
     } else {
