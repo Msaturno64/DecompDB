@@ -5,6 +5,7 @@
 #include "sys/list.h"
 #include "sys/math3d.h"
 #include "sys/gfxm_b_b.h"
+#include "battle/btl_multi.h" /* BTL_SHADOW_ROOM */
 
 /*
  * 0x112A30..0x115170, four source files (the stem is a placeholder; suggested names in brackets):
@@ -146,7 +147,11 @@ typedef struct ObjShadowTri {
 
 #define OBJ_SHADOW_TRI_MAX 0x80
 #define OBJ_SHADOW_PKT_TRIS 0x90
+#ifdef PORT
+#define OBJ_SHADOW_MAX 12 /* one per battle object (BTL_OBJ_MAX): five ran out with more fighters (multi-fighter) */
+#else
 #define OBJ_SHADOW_MAX 5
+#endif
 
 /* Element of the third pool of the battle object work block (BtlObjPool3Work.nodes). */
 typedef struct ObjShadow {
@@ -164,6 +169,9 @@ typedef struct ObjShadow {
 
 typedef struct ObjShadowPool {
     /* 0x0000 */ ObjShadow nodes[OBJ_SHADOW_MAX];
+#ifdef PORT
+    u8 room[BTL_SHADOW_ROOM - OBJ_SHADOW_MAX * sizeof(ObjShadow)]; /* to BtlObjPool3Work's free list (battle/btl_multi.h) */
+#endif
     /* 0xA140 */ SList free;
     /* 0xA14C */ s32 pad;
 } ObjShadowPool; /* size 0xA150 */

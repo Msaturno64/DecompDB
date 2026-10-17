@@ -785,6 +785,10 @@ void ObjShadow_BeginFlat(ObjMdlObj *obj) {
     }
 }
 
+#ifdef PORT
+_Static_assert(__builtin_offsetof(ObjShadowPool, free) == BTL_SHADOW_ROOM, "ObjShadowPool must match BtlObjPool3Work (battle/btl_multi.h)");
+#endif
+
 /* Clears the shadow pool and gives each of its five shadows a work block and two packet buffers. */
 void ObjShadow_InitPool(void) {
     ObjShadowPool *pool = BtlObjPool3_Get();

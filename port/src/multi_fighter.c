@@ -570,7 +570,8 @@ int PortMulti_ReadBars(PortMultiBar *out, int max) {
    and the health it took; STUCK when a fighter stays in one technique, reaction or load for 30 s (the game goes on
    but the fight does not: what a player sees as a hang); then the program ends. Off: nothing here runs.
    BT3_TECHTEST=2: the transformations instead: each fighter takes the form of each of its four transformation slots
-   in turn (BtlCtrl_Transform; "kind" 10 + slot in the lines), each time followed by its ultimate in that form. */
+   in turn (BtlCtrl_Transform; "kind" 10 + slot in the lines), each time followed by its ultimate in that form.
+   BT3_TECHTEST_ROUNDS=1: each technique once instead of twice (BT3_TECHTEST=2: no change). */
 #define TT_ROUNDS 10         /* uses per fighter: kinds 2, 3, 4, 0, 1, twice (BT3_TECHTEST=2: 4 forms, 4 ultimates) */
 #define TT_BUSY(a) (ENGAGED_ACTION(a) || ((a) >= 0xEC && (a) <= 0xF8)) /* (and the character changes) */
 #define TT_STUCK 900         /* 30 s */
@@ -583,15 +584,17 @@ static void tech_test(void) {
     extern int BtlCharApi_GetAction(int objId);
     extern int BtlCharApi_GetHp(int objId);
     extern char GAME_PTR Battle_GetWork(void); /* src/battle/battle_work.c */
-    static int on = -1, frame, turn, used[3], wait, startAt, dmg, startAction, kind, since[3], last[3], prevHp[3];
+    static int on = -1, frame, turn, used[FIGHTER_MAX], wait, startAt, dmg, startAction, kind, since[FIGHTER_MAX],
+        last[FIGHTER_MAX], prevHp[FIGHTER_MAX];
     static int A; /* the first fighter of the pair: 0, or BT3_TECHTEST_A (1: side 1's lead against its own extra) */
+    static int uses; /* per fighter, until the test is done */
     extern int BtlChange_IsPendingType0(int player), BtlChange_IsPendingType1(int player); /* btl_capi_b.c */
     extern int BtlChange_IsLoadedFor(int player), BtlChange_IsReady(void); /* btl_char_ctl_b.c, btl_capi_b.c */
     static int loadSince, reported, queue = -1;
     int f, other, a, i, hp, q, B;
 
     if (on < 0) {
-        on = getenv("BT3_TECHTEST") != NULL && (BattleSide_GetCount() == 2 || BattleSide_GetCount() == 3) ? atoi(getenv("BT3_TECHTEST")) : 0;
+        on = getenv("BT3_TECHTEST") != NULL && BattleSide_GetCount() >= 2 && BattleSide_GetCount() <= FIGHTER_MAX ? atoi(getenv("BT3_TECHTEST")) : 0;
     }
     if (!on) {
         return;
@@ -601,6 +604,7 @@ static void tech_test(void) {
     if (frame == 1) {
         A = getenv("BT3_TECHTEST_A") != NULL && atoi(getenv("BT3_TECHTEST_A")) < B ? atoi(getenv("BT3_TECHTEST_A")) : 0;
         turn = A;
+        uses = on == 2 ? 8 : getenv("BT3_TECHTEST_ROUNDS") != NULL && atoi(getenv("BT3_TECHTEST_ROUNDS")) == 1 ? 5 : TT_ROUNDS;
     }
     f = turn;
     other = f == A ? B : A;
@@ -666,7 +670,7 @@ static void tech_test(void) {
         }
         return;
     }
-    if (used[A] >= (on == 2 ? 8 : TT_ROUNDS) && used[B] >= (on == 2 ? 8 : TT_ROUNDS)) {
+    if (used[A] >= uses && used[B] >= uses) {
         printf("bt3: techtest: done, %d stuck\n", reported);
         fflush(stdout);
         exit(reported ? 3 : 0);

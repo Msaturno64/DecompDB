@@ -312,7 +312,7 @@ void BtlObjPool70_Init(void) {
     s32 i;
 
     memset(pool, 0, sizeof(BtlObjPool70Work));
-    for (i = 0; i < 4; i++) {
+    for (i = 0; i < BTL_OBJ_FACE_MAX; i++) {
         SList_PushFront(&pool->free, &pool->nodes[i].link);
     }
 }

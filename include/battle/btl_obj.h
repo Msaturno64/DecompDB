@@ -272,15 +272,24 @@ typedef struct BtlObjPool70 {
     /* 0x04 */ u8 unk04[0x6C];
 } BtlObjPool70; /* size 0x70 */
 
+#ifdef PORT
+#define BTL_OBJ_FACE_MAX BTL_OBJ_MAX /* one per object: with more fighters (and a partner) four ran out, multi-fighter */
+#else
+#define BTL_OBJ_FACE_MAX 4
+#endif
 typedef struct BtlObjPool70Work {
-    /* 0x000 */ BtlObjPool70 nodes[4];
+    /* 0x000 */ BtlObjPool70 nodes[BTL_OBJ_FACE_MAX];
     /* 0x1C0 */ SList free;
     /* 0x1CC */ s32 pad;
 } BtlObjPool70Work; /* size 0x1D0 */
 
 /* Third pool; elements are not touched in this file (ObjShadow_InitPool fills the free list). */
 typedef struct BtlObjPool3Work {
+#ifdef PORT
+    u8 nodes[BTL_SHADOW_ROOM]; /* (battle/btl_multi.h) */
+#else
     /* 0x0000 */ u8 nodes[0xA140];
+#endif
     /* 0xA140 */ SList free;
     /* 0xA14C */ s32 pad;
 } BtlObjPool3Work; /* size 0xA150 */

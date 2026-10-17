@@ -16,6 +16,10 @@
    on (port/src/multi_fighter.c). */
 extern s32 PortMulti_TargetOf(s32 fighter);
 #define BTL_OPP(i) PortMulti_TargetOf(i)
+/* The room the battle object work block keeps for the shadow pool's shadows (BtlObjPool3Work, battle/btl_obj.h):
+   twelve (OBJ_SHADOW_MAX, sys/gfxm_e.h), one per battle object. btl_obj.c takes shadows from the free list after
+   this room and gfxm_e_b.c fills the one of ObjShadowPool, padded to the same place (it checks that). */
+#define BTL_SHADOW_ROOM (12 * 0x2100)
 #else
 #define BTL_FIGHTER_MAX 2
 #define BTL_OPP(i) ((i) ^ 1)
