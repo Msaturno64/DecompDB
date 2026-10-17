@@ -4,6 +4,7 @@
 #include "types.h"
 #include "sys/math3d.h"
 #include "sys/list.h"
+#include "battle/btl_multi.h" /* BTL_FIGHTER_MAX */
 
 /*
  * Views local to src/battle/eft_o.c, eft_o_b.c and eft_o_c.c (0x167E68..0x16C2E0). Five modules, in address
@@ -412,7 +413,7 @@ typedef struct EftBodyFxArg {
 /* gEftBodyFx, 0x328 bytes: the effect packs and the task of each fighter. */
 typedef struct EftBodyFxMgr {
     /* 0x000 */ EftOSet set[EFT_BODYFX_SETS];
-    /* 0x320 */ EftOTask *task[2];
+    /* 0x320 */ EftOTask *task[BTL_FIGHTER_MAX]; /* (2 on the console; indexed by object id) */
 } EftBodyFxMgr;
 
 /* Work of the task (class 0x2C3B08). */

@@ -2,6 +2,7 @@
 #define BATTLE_EFT_AE_H
 
 #include "types.h"
+#include "battle/btl_multi.h" /* BTL_EFT_VRAM_MAX */
 #include "sys/math3d.h"
 
 /*
@@ -132,8 +133,17 @@ typedef struct EftAeVramEntry {
 } EftAeVramEntry; /* size 0x10 */
 
 /* The effect VRAM allocator (gEftVram): a list rebuilt every frame. */
+#ifdef PORT
+#define EFT_VRAM_MAX BTL_EFT_VRAM_MAX /* (battle/btl_multi.h) */
+#else
+#define EFT_VRAM_MAX 128
+#endif
 typedef struct EftAeVram {
+#ifdef PORT
+    EftAeVramEntry entry[EFT_VRAM_MAX + 1]; /* the last: where a texture past the list goes (not uploaded, not counted) */
+#else
     /* 0x000 */ EftAeVramEntry entry[128];
+#endif
     /* 0x800 */ u32 count;
     /* 0x804 */ s32 imageNext;  /* next free block for images, 0x2B00 at the start of a frame (grows up) */
     /* 0x808 */ s32 clutNext;   /* next free block for CLUTs, 0x2A00 at the start of a frame (grows up) */

@@ -99,6 +99,9 @@ extern void GfxAlphaKey_Term(void);
 extern void GfxAlphaKey_Draw(void);
 
 extern f32 gBtlObjFarDist[];
+#ifdef PORT
+static BtlObj *gBtlObjTbl[BTL_OBJ_MAX]; /* (the game image's has room for twelve: battle/btl_obj.h) */
+#endif
 
 /* File_Request is called with a third argument (the buffer size), which it ignores. */
 #define File_Request3(id, buf, size) ((void *(*)(s32, void *, s32))File_Request)(id, buf, size)

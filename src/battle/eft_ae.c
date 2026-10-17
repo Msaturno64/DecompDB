@@ -1623,6 +1623,9 @@ u64 EftVram_AddTex(EftAeTex *tex, s32 tcc, s32 tfx) {
     e->imageBlock = gEftVram->imageNext;
     e->clutBlock = gEftVram->clutNext;
     e->flags = 3;
+#ifdef PORT
+    if (gEftVram->count < EFT_VRAM_MAX)
+#endif
     gEftVram->count++;
     tex->tex0 &= 0xFFF80003FFFFC000;
     tex0 = ((tex->tex0 | ((u64)tcc << 34)) | (((u64)tfx << 35) | (u32)gEftVram->imageNext)) |
@@ -1641,6 +1644,9 @@ u64 EftVram_AddImage(EftAeTex *tex, s32 tcc, s32 tfx) {
     e->imageBlock = gEftVram->imageNext;
     e->flags = 1;
     e->clutBlock = 0;
+#ifdef PORT
+    if (gEftVram->count < EFT_VRAM_MAX)
+#endif
     gEftVram->count++;
     tex->tex0 &= 0xFFF80003FFFFC000;
     tex0 = (tex->tex0 | ((u64)tcc << 34)) | (((u64)tfx << 35) | (u32)gEftVram->imageNext);
@@ -1657,6 +1663,9 @@ u64 EftVram_AddClut(EftAeTex *tex) {
     e->imageBlock = 0;
     e->clutBlock = gEftVram->clutNext;
     e->flags = 2;
+#ifdef PORT
+    if (gEftVram->count < EFT_VRAM_MAX)
+#endif
     gEftVram->count++;
     block = (u32)gEftVram->clutNext;
     gEftVram->clutNext += tex->image->clutBlocks;
@@ -1671,6 +1680,9 @@ u64 EftVram_AddTexAt(EftAeTex *tex, s32 imageBlock, s32 clutBlock, s32 tcc, s32 
     e->imageBlock = imageBlock;
     e->clutBlock = clutBlock;
     e->tex = tex;
+#ifdef PORT
+    if (gEftVram->count < EFT_VRAM_MAX)
+#endif
     gEftVram->count++;
     tex->tex0 &= 0xFFF80003FFFFC000;
     return ((tex->tex0 | ((u64)tcc << 34)) | (((u64)tfx << 35) | (u32)imageBlock)) | ((u64)clutBlock << 37);

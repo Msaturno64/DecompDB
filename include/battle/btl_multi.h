@@ -16,10 +16,17 @@
    on (port/src/multi_fighter.c). */
 extern s32 PortMulti_TargetOf(s32 fighter);
 #define BTL_OPP(i) PortMulti_TargetOf(i)
-/* The room the battle object work block keeps for the shadow pool's shadows (BtlObjPool3Work, battle/btl_obj.h):
-   twelve (OBJ_SHADOW_MAX, sys/gfxm_e.h), one per battle object. btl_obj.c takes shadows from the free list after
-   this room and gfxm_e_b.c fills the one of ObjShadowPool, padded to the same place (it checks that). */
-#define BTL_SHADOW_ROOM (12 * 0x2100)
+/* Battle objects (BTL_OBJ_MAX, battle/btl_obj.h): ten fighters and as many again for what their techniques bring
+   (blast models, partners, props); the console's twelve ran out in a 5v5 (EftObj_Create gave -1). Past fifteen,
+   objects share alpha row 0 (BtlObjVis_AllocFreeBit). */
+#define BTL_OBJ_PORT_MAX 20
+/* The room the battle object work block keeps for the shadow pool's shadows (BtlObjPool3Work, battle/btl_obj.h): one
+   per battle object (OBJ_SHADOW_MAX, sys/gfxm_e.h). btl_obj.c takes shadows from the free list after this room and
+   gfxm_e_b.c fills the one of ObjShadowPool, padded to the same place (it checks that). */
+#define BTL_SHADOW_ROOM (BTL_OBJ_PORT_MAX * 0x2100)
+/* Effect textures uploaded in one frame (EftAeVram, battle/eft_ae.h): five times the console's 128, for ten
+   fighters' effects (a 5v5 ran past 128 and the list overwrote its own count). */
+#define BTL_EFT_VRAM_MAX 640
 #else
 #define BTL_FIGHTER_MAX 2
 #define BTL_OPP(i) ((i) ^ 1)

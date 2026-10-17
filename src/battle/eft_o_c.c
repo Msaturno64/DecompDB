@@ -255,7 +255,7 @@ void EftBodyFxMgr_Init(EftOTask *task) {
 
     gEftBodyFx = BtlPool_Alloc(BtlPool_GetCurrent(), sizeof(EftBodyFxMgr));
     memset(gEftBodyFx, 0, sizeof(EftBodyFxMgr));
-    gEftBodyFxList = BtlTask_CreateChildList(task, 3, sizeof(EftBodyFx));
+    gEftBodyFxList = BtlTask_CreateChildList(task, BTL_FIGHTER_MAX + 1, sizeof(EftBodyFx));
     id[0] = 0x23F;
     for (i = 0; i < EFT_BODYFX_SETS; i++) {
         EftEmit_LoadSet(NULL, &gEftBodyFx->set[i], NULL, NULL, 1, id[i]);

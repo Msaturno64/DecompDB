@@ -1,5 +1,6 @@
 #include "common.h"
 #include "battle/eft_b.h"
+#include "battle/btl_multi.h" /* BTL_FIGHTER_MAX */
 #include "sys/gfx_ot.h"
 
 #ifdef PORT
@@ -657,8 +658,8 @@ void EftBubble_Init(EftBTask *task) {
         memset(gEftBubble, 0, sizeof(EftBubbleWork));
     }
     if (gEftBubble->chr == NULL) {
-        gEftBubble->chr = BtlPool_Alloc(BtlPool_GetCurrent(), 2 * sizeof(EftBubbleChr));
-        memset(gEftBubble->chr, 0, 2 * sizeof(EftBubbleChr));
+        gEftBubble->chr = BtlPool_Alloc(BtlPool_GetCurrent(), BTL_FIGHTER_MAX * sizeof(EftBubbleChr));
+        memset(gEftBubble->chr, 0, BTL_FIGHTER_MAX * sizeof(EftBubbleChr));
     }
     if (gEftBubble->pool == NULL) {
         gEftBubble->pool = BtlPool_Alloc(BtlPool_GetCurrent(), EFT_BUBBLE_MAX * sizeof(EftBubble));

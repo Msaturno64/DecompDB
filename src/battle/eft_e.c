@@ -1,5 +1,6 @@
 #include "common.h"
 #include "battle/eft_e.h"
+#include "battle/btl_multi.h" /* BTL_FIGHTER_MAX */
 #include "sys/gfx_ot.h"
 
 /*
@@ -898,8 +899,8 @@ void EftWater_Init(void *task) {
         memset(gEftDust, 0, sizeof(EftWater));
     }
     if (gEftDust->wake == NULL) {
-        gEftDust->wake = BtlPool_Alloc(BtlPool_GetCurrent(), 0x18);
-        memset(gEftDust->wake, 0, 0x18);
+        gEftDust->wake = BtlPool_Alloc(BtlPool_GetCurrent(), BTL_FIGHTER_MAX * sizeof(EftWaterWake));
+        memset(gEftDust->wake, 0, BTL_FIGHTER_MAX * sizeof(EftWaterWake));
     }
     if (gEftDust->splash == NULL) {
         gEftDust->splash = BtlPool_Alloc(BtlPool_GetCurrent(), 0x280);
@@ -1045,7 +1046,7 @@ void EftWater_UpdateWakes(void) {
 
     if (!EFT_PAUSED()) {
         wake = gEftDust->wake;
-        for (n = 0; n < 2; n++, wake++) {
+        for (n = 0; n < BTL_FIGHTER_MAX; n++, wake++) {
             if (wake->on != 0) {
                 BtlCharApi_GetPos(wake->objId, (Vec4 *)&pos);
                 if (EftWater_GetSurfaceY(&y)) {

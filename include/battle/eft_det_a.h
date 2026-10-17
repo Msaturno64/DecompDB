@@ -2,6 +2,7 @@
 #define BATTLE_EFT_DET_A_H
 
 #include "types.h"
+#include "battle/btl_multi.h" /* BTL_EFT_VRAM_MAX */
 
 /*
  * src/battle/eft_det_a.c, 0x1AE2A8..0x1B16F0 (the brief's range starts at 0x1AE200, which is inside the function
@@ -312,7 +313,11 @@ typedef struct EftVramTex {
 
 /* The effect VRAM allocator (gp 0x2FEAF4; managed by the file before). */
 typedef struct EftVram {
+#ifdef PORT
+    u8 entries[(BTL_EFT_VRAM_MAX + 1) * 0x10]; /* (EftAeVram, battle/eft_ae.h: one entry more, battle/btl_multi.h) */
+#else
     /* 0x000 */ u8 entries[0x800];
+#endif
     /* 0x800 */ u32 count;
     /* 0x804 */ s32 next;       /* next free block, starts at 0x2B00 */
     /* 0x808 */ s32 unk808;

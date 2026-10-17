@@ -1,5 +1,6 @@
 #include "common.h"
 #include "battle/eft_t.h"
+#include "battle/btl_multi.h" /* BTL_FIGHTER_MAX */
 
 /*
  * 0x1809C0..0x182CE8: the module of task class 0x2C3EC0 (EftShotFx_*), the teleport ("vanish") lines: black
@@ -28,12 +29,12 @@ extern EftTShotFxMgr *gEftShotFx;
 INCLUDE_RODATA("asm/nonmatchings/battle/eft_t_c", gEftShotFxSegs);
 INCLUDE_RODATA("asm/nonmatchings/battle/eft_t_c", gEftShotFxRows);
 
-/* Returns a free request slot (flags == 0) of the two, or NULL. */
+/* Returns a free request slot (flags == 0), one per fighter (two on the console), or NULL. */
 EftTShotFxReq *EftShotFx_FindFree(void) {
     EftTShotFxReq *req = gEftShotFx->req;
     s32 i;
 
-    for (i = 0; i < 2; i++, req++) {
+    for (i = 0; i < BTL_FIGHTER_MAX; i++, req++) {
         if (req->flags == 0) {
             return req;
         }
@@ -95,8 +96,8 @@ void EftShotFxMgr_Init(EftTTask *task) {
         memset(w, 0, sizeof(EftTShotFxMgr));
     }
     if (gEftShotFx->req == NULL) {
-        gEftShotFx->req = BtlPool_Alloc(BtlPool_GetCurrent(), 2 * sizeof(EftTShotFxReq));
-        memset(gEftShotFx->req, 0, 2 * sizeof(EftTShotFxReq));
+        gEftShotFx->req = BtlPool_Alloc(BtlPool_GetCurrent(), BTL_FIGHTER_MAX * sizeof(EftTShotFxReq));
+        memset(gEftShotFx->req, 0, BTL_FIGHTER_MAX * sizeof(EftTShotFxReq));
     }
     if (gEftShotFx->lines == NULL) {
         gEftShotFx->lines = BtlPool_Alloc(BtlPool_GetCurrent(), 0x4B00);
@@ -418,7 +419,7 @@ void EftShotFx_UpdateReqs(void) {
     s32 j;
 
     if (!(Battle_GetWork()->flags & 0x100)) {
-        for (i = 0; i < 2; i++) {
+        for (i = 0; i < BTL_FIGHTER_MAX; i++) {
             r = &gEftShotFx->req[i];
             if (r->flags == 0) {
                 continue;

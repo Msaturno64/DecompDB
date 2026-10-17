@@ -31,7 +31,11 @@
  * Entries of free ids are NULL.
  */
 
+#ifdef PORT
+#define BTL_OBJ_MAX BTL_OBJ_PORT_MAX /* (battle/btl_multi.h) */
+#else
 #define BTL_OBJ_MAX 12
+#endif
 #define BTL_OBJ_VIEW_MAX 2
 #ifdef PORT
 #define BTL_OBJ_WORK_SIZE sizeof(BtlObjWork) /* larger: a fighter work buffer and a fixed slot per fighter */
@@ -337,7 +341,9 @@ typedef struct BtlObjWork {
 } BtlObjWork; /* size 0x6B740 */
 
 extern BtlObjWork *gBtlObjWork;
+#ifndef PORT /* (the PC build's table is btl_obj.c's own: the game image's has room for twelve) */
 extern BtlObj *gBtlObjTbl[BTL_OBJ_MAX];
+#endif
 
 void BtlObj_InitNop(void);
 void BtlObj_TermNop(void);

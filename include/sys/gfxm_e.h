@@ -148,7 +148,7 @@ typedef struct ObjShadowTri {
 #define OBJ_SHADOW_TRI_MAX 0x80
 #define OBJ_SHADOW_PKT_TRIS 0x90
 #ifdef PORT
-#define OBJ_SHADOW_MAX 12 /* one per battle object (BTL_OBJ_MAX): five ran out with more fighters (multi-fighter) */
+#define OBJ_SHADOW_MAX BTL_OBJ_PORT_MAX /* one per battle object (battle/btl_multi.h): five ran out with more fighters */
 #else
 #define OBJ_SHADOW_MAX 5
 #endif
