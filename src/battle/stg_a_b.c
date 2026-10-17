@@ -806,6 +806,69 @@ s32 BtlStage_ProbeGround(s32 zone, Vec4 *pos, StgGroundHit *out) {
     return r;
 }
 
+#ifdef PORT
+/* Several fighters on the field (multi-fighter): the stage has a start point for each of the two sides only, and a
+   fighter past them read past the list (the extras stood between the two leads). A team battle keeps the leads at
+   their points and lines each team up beside its lead, right and left in turn and a little behind, facing the same
+   way; a free for all puts every fighter on the circle through the two points, evenly from side 0's, facing the
+   middle. Distances are shares of the half distance between the points (stages differ in size). 0: the console's
+   point (two fighters, or a team battle's lead). */
+#define STG_PORT_STEP 0.4f  /* across, between two of a team */
+#define STG_PORT_BACK 0.15f /* behind the lead, each step out */
+static s32 Stg_PortStartPlace(s32 side, StgPlace *starts, Vec4 *pos, f32 *yaw) {
+    extern s32 BattleSide_GetCount(void);  /* battle_load.c */
+    extern s32 BattleSide_GetTeam(s32 side);
+    extern s32 PortMulti_Ffa(void);        /* port/src/multi_fighter.c */
+    extern f32 Mathf_Sin(f32 a);
+    extern f32 Mathf_Cos(f32 a);
+    extern f32 atan2f(f32 y, f32 x);
+    s32 n = BattleSide_GetCount();
+    s32 t;
+    s32 j;
+    s32 k;
+    f32 cx;
+    f32 cz;
+    f32 ux;
+    f32 uz;
+    f32 h;
+    f32 a;
+    f32 across;
+    f32 back;
+
+    if (n <= 2 || (side < 2 && !PortMulti_Ffa())) {
+        return 0;
+    }
+    cx = (starts[0].pos.x + starts[1].pos.x) * 0.5f;
+    cz = (starts[0].pos.z + starts[1].pos.z) * 0.5f;
+    ux = starts[1].pos.x - starts[0].pos.x;
+    uz = starts[1].pos.z - starts[0].pos.z;
+    h = sqrtf(ux * ux + uz * uz) * 0.5f;
+    if (h < 1.0f) {
+        return 0;
+    }
+    ux /= h * 2.0f; /* (from side 0's point to side 1's) */
+    uz /= h * 2.0f;
+    if (PortMulti_Ffa()) {
+        a = atan2f(starts[0].pos.x - cx, starts[0].pos.z - cz) + 6.2831853f * (f32)side / (f32)n;
+        pos->x = cx + h * Mathf_Sin(a);
+        pos->z = cz + h * Mathf_Cos(a);
+        *yaw = Stg_CalcYaw(pos->x, pos->z, cx, cz);
+        return 1;
+    }
+    t = BattleSide_GetTeam(side);
+    for (j = 0, k = 0; k < side; k++) { /* (its place in its team: the lead is 0, the extras follow in order) */
+        j += BattleSide_GetTeam(k) == t;
+    }
+    across = (f32)((j + 1) / 2) * ((j & 1) ? 1.0f : -1.0f) * h * STG_PORT_STEP;
+    back = (f32)((j + 1) / 2) * h * STG_PORT_BACK * (t == 0 ? -1.0f : 1.0f);
+    pos->x = starts[t].pos.x - uz * across + ux * back;
+    pos->z = starts[t].pos.z + ux * across + uz * back;
+    *yaw = Stg_CalcYaw(pos->x, pos->z, pos->x + starts[t ^ 1].pos.x - starts[t].pos.x,
+                       pos->z + starts[t ^ 1].pos.z - starts[t].pos.z);
+    return 1;
+}
+#endif
+
 /* Start placement of a player: the stage's start point for `side` (the single alternative point when alt == 1),
  * dropped onto the ground from y = -700, with the yaw that faces the point's target. Returns the zone of the
  * point (the fighter keeps it as its "area"). Reads gBtlStage->data even when the stage is not ready. */
@@ -827,6 +890,11 @@ s32 BtlStage_GetStartPlace(s32 side, Vec4 *pos, Vec4 *rot, s32 alt) {
         pos->y = -700.0f;
         pos->z = p->pos.z;
         pos->w = 1.0f;
+#ifdef PORT
+    } else if (Stg_PortStartPlace(side, starts, pos, &yaw)) {
+        pos->y = -700.0f;
+        pos->w = 1.0f;
+#endif
     } else {
         p = (StgPlace *)(side * (s32)sizeof(StgPlace) + (s32)starts);
         yaw = Stg_CalcYaw(p->pos.x, p->pos.z, p->target.x, p->target.z);

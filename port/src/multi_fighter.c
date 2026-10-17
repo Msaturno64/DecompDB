@@ -172,6 +172,10 @@ static int sEngaged[FIGHTER_MAX] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1}, sEn
 #define ENGAGE_GRACE 15 /* frames an exchange holds anyway: the reaction starts at the victim's next action update */
 /* hit reactions, throws, down and getting up (0xB4..0xEB); techniques and their receiving end (0x105..0x13B) */
 #define ENGAGED_ACTION(a) (((a) >= 0xB4 && (a) <= 0xEB) || ((a) >= 0x105 && (a) <= 0x13B))
+/* A player's fighter stays on whoever hit it only while it takes the hit: the reactions, down and getting up, and the
+   receiving end of a rush (a counter such as the vanish behind the attacker needs it); its own moves and techniques
+   go back to its lock-on at once (the user: a hit from an enemy not locked on kept the player's blasts on that one). */
+#define REACTION_ACTION(a) (((a) >= 0xB4 && (a) <= 0xEB) || ((a) >= 0x139 && (a) <= 0x13B))
 
 /* A hit of `attacker` reached `victim` (btl_char_hit.c, eft_det_a.c). */
 void PortMulti_Engage(int victim, int attacker) {
@@ -364,11 +368,13 @@ void PortMulti_UpdateTargets(void) {
     }
     sTargetFrame++;
     for (i = 0; i < n; i++) {
+        int a = BtlCharApi_GetAction(BattleSide_GetObjId(i));
+
         BtlCharApi_GetPos(BattleSide_GetObjId(i), p[i]);
         k = sEngaged[i];
         if (k >= 0 && (k >= n || BtlChar_IsDead(BtlChar_Get(i)) || BtlChar_IsDead(BtlChar_Get(k)) ||
                        (sTargetFrame - sEngagedAt[i] > ENGAGE_GRACE &&
-                        !ENGAGED_ACTION(BtlCharApi_GetAction(BattleSide_GetObjId(i)))))) {
+                        !(BattleSide_GetControl(i) == 0 ? REACTION_ACTION(a) : ENGAGED_ACTION(a))))) {
             sEngaged[i] = -1; /* the exchange is over: back to the target */
         }
     }
@@ -542,11 +548,21 @@ void PortMulti_ProjectBars(int view, int last) {
     }
 }
 
-/* The render thread's copy of the last frame's bars (ui.cpp); the count. */
+/* The render thread's copy of the last frame's bars (ui.cpp); the count. None once they have not been published for
+   a while: a fight left halfway (to the main menu) publishes no more, and its last bars stayed over the menus. */
+#define BAR_STALE_READS 30 /* (the window is drawn once or a few times a game frame) */
+
 int PortMulti_ReadBars(PortMultiBar *out, int max) {
+    static unsigned lastSeq, sameReads;
     unsigned a, b;
     int tries, c;
 
+    a = __atomic_load_n(&sBarSeq, __ATOMIC_ACQUIRE);
+    sameReads = a == lastSeq ? sameReads + 1 : 0;
+    lastSeq = a;
+    if (sameReads > BAR_STALE_READS) {
+        return 0;
+    }
     for (tries = 0; tries < 64; tries++) {
         a = __atomic_load_n(&sBarSeq, __ATOMIC_ACQUIRE);
         if (a & 1) {
