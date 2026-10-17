@@ -173,6 +173,60 @@ static int sEngaged[FIGHTER_MAX] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1}, sEn
 /* hit reactions, throws, down and getting up (0xB4..0xEB); techniques and their receiving end (0x105..0x13B) */
 #define ENGAGED_ACTION(a) (((a) >= 0xB4 && (a) <= 0xEB) || ((a) >= 0x105 && (a) <= 0x13B))
 
+/* The last enemy whose attack reached each fighter (a hit, or guarded, dodged or countered alike) and when: a
+   player's counter that warps behind the opponent goes behind that one and locks on to it (PortMulti_CounterWarp;
+   the user's choice: the counter is the player choosing to answer that enemy). */
+#define THREAT_FRAMES 30
+static int sThreat[FIGHTER_MAX], sThreatAt[FIGHTER_MAX];
+
+void PortMulti_NoteThreat(int victim, int attacker) {
+    int n = BattleSide_GetCount();
+
+    if (n > 2 && victim >= 0 && victim < n && attacker >= 0 && attacker < n &&
+        BattleSide_GetBand(victim) != BattleSide_GetBand(attacker)) {
+        sThreat[victim] = attacker;
+        sThreatAt[victim] = sTargetFrame;
+    }
+}
+
+/* btl_char_move.c, BtlMove_WarpBehindOpponent, before it looks at the opponent: a player's counter (action 0x24,
+   vanish and reappear behind the opponent; 0x2D, appear behind it and strike) answering an attack of an enemy it is
+   not locked on locks on to that enemy, so the warp goes behind it. Not Instant Transmission and the like (they
+   warp behind the lock-on). BT3_MF_COUNTERTEST=1 (tests): computer fighters too, with a line in the log. */
+int PortMulti_TargetOf(int i);
+
+/* A fighter that keeps its lock-on whoever hits it: a player's (BTL_CONTROL_PAD). BT3_MF_COUNTERTEST=1 (tests):
+   every fighter, so that the computer's counters take the players' way. */
+static int keeps_lock_on(int i) {
+    extern int BattleSide_GetControl(int side); /* src/battle/battle_load.c: 0 a pad, 2 the computer */
+    PORT_HOST static int test = -1;
+
+    if (test < 0) {
+        test = getenv("BT3_MF_COUNTERTEST") != NULL;
+    }
+    return BattleSide_GetControl(i) == 0 || test;
+}
+
+void PortMulti_CounterWarp(int i) {
+    extern int BtlCharApi_GetAction(int objId); /* src/battle/btl_capi_b.c */
+    extern int gPortResim;                      /* gs/state.c */
+    int n = BattleSide_GetCount(), a, e;
+
+    if (n <= 2 || i < 0 || i >= n || !keeps_lock_on(i)) {
+        return;
+    }
+    a = BtlCharApi_GetAction(BattleSide_GetObjId(i));
+    e = sThreat[i];
+    if ((a != 0x24 && a != 0x2D) || e < 0 || e >= n || sTargetFrame - sThreatAt[i] > THREAT_FRAMES ||
+        e == PortMulti_TargetOf(i) || BattleSide_GetBand(e) == BattleSide_GetBand(i) || BtlChar_IsDead(BtlChar_Get(e))) {
+        return;
+    }
+    if (getenv("BT3_MF_COUNTERTEST") != NULL && !gPortResim) {
+        printf("bt3: counter: fighter %d (action %X) warps behind %d (lock-on was %d)\n", i, a, e, PortMulti_TargetOf(i));
+    }
+    sTarget[i] = e;
+}
+
 /* A hit of `attacker` reached `victim` (btl_char_hit.c, eft_det_a.c). A player's fighter is never put in an exchange:
    its opponent is the one it locked on (L3), whoever hits it (the user: being hit by another enemy switched the
    target back and forth, "dizzying"); the hit itself is still resolved against its attacker (PortMulti_SetOverride),
@@ -180,19 +234,19 @@ static int sEngaged[FIGHTER_MAX] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1}, sEn
 void PortMulti_Engage(int victim, int attacker) {
     extern int BtlCharApi_IsInTechnique(int objId); /* src/battle/btl_capi_a.c */
     extern int BtlCharApi_GetAction(int objId);     /* src/battle/btl_capi_b.c */
-    extern int BattleSide_GetControl(int side);     /* src/battle/battle_load.c: 0 a pad, 2 the computer */
     int n = BattleSide_GetCount(), a;
 
     if (n <= 2 || victim < 0 || victim >= n || attacker < 0 || attacker >= n ||
         BattleSide_GetBand(victim) == BattleSide_GetBand(attacker)) {
         return;
     }
-    if (BattleSide_GetControl(victim) != 0) {
+    PortMulti_NoteThreat(victim, attacker);
+    if (!keeps_lock_on(victim)) {
         sEngaged[victim] = attacker;
         sEngagedAt[victim] = sTargetFrame;
     }
     a = BtlCharApi_GetAction(BattleSide_GetObjId(attacker));
-    if (BattleSide_GetControl(attacker) != 0 &&
+    if (!keeps_lock_on(attacker) &&
         (BtlCharApi_IsInTechnique(BattleSide_GetObjId(attacker)) || (a >= 0xB4 && a <= 0xBF))) { /* (and a throw) */
         sEngaged[attacker] = victim;
         sEngagedAt[attacker] = sTargetFrame;
@@ -283,6 +337,7 @@ void PortMulti_ResetTargets(void) {
         sEngaged[i] = -1;
         sL3Prev[i] = 1; /* (an L3 held into the fight is not a tap) */
         sHpPrev[i] = 0x7FFFFFFF;
+        sThreat[i] = -1;
     }
     sTargetFrame = 0;
 }

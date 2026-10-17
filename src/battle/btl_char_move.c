@@ -850,6 +850,14 @@ void BtlMove_WarpBehindOpponent(BtlMoveChr *chr, f32 gap) {
     Vec4 vel;
     Vec4 ofs;
 
+#ifdef PORT
+    {
+        /* several fighters on the field: a player's counter answering an enemy it is not locked on to goes behind
+           that one, which becomes its lock-on (port/src/multi_fighter.c) */
+        extern void PortMulti_CounterWarp(s32 fighter);
+        PortMulti_CounterWarp(chr->player);
+    }
+#endif
     if (BtlChar_TestFlag(chr, 5)) {
         f32 d;
 

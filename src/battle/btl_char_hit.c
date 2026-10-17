@@ -12,6 +12,7 @@ extern s32 BtlChar_IsDead(HitChr *chr);
 extern s32 BattleSide_GetObjId(s32 side);                       /* battle_load.c */
 extern s32 BtlCharApi_GetHp(s32 objId);                         /* btl_capi_a.c */
 extern void PortMulti_NoteMelee(s32 path, s32 victim);          /* multi_fighter.c: counted for BT3_MFSTAT */
+extern void PortMulti_NoteThreat(s32 victim, s32 attacker);     /* multi_fighter.c: whose attack reached whom */
 void BtlHit_PortExtraContacts(void);
 #endif
 
@@ -1465,6 +1466,7 @@ void BtlHit_PortExtraContacts(void) {
             if (BtlChar_IsDead(def)) {
                 continue;
             }
+            PortMulti_NoteThreat(e, i); /* (before the dodge, guard and counter tests) */
             PortMulti_SetOverride(i, e);
             PortMulti_SetOverride(e, i);
             if (__builtin_fabsf(BtlOpp_GetYawFromFacing(atk)) < 1.5707963f || (BtlAtk_GetFlags(atk) & 8)) {
@@ -1520,6 +1522,7 @@ void BtlColl_Update(void) {
 
             if (BtlChar_GetCount() > 2 && victim >= 0) {
                 PortMulti_SetOverride(victim, i);
+                PortMulti_NoteThreat(victim, i); /* (before the dodge, guard and counter tests) */
             }
 #endif
             BtlHit_ApplyHit(BtlChar_Get(i));
