@@ -437,6 +437,11 @@ s32 BtlObj_FreeId(s32 id) {
 
 /* Returns the object with this id, NULL if the id is free. */
 BtlObj *BtlObj_Get(s32 id) {
+#ifdef PORT
+    if ((u32)id >= BTL_OBJ_MAX) { /* (-1: an object that could not be made, every one in use; eft_ad_b.c) */
+        return NULL;
+    }
+#endif
     return gBtlObjTbl[id];
 }
 

@@ -78,7 +78,33 @@ void BtlChange_Update(void) {
 
 /* Queues a character model change (transformation, fusion, member switch) for a player. */
 void BtlChange_RequestChara(s32 player, s32 chara, s32 costume, s32 variant, s32 animChara, s32 unk18, s32 voiceChara) {
-    BtlChangeReq *req = BtlChange_Alloc();
+    BtlChangeReq *req;
+
+#ifdef PORT
+    /* More than two fighters (multi-fighter): one model change per fighter at a time. A sequence asks for its change
+       on the frame its animation is new, and waits for one ready and one done; with more fighters to update, a
+       victim's animation was new two frames running (an ultimate that turns the victim into a random fighter, 1v4),
+       and the second request, a form of the next frame, was left in the queue with no one to finish it: the loads
+       stopped for good. */
+    {
+        extern s32 BattleSide_GetCount(void); /* battle/battle_load.c */
+        BtlChangeQueue *q = &gBtlChars->change;
+        s32 r;
+
+        if (BattleSide_GetCount() > 2) {
+            if (q->cur != NULL && q->cur->player == player && q->cur->kind == BTL_CHANGE_KIND_CHARA &&
+                q->state != BTL_CHANGE_DONE) {
+                return;
+            }
+            for (r = q->read; r != q->write; r = (r + 1) % BTL_CHANGE_RING) {
+                if (q->req[r].player == player && q->req[r].kind == BTL_CHANGE_KIND_CHARA) {
+                    return;
+                }
+            }
+        }
+    }
+#endif
+    req = BtlChange_Alloc();
 
     if (req != NULL) {
         req->player = player;

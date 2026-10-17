@@ -746,6 +746,14 @@ void EftMesh_DrawNowTriClip(EftMeshOut *v, u64 tex0, s32 abe) {
 
 /* ---- effect model objects --------------------------------------------------------------------------------- */
 
+#ifdef PORT
+/* An effect whose object could not be made (-1: every battle object in use) goes on without its model: the
+   functions below do nothing for it. (On the console they wrote through the table entry before the first.) */
+#define EFT_OBJ_OR(id, ret) if (BtlObj_Get(id) == NULL) { return ret; }
+#else
+#define EFT_OBJ_OR(id, ret)
+#endif
+
 /* Makes a battle object (type 1, active) from a model that is already in memory: fills the caller's resource
    record with the model pointer and hands it to BtlObj_Create. Returns the object id, -1 when the 12 objects
    are all in use. */
@@ -769,37 +777,45 @@ s32 EftObj_Destroy(s32 id) {
 
 /* Writes the object's position (used by EftObj_UpdateMtx). No caller. */
 void EftObj_SetPos(s32 id, Vec4 *pos) {
+    EFT_OBJ_OR(id, )
     Vec4_Copy(&BtlObj_Get(id)->pos, pos);
 }
 
 /* Rebuilds the object's matrix from its position and rotation. No caller. */
 void EftObj_UpdateMtx(s32 id) {
+    EFT_OBJ_OR(id, )
     BtlObjXf_Update(BtlObj_Get(id));
 }
 
 /* Starts one of the model's animations. */
 void EftObj_PlayAnim(s32 id, s32 anim, s32 mode) {
+    EFT_OBJ_OR(id, )
     BtlObjAnim_PlayModel(BtlObj_Get(id), anim, mode);
 }
 
 /* Whether an animation is playing. */
 s32 EftObj_IsAnimPlaying(s32 id) {
+    EFT_OBJ_OR(id, 0)
     return BtlObjAnim_GetMode(BtlObj_Get(id)) != 0;
 }
 
 /* Writes the object's rotation (used by EftObj_UpdateMtx). No caller. */
 void EftObj_SetRot(s32 id, Vec4 *rot) {
+    EFT_OBJ_OR(id, )
     Vec4_Copy(&BtlObj_Get(id)->rot, rot);
 }
 
 /* Poses the object: sets its world matrix. */
 void EftObj_SetMtx(s32 id, Mtx44 *m) {
+    EFT_OBJ_OR(id, )
     BtlObjXf_SetMtx(BtlObj_Get(id), m);
 }
 
 /* Shows or hides the object (the battle object's "drawn" flag). */
 void EftObj_SetVisible(s32 id, s32 on) {
     EftAdObj *obj = BtlObj_Get(id);
+
+    EFT_OBJ_OR(id, )
 
     if (on) {
         obj->flags |= 2;

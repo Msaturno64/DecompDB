@@ -16,10 +16,12 @@
    on (port/src/multi_fighter.c). */
 extern s32 PortMulti_TargetOf(s32 fighter);
 #define BTL_OPP(i) PortMulti_TargetOf(i)
-/* Battle objects (BTL_OBJ_MAX, battle/btl_obj.h): ten fighters and as many again for what their techniques bring
-   (blast models, partners, props); the console's twelve ran out in a 5v5 (EftObj_Create gave -1). Past fifteen,
-   objects share alpha row 0 (BtlObjVis_AllocFreeBit). */
-#define BTL_OBJ_PORT_MAX 20
+/* Battle objects (BTL_OBJ_MAX, battle/btl_obj.h): ten fighters and more than twenty for what their techniques
+   bring (blast models, partners, props): the console's twelve ran out in a 5v5 (EftObj_Create gave -1), and twenty
+   in a 5v2 free for all, where one of Frieza's techniques alone fires more than thirteen shots with a model. An
+   effect that gets none goes on without its model (eft_ad_b.c). Past fifteen, models share alpha row 0
+   (BtlObjVis_AllocFreeBit). */
+#define BTL_OBJ_PORT_MAX 32
 /* The room the battle object work block keeps for the shadow pool's shadows (BtlObjPool3Work, battle/btl_obj.h): one
    per battle object (OBJ_SHADOW_MAX, sys/gfxm_e.h). btl_obj.c takes shadows from the free list after this room and
    gfxm_e_b.c fills the one of ObjShadowPool, padded to the same place (it checks that). */

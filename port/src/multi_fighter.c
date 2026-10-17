@@ -590,8 +590,8 @@ static void tech_test(void) {
     static int uses; /* per fighter, until the test is done */
     extern int BtlChange_IsPendingType0(int player), BtlChange_IsPendingType1(int player); /* btl_capi_b.c */
     extern int BtlChange_IsLoadedFor(int player), BtlChange_IsReady(void); /* btl_char_ctl_b.c, btl_capi_b.c */
-    static int loadSince, reported, queue = -1;
-    int f, other, a, i, hp, q, B;
+    static int loadSince, reported;
+    int f, other, a, i, hp, B;
 
     if (on < 0) {
         on = getenv("BT3_TECHTEST") != NULL && BattleSide_GetCount() >= 2 && BattleSide_GetCount() <= FIGHTER_MAX ? atoi(getenv("BT3_TECHTEST")) : 0;
@@ -608,14 +608,23 @@ static void tech_test(void) {
     }
     f = turn;
     other = f == A ? B : A;
-    for (q = BtlChange_IsReady(), i = 0; i < 3; i++) { /* the change queue (models, partners), each time it moves */
-        q = q << 3 | BtlChange_IsPendingType0(i) << 2 | BtlChange_IsPendingType1(i) << 1 | BtlChange_IsLoadedFor(i);
-    }
-    if (q != queue) {
-        printf("bt3: techtest: frame %d change queue: ready %d, pending0/pending1/loaded of each fighter %d%d%d %d%d%d %d%d%d\n",
-               frame, q >> 9 & 1, q >> 8 & 1, q >> 7 & 1, q >> 6 & 1, q >> 5 & 1, q >> 4 & 1, q >> 3 & 1, q >> 2 & 1,
-               q >> 1 & 1, q & 1);
-        queue = q;
+    { /* the change queue (models, partners) of every fighter, each time it moves */
+        static char was[FIGHTER_MAX * 4 + 2];
+        char now[FIGHTER_MAX * 4 + 2];
+
+        now[0] = '0' + BtlChange_IsReady();
+        for (i = 0; i < BattleSide_GetCount(); i++) {
+            now[1 + i * 4] = ' ';
+            now[2 + i * 4] = '0' + BtlChange_IsPendingType0(i);
+            now[3 + i * 4] = '0' + BtlChange_IsPendingType1(i);
+            now[4 + i * 4] = '0' + BtlChange_IsLoadedFor(i);
+        }
+        now[1 + i * 4] = '\0';
+        if (strcmp(now, was) != 0) {
+            printf("bt3: techtest: frame %d change queue: ready %c, pending0/pending1/loaded of each fighter%s\n", frame,
+                   now[0], now + 1);
+            strcpy(was, now);
+        }
     }
     for (i = 0; i < BattleSide_GetCount(); i++) { /* the health a technique takes is counted before nobody is let fall below 95% */
         hp = BtlCharApi_GetHp(BattleSide_GetObjId(i));
@@ -643,14 +652,19 @@ static void tech_test(void) {
             last[i] = a;
             since[i] = frame;
         } else if (TT_BUSY(a) && frame - since[i] == TT_STUCK) {
-            printf("bt3: techtest: STUCK fighter %d in action %X for 30 s (kind %d of fighter %d)\n", i, a, kind, turn);
+            extern int BtlChange_GetPlayer(void); /* btl_char_ctl_b.c */
+            int GAME_PTR thr = (int GAME_PTR)((char GAME_PTR)BtlChar_Get(i) + 0xE90); /* the pair block */
+
+            printf("bt3: techtest: STUCK fighter %d in action %X for 30 s (kind %d of fighter %d; pair %d -> %d, change "
+                   "queue's fighter %d)\n", i, a, kind, turn, thr[1], thr[2], BtlChange_GetPlayer());
             reported++;
         }
     }
     if ((*(unsigned GAME_PTR)(Battle_GetWork() + 0x19F0) & 0x1800) == 0) { /* BattleWork.flags: LOAD_CHARA, _OBJECT */
         loadSince = frame;
     } else if (frame - loadSince == TT_STUCK) {
-        printf("bt3: techtest: STUCK loading a model for 30 s (kind %d of fighter %d)\n", kind, turn);
+        printf("bt3: techtest: STUCK loading a model for 30 s (kind %d of fighter %d; BattleWork flags %X)\n", kind, turn,
+               *(unsigned GAME_PTR)(Battle_GetWork() + 0x19F0));
         reported++;
     }
     a = BtlCharApi_GetAction(BattleSide_GetObjId(f));
@@ -659,10 +673,15 @@ static void tech_test(void) {
             startAction = a;
         }
         if ((startAction != 0 && BtlCtrl_CanAct(f)) || frame - startAt > 300 + (startAction ? 3 * TT_STUCK : 0)) {
-            printf("bt3: techtest: frame %d fighter %d kind %d: %s action %X, %d frames, %d health of fighter %d\n",
-                   frame, f, kind,
-                   startAction ? "ran" : "did not start:", startAction, frame - startAt,
-                   dmg, other);
+            extern void GAME_PTR BtlObj_Get(int id); /* src/battle/btl_obj.c: NULL for a free object */
+            int objs = 0;
+
+            for (i = 0; i < 64; i++) { /* (the battle objects in use; NULL past the last, src/battle/btl_obj.c) */
+                objs += BtlObj_Get(i) != NULL;
+            }
+            printf("bt3: techtest: frame %d fighter %d kind %d: %s action %X, %d frames, %d health of fighter %d, %d "
+                   "objects\n", frame, f, kind, startAction ? "ran" : "did not start:", startAction, frame - startAt,
+                   dmg, other, objs);
             startAt = 0;
             used[f]++;
             turn = used[A] > used[B] ? B : A;
