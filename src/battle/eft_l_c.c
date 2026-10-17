@@ -1,4 +1,7 @@
 #include "common.h"
+#ifdef PORT
+extern u32 BtlTask_PortOwnerTag(s32 chr); /* eft_ae.c: 0x800 / 0x1000, or a bit of its own for an extra fighter */
+#endif
 #include "battle/eft_l.h"
 
 /*
@@ -93,7 +96,11 @@ void EftAbsorb_Init(EftTask *task, EftAbsorbArg *arg) {
     EftEmit_InitState(w->model, &w->inst[1]);
     w->flags |= EFT_ABSORB_NEW;
     w->life = EftEmit_GetEndFrames(w->model);
+#ifdef PORT
+    BtlTask_SetOwnerTag(task, BtlTask_PortOwnerTag(owner->objId));
+#else
     BtlTask_SetOwnerTag(task, owner->objId == 0 ? 0x800 : 0x1000);
+#endif
     if (w->hands == 0) {
         BtlCharApi_GetNodePos(owner->objId, 0x36, &w->pos[0]);
         Vec4_Set(&w->dir[0], 0.0f, -1.0f, 0.0f, 1.0f);

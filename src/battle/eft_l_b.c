@@ -1,4 +1,7 @@
 #include "common.h"
+#ifdef PORT
+extern u32 BtlTask_PortOwnerTag(s32 chr); /* eft_ae.c: 0x800 / 0x1000, or a bit of its own for an extra fighter */
+#endif
 #include "battle/eft_l.h"
 
 /*
@@ -726,7 +729,11 @@ void EftRingShot_Init(EftTask *task, EftTechArg *arg) {
     } else if (id == 0x2A4) {
         w->type = 3;
     }
+#ifdef PORT
+    BtlTask_SetOwnerTag(task, BtlTask_PortOwnerTag(arg->objId));
+#else
     BtlTask_SetOwnerTag(task, arg->objId == 0 ? 0x800 : 0x1000);
+#endif
 }
 
 /* Term callback: releases the model instance and the fighter's held flags. */

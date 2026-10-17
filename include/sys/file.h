@@ -5,7 +5,11 @@
 #include "sys/list.h"
 
 #define FILE_SECTOR_SIZE 0x800
+#ifdef PORT
+#define FILE_REQ_MAX 128 /* a battle's first batch: three model files per fighter and every member's data (multi-fighter) */
+#else
 #define FILE_REQ_MAX 32
+#endif
 
 /* File ids: one global number space spread over three AFS partitions. */
 #define FILE_PT1_FIRST_ID 1     /* ids <= 0 are entries of partition 0 */

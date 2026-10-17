@@ -271,7 +271,7 @@ void BtlObjPoolE0_Init(void) {
 
     memset(pool, 0, sizeof(BtlObjPoolE0Work));
     node = pool->nodes;
-    for (i = 0; i < 512; i++) {
+    for (i = 0; i < BTL_OBJ_PART_MAX; i++) {
         SList_PushFront(&pool->free, &node->link);
         node++;
     }

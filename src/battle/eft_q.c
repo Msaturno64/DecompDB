@@ -1,5 +1,8 @@
 #include "common.h"
 #ifdef PORT
+extern u32 BtlTask_PortOwnerTag(s32 chr); /* eft_ae.c: 0x800 / 0x1000, or a bit of its own for an extra fighter */
+#endif
+#ifdef PORT
 extern s32 BtlScene_PortCharReset(s32 chr); /* btl_scene.c: the BtlScene_Reset mode of one character's tasks */
 #endif
 #include "battle/eft_q.h"
@@ -561,7 +564,11 @@ void EftRushBurst_Init(EftQTask *task, EftRushBurstArg *arg) {
     EftEmit_SetNode(w->nodes, 0, arg->node, NULL);
     w->flags |= EFT_RUSHBURST_ALIVE;
     w->life = EftEmit_GetEndFrames(w->set);
+#ifdef PORT
+    BtlTask_SetOwnerTag(task, BtlTask_PortOwnerTag(arg->objId));
+#else
     BtlTask_SetOwnerTag(task, arg->objId == 0 ? 0x800 : 0x1000);
+#endif
 }
 
 /* Term callback: releases the emitter state and the fighter's slot. */
@@ -958,7 +965,11 @@ void EftCharNull_Init(EftQTask *task, s32 chr) {
     s32 *w = task->work;
 
     *w = 0;
+#ifdef PORT
+    BtlTask_SetOwnerTag(task, BtlTask_PortOwnerTag(chr));
+#else
     BtlTask_SetOwnerTag(task, chr == 0 ? 0x800 : 0x1000);
+#endif
 }
 
 /* Task term: nothing. */
@@ -1814,7 +1825,11 @@ void EftCharaFx_Init(EftQTask *task, EftCharaFxArg *arg) {
     EftEmit_SetNode(w->nodes, 0, w->node, NULL);
     w->flags |= EFT_CHARAFX_ALIVE;
     w->life = EftEmit_GetEndFrames(w->set);
+#ifdef PORT
+    BtlTask_SetOwnerTag(task, BtlTask_PortOwnerTag(arg->objId));
+#else
     BtlTask_SetOwnerTag(task, arg->objId == 0 ? 0x800 : 0x1000);
+#endif
 }
 
 /* Term callback: releases both emitter states and the fighter's slot. */

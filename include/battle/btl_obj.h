@@ -261,8 +261,13 @@ typedef struct BtlObjPoolE0 {
     /* 0xB0 */ u8 unkB0[0x30];
 } BtlObjPoolE0; /* size 0xE0 */
 
+#ifdef PORT
+#define BTL_OBJ_PART_MAX 1024 /* one per mesh of every object: nine fighters took the console's 512 (multi-fighter) */
+#else
+#define BTL_OBJ_PART_MAX 512
+#endif
 typedef struct BtlObjPoolE0Work {
-    /* 0x00000 */ BtlObjPoolE0 nodes[512];
+    /* 0x00000 */ BtlObjPoolE0 nodes[BTL_OBJ_PART_MAX];
     /* 0x1C000 */ SList free;
     /* 0x1C00C */ s32 pad;
 } BtlObjPoolE0Work; /* size 0x1C010 */

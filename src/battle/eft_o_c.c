@@ -1,4 +1,7 @@
 #include "common.h"
+#ifdef PORT
+extern u32 BtlTask_PortOwnerTag(s32 chr); /* eft_ae.c: 0x800 / 0x1000, or a bit of its own for an extra fighter */
+#endif
 #include "battle/eft_o.h"
 #ifdef PORT
 #include "battle/btl_multi.h"
@@ -170,7 +173,11 @@ void EftBodyFx_Init(EftOTask *task, EftBodyFxArg *arg) {
     EftEmit_SetNode(&w->nodes, 0, 3, NULL);
     w->flags |= 8;
     w->endLife = EftEmit_GetEndFrames(w->set);
+#ifdef PORT
+    BtlTask_SetOwnerTag(task, BtlTask_PortOwnerTag(arg->objId));
+#else
     BtlTask_SetOwnerTag(task, arg->objId == 0 ? 0x800 : 0x1000);
+#endif
 }
 
 /* Term callback. */
@@ -434,7 +441,11 @@ void EftDisc_Init(EftOTask *task, EftODiscArg *arg) {
     }
     EftDisc_SetTex(w, w->tex, arg->texA, arg->texB);
     w->flags |= EFT_ODISC_ALIVE;
+#ifdef PORT
+    BtlTask_SetOwnerTag(task, BtlTask_PortOwnerTag(arg->objId));
+#else
     BtlTask_SetOwnerTag(task, arg->objId == 0 ? 0x800 : 0x1000);
+#endif
 }
 
 /* The roll decay block needs its own zero / clamp variable `k` (not the function-wide `t`) and the clamp written

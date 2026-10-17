@@ -1,4 +1,7 @@
 #include "common.h"
+#ifdef PORT
+extern u32 BtlTask_PortOwnerTag(s32 chr); /* eft_ae.c: 0x800 / 0x1000, or a bit of its own for an extra fighter */
+#endif
 #include "battle/eft_o.h"
 
 /*
@@ -398,7 +401,11 @@ void EftBlastObj_Init(EftOTask *task, EftBlastObjArg *arg) {
         w->model.pack = arg->model;
         EftBlastObj_InitModel(task);
     }
+#ifdef PORT
+    BtlTask_SetOwnerTag(task, BtlTask_PortOwnerTag(src->objId));
+#else
     BtlTask_SetOwnerTag(task, src->objId == 0 ? 0x800 : 0x1000);
+#endif
 }
 
 /* Term callback. */

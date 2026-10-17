@@ -1,4 +1,7 @@
 #include "common.h"
+#ifdef PORT
+extern u32 BtlTask_PortOwnerTag(s32 chr); /* eft_ae.c: 0x800 / 0x1000, or a bit of its own for an extra fighter */
+#endif
 #include "battle/eft_k.h"
 
 /*
@@ -450,7 +453,11 @@ void EftShotTech_Init(EftKTask *task, EftKSrc *src) {
     if (mgr->modelPack != NULL) {
         EftShotTech_InitModel(task);
     }
+#ifdef PORT
+    BtlTask_SetOwnerTag(task, BtlTask_PortOwnerTag(src->objId));
+#else
     BtlTask_SetOwnerTag(task, src->objId == 0 ? 0x800 : 0x1000);
+#endif
 }
 
 /* Item term: destroys the model, the eight sub-effects and the aura effect, frees the emitter state and sets the
@@ -1532,7 +1539,11 @@ void EftObjTech_Init(EftKTask *task, EftKSrc *src) {
         }
         EftObjTech_InitRings(task, roll, step, grow);
     }
+#ifdef PORT
+    BtlTask_SetOwnerTag(task, BtlTask_PortOwnerTag(src->objId));
+#else
     BtlTask_SetOwnerTag(task, src->objId == 0 ? 0x800 : 0x1000);
+#endif
 }
 
 /* Item term: destroys the model, frees the emitter state; a technique (kind not 0) sets held flag 0xA8. */
@@ -2279,7 +2290,11 @@ void EftRushShot_Init(EftTask *task, EftTechArg *arg) {
             w->unkAB0 = v;
         }
     }
+#ifdef PORT
+    BtlTask_SetOwnerTag(task, BtlTask_PortOwnerTag(arg->objId));
+#else
     BtlTask_SetOwnerTag(task, arg->objId == 0 ? 0x800 : 0x1000);
+#endif
 }
 
 /* Term callback: ends the stage tint, the sub-effects and the model instance. */

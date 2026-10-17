@@ -1,5 +1,8 @@
 #include "common.h"
 #ifdef PORT
+extern u32 BtlTask_PortOwnerTag(s32 chr); /* eft_ae.c: 0x800 / 0x1000, or a bit of its own for an extra fighter */
+#endif
+#ifdef PORT
 extern s32 EftDet_PortDeflector(void *task, s32 fallback); /* eft_det_a.c: who knocked the shot away */
 #endif
 #ifdef PORT
@@ -879,7 +882,11 @@ void EftCharge_Init(EftRTask *task, s32 *arg) {
     EftEmit_SetNode(&w->nodes, 0, 3, NULL);
     w->flags |= EFT_CHARGE_ALIVE;
     w->life = EftEmit_GetEndFrames(w->set);
+#ifdef PORT
+    BtlTask_SetOwnerTag(task, BtlTask_PortOwnerTag(arg[0]));
+#else
     BtlTask_SetOwnerTag(task, arg[0] == 0 ? 0x800 : 0x1000);
+#endif
 }
 
 /* Task term: releases the emitter state and the fighter's task slot. */
@@ -1208,7 +1215,11 @@ void EftKiBlast_Init(EftRTask *task, EftRArg *arg) {
     if (BtlCharApi_IsLockedOn(arg->objId)) {
         w->flags |= EFT_KIBLAST_HOMING;
     }
+#ifdef PORT
+    BtlTask_SetOwnerTag(task, BtlTask_PortOwnerTag(arg->objId));
+#else
     BtlTask_SetOwnerTag(task, arg->objId == 0 ? 0x800 : 0x1000);
+#endif
 }
 
 /* Task term. */
@@ -1444,7 +1455,11 @@ void EftBlastCharge_Init(EftRTask *task, EftBlastChargeArg *arg) {
     w->mask |= 1;
     EftEmit_SetNode(&w->nodes, 0, arg->node, NULL);
     w->life = EftEmit_GetEndFrames(w->set);
+#ifdef PORT
+    BtlTask_SetOwnerTag(task, BtlTask_PortOwnerTag(arg->objId));
+#else
     BtlTask_SetOwnerTag(task, arg->objId == 0 ? 0x800 : 0x1000);
+#endif
 }
 
 /* Task term: releases the emitter state and the fighter's task slot. */
@@ -1657,7 +1672,11 @@ void EftKiBomb_Init(EftRTask *task, EftRArg *arg) {
     w->arg.srcId = arg->objId;
     EftKiBomb_Launch(task);
     w->flags |= EFT_KIBOMB_SHOWN | EFT_KIBOMB_HITS;
+#ifdef PORT
+    BtlTask_SetOwnerTag(task, BtlTask_PortOwnerTag(arg->objId));
+#else
     BtlTask_SetOwnerTag(task, arg->objId == 0 ? 0x800 : 0x1000);
+#endif
 }
 
 /* Task term: frees the model instance. */
@@ -2053,7 +2072,11 @@ void EftKiObj_Init(EftRTask *task, EftRArg *arg) {
     w->b.arg.srcId = arg->objId;
     EftKiObj_Launch(task);
     w->b.flags |= EFT_KIBOMB_SHOWN | EFT_KIBOMB_HITS;
+#ifdef PORT
+    BtlTask_SetOwnerTag(task, BtlTask_PortOwnerTag(arg->objId));
+#else
     BtlTask_SetOwnerTag(task, arg->objId == 0 ? 0x800 : 0x1000);
+#endif
 }
 
 /* Task term: frees the model instance. */

@@ -40,7 +40,13 @@ extern AdxPlayer gAdxPlayerTbl[];
 extern char *gDiscExeNameTbl[];
 extern AdxDvdFsParam gAdxDvdFsParam;
 extern AdxFcacheParam gAdxFcacheParam;
+#ifdef PORT
+/* PC build: the queue is larger than the console's 0x320 bytes (FILE_REQ_MAX, sys/file.h), so not the game's own */
+static FileReqQueue sFileReqPort;
+#define gFileReq sFileReqPort
+#else
 extern FileReqQueue gFileReq;
+#endif
 extern char gFileRootDir[];
 extern char gFileDirName[];
 
