@@ -1138,7 +1138,7 @@ void BtlChar_UpdateSeqFlags(BtlMgrChr *chr) {
         break;
     }
     BtlChar_UpdateLockOn(chr);
-    if (BtlChars_IsTimeStopped()) {
+    if (BTL_TIME_STOPPED_FOR(chr->side)) {
         BtlChar_SetHeldFlag(chr, 0x135);
     } else {
         BtlChar_ClearFlag(chr, 0x135);
@@ -1226,7 +1226,7 @@ void BtlChar_UpdateStage8(BtlMgrChr *chr) {
     if (gBtlChars->flags & BTL_CHARS_STARTED) {
         started = 1;
     }
-    if (BtlChars_IsTimeStopped()) {
+    if (BTL_TIME_STOPPED_FOR(chr->side)) {
         started = 0;
     }
     StgCol_UpdateFighter(obj, flag, BtlCharApi_IsChanging(chr->objId) ? 0 : started);

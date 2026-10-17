@@ -1,4 +1,5 @@
 #include "common.h"
+#include "battle/btl_multi.h" /* BTL_TIME_STOPPED_FOR */
 #include "battle/btl_char_move.h"
 
 /* Fighter movement, 0x1DC9A0-0x1E0290 (see battle/btl_char_move.h for the model and the structures).
@@ -1566,7 +1567,7 @@ void BtlMove_DeflectAtStageLimit(BtlMoveChr *chr, s32 back) {
 s32 BtlMove_ApplyImpulse(BtlMoveChr *chr) {
     BtlMovePose *pose = BtlChar_GetPos(chr);
 
-    if (!BtlChars_IsTimeStopped()) {
+    if (!BTL_TIME_STOPPED_FOR(chr->player)) {
         Vec4 *vel = &pose->unk70;
         f32 len;
 
@@ -1590,7 +1591,7 @@ void BtlMove_UpdateHoverOffset(BtlMoveChr *chr) {
     if (BtlChar_TestFlag(chr, 0x29)) {
         pose->unkA8 = 0.0f;
     }
-    if (BtlChars_IsTimeStopped()) {
+    if (BTL_TIME_STOPPED_FOR(chr->player)) {
         return;
     }
     if (BtlChar_TestFlag(chr, 0xE) && BtlChar_TestFlag(chr, 0x1C)) {

@@ -1,4 +1,5 @@
 #include "common.h"
+#include "battle/btl_multi.h" /* BTL_TIME_STOPPED_FOR */
 #include "battle/btl_char_ctl.h"
 
 /*
@@ -74,7 +75,7 @@ void BtlChar_UpdateLookOffset(BtlCtlChr *chr) {
     BtlCtlLook *look = &chr->look;
     BtlCtlObj *obj = BtlChar_GetObj(chr);
 
-    if (BtlChars_IsTimeStopped()) {
+    if (BTL_TIME_STOPPED_FOR(chr->player)) {
         BtlChar_ResetLook(chr);
     } else {
         BtlCtlNode *node = BtlObj_GetNode(obj, 0x2F);

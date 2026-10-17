@@ -419,7 +419,7 @@ void BtlInput_BuildRecord(BtlInputChr *chr) {
     active = 0;
     if (BtlChar_TestFlag(chr, 2) || BtlChar_TestFlag(chr, 3)) {
         if (!BtlChar_TestFlag(chr, 0x136)) {
-            active = BtlChars_IsTimeStopped() == 0;
+            active = BTL_TIME_STOPPED_FOR(chr->player) == 0;
         }
     }
     if (active) {
@@ -444,7 +444,7 @@ void BtlInput_BuildRecord(BtlInputChr *chr) {
     chr->input.rec.stickY = stick[1];
     chr->input.rec.commands = commands;
     chr->input.rec.unk5 = 0;
-    if (!BtlChars_IsTimeStopped()) {
+    if (!BTL_TIME_STOPPED_FOR(chr->player)) {
         BtlInput_TickCounters(&chr->input.recCount, buttons, buttons & ~prevButtons, prevButtons & ~buttons);
         BtlInput_TickCounters(&chr->input.recCmdCount, commands, commands & ~prevCommands, prevCommands & ~commands);
     }
@@ -638,7 +638,7 @@ void BtlInput_Update(BtlInputChr *chr) {
     in->cmdHeld = commands;
     in->stickRaw[0] = BtlInput_ByteToStick(stick[0]);
     in->stickRaw[1] = BtlInput_ByteToStick(stick[1]);
-    if (BtlChars_IsTimeStopped()) {
+    if (BTL_TIME_STOPPED_FOR(chr->player)) {
         in->stick[0] = in->stickRaw[0];
         in->stick[1] = in->stickRaw[1];
     } else {
@@ -658,7 +658,7 @@ void BtlInput_Update(BtlInputChr *chr) {
     } else {
         in->stickTurn = 0.0f;
     }
-    if (!BtlChars_IsTimeStopped()) {
+    if (!BTL_TIME_STOPPED_FOR(chr->player)) {
         BtlInput_TickCounters(&in->count, in->held, in->pressed, in->released);
         BtlInput_TickCounters(&in->cmdCount, in->cmdHeld, in->cmdPressed, in->cmdReleased);
     }

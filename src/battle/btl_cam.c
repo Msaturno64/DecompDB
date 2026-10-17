@@ -371,15 +371,19 @@ void BtlCam_UpdateView(s32 side) {
         extern s32 BattleSide_GetCount(void);
         extern s32 BattleSide_GetTeam(s32 side);
 extern s32 BattleSide_GetBand(s32 side); /* battle_load.c: who fights with whom (free for all) */
+        extern void PortMulti_NoteViewSubject(s32 view, s32 fighter); /* port/src/multi_fighter.c */
         s32 k;
+        s32 who = side;
         s32 best = BtlCharApi_HasCamPriority(objId);
 
         for (k = 2; k < BattleSide_GetCount(); k++) {
             if (BattleSide_GetBand(k) == side && BtlCharApi_HasCamPriority(BattleSide_GetObjId(k)) > best) {
                 best = BtlCharApi_HasCamPriority(BattleSide_GetObjId(k));
                 objId = BattleSide_GetObjId(k);
+                who = k;
             }
         }
+        PortMulti_NoteViewSubject(side, who); /* (whose technique camera this view is: BtlCam_UpdateOverride) */
     }
 #endif
 
@@ -531,6 +535,12 @@ void BtlCam_ApplyView(s32 scissor) {
 
 #ifdef PORT
 extern int Port_NetView(void); /* port/src/gs/net.c: the local player's view (0 or 1), or -1 */
+/* port/src/multi_fighter.c (SPEC-cinematicas.md, C5): with more than two fighters a technique camera of others (a
+   view's priority, the demo camera) is not the player's screen unless the player is in that technique */
+extern int PortMulti_ViewerSees(int subject);
+extern int PortMulti_ViewSubject(int view);
+extern int PortMulti_CinemaOwner(void);
+extern void PortMulti_NoteShown(int view, int cinema, int shown); /* (BT3_MFLOG) */
 #endif
 /* Decides whether one full-screen view replaces the per-player views this frame; returns 1 if so. */
 s32 BtlCam_UpdateOverride(void) {
@@ -539,6 +549,11 @@ s32 BtlCam_UpdateOverride(void) {
 
     if (!Battle_IsSplitScreen() || BattleReplay_IsActive() != 0) {
         idx = BtlCam_GetPriorityView();
+#ifdef PORT
+        if (idx >= 0 && !PortMulti_ViewerSees(PortMulti_ViewSubject(idx))) {
+            idx = -1; /* (another's technique: the player keeps its camera) */
+        }
+#endif
         if (idx < 0) {
             idx = BtlCam_GetDefaultView();
         }
@@ -551,7 +566,11 @@ s32 BtlCam_UpdateOverride(void) {
 #ifdef PORT
         /* Online play: both machines run the two-player game with its two cameras, and each shows only its own
            player's view, full screen. That is this function's own case of "one view has priority", with the
-           local player's view taking the place when the game itself gives none priority. */
+           local player's view taking the place when the game itself gives none priority (or when it is the camera
+           of another's technique the player is not in, with more than two fighters). */
+        if (idx >= 0 && !PortMulti_ViewerSees(PortMulti_ViewSubject(idx))) {
+            idx = -1;
+        }
         if (idx < 0) {
             idx = Port_NetView();
         }
@@ -562,8 +581,21 @@ s32 BtlCam_UpdateOverride(void) {
             BtlCam_SetLayout(0, 1);
         }
     }
+#ifdef PORT
+    PortMulti_NoteShown(idx, 0, 0);
+#endif
     if (DemoCam_IsActive() != 0) {
         DemoCam_Update();
+#ifdef PORT
+        /* (the cinematic still runs, its time and its end; a player not in it is shown its own camera again) */
+        if (idx >= 0 && !PortMulti_ViewerSees(PortMulti_CinemaOwner())) {
+            BtlCam_SelectView(idx);
+            BtlCam_ApplyView(1);
+            PortMulti_NoteShown(idx, 1, 0);
+        } else {
+            PortMulti_NoteShown(idx, 1, 1);
+        }
+#endif
         ret = 1;
     }
     return ret;

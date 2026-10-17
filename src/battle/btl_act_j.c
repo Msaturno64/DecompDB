@@ -1,4 +1,7 @@
 #include "common.h"
+#ifdef PORT
+extern s32 PortMulti_CinemaBusy(s32 fighter); /* port/src/multi_fighter.c: a cinematic of others is on */
+#endif
 #include "battle/btl_act_j.h"
 
 /*
@@ -94,6 +97,11 @@ s32 BtlAct_QueueComboFinish(BtlActJChr *chr) {
     s32 col;
     s32 tech2;
     s32 tech3;
+#ifdef PORT
+    if (PortMulti_CinemaBusy(chr->player)) { /* (several fighters: one cinematic at a time) */
+        return 0;
+    }
+#endif
 
     if (!BtlChar_TestFlag(chr, 6)) {
         return 0;
@@ -325,6 +333,11 @@ s32 BtlAct_CanFuse(BtlActJChr *chr, s32 index, s32 needBlast, s32 needAllowed, s
     s32 cost;
     s32 member;
     s32 i;
+#ifdef PORT
+    if (PortMulti_CinemaBusy(chr->player)) { /* (several fighters: one cinematic at a time) */
+        return 0;
+    }
+#endif
 
     if (needAllowed && chr->form.allowed == 0) {
         return 0;
@@ -406,6 +419,11 @@ s32 BtlAct_QueueFusion(BtlActJChr *chr, s32 index, s32 partner) {
     s32 unk24 = BtlParam_GetUnkB7(chr, index);
     s32 i;
     s32 action;
+#ifdef PORT
+    if (PortMulti_CinemaBusy(chr->player)) { /* (several fighters: one cinematic at a time) */
+        return 0;
+    }
+#endif
 
     if (partner < 0) {
         i = 0;
@@ -476,6 +494,11 @@ s32 BtlAct_CheckSwitchInput(BtlActJChr *chr) {
 
 /* Picks the member to switch to and queues the switch action 0xF3. */
 s32 BtlAct_QueueSwitch(BtlActJChr *chr) {
+#ifdef PORT
+    if (PortMulti_CinemaBusy(chr->player)) { /* (several fighters: one cinematic at a time) */
+        return 0;
+    }
+#endif
     BtlAct_PrepareSwitch(chr);
     BtlAct_SetQueue(chr, 0, 0xF3);
     return 1;
@@ -518,6 +541,11 @@ s32 BtlAct_GetTechniqueAction(BtlActJChr *chr, s32 slot) {
  */
 s32 BtlAct_CanUseTechnique(BtlActJChr *chr, s32 slot) {
     s32 check;
+#ifdef PORT
+    if (PortMulti_CinemaBusy(chr->player)) { /* (several fighters: one cinematic at a time) */
+        return 0;
+    }
+#endif
 
     if ((u32)(slot - 2) >= 3) {
         return 0;
@@ -627,6 +655,11 @@ s32 BtlAct_GetSkillAction(BtlActJChr *chr, s32 slot) {
 s32 BtlAct_CanUseSkill(BtlActJChr *chr, u32 slot) {
     s32 flags;
     s32 stack;
+#ifdef PORT
+    if (PortMulti_CinemaBusy(chr->player)) { /* (several fighters: one cinematic at a time) */
+        return 0;
+    }
+#endif
 
     if (slot >= 2) {
         return 0;

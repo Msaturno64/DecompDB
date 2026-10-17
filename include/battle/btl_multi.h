@@ -29,9 +29,15 @@ extern s32 PortMulti_TargetOf(s32 fighter);
 /* Effect textures uploaded in one frame (EftAeVram, battle/eft_ae.h): five times the console's 128, for ten
    fighters' effects (a 5v5 ran past 128 and the list overwrote its own count). */
 #define BTL_EFT_VRAM_MAX 640
+/* Time stopped for one fighter: a model change (the change queue, BtlChars_IsTimeStopped) stops the changing
+   fighter's (and its rush or throw pair's) input, gauges, timers and moves, not the field's (as the Tag Team Mod's
+   cinematic_policy; port/src/multi_fighter.c). With two fighters, everybody's, as on the console. */
+extern s32 PortMulti_TimeStoppedFor(s32 fighter);
+#define BTL_TIME_STOPPED_FOR(fighter) PortMulti_TimeStoppedFor(fighter)
 #else
 #define BTL_FIGHTER_MAX 2
 #define BTL_OPP(i) ((i) ^ 1)
+#define BTL_TIME_STOPPED_FOR(fighter) BtlChars_IsTimeStopped()
 #endif
 
 #endif

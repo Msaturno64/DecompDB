@@ -1,4 +1,5 @@
 #include "common.h"
+#include "battle/btl_multi.h" /* BTL_TIME_STOPPED_FOR */
 #include "battle/btl_act_h.h"
 
 /*
@@ -1914,7 +1915,7 @@ void BtlSkill_Apply(BtlActIChr *chr, s32 slot) {
 
 /* Per-frame countdown of the skill timers (not while time is stopped). */
 void BtlSkill_UpdateTimers(BtlActIChr *chr) {
-    if (BtlChars_IsTimeStopped()) {
+    if (BTL_TIME_STOPPED_FOR(chr->player)) {
         return;
     }
     if (--chr->skillTimerE < 0) {

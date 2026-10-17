@@ -294,11 +294,24 @@ void PortMulti_Engage(int victim, int attacker) {
      ((a) >= 0x139 && (a) <= 0x13B))
 int PortMulti_TargetOf(int i);
 
+static int cinema_owner(int *on);
+
 int PortMulti_CanContact(int attacker, int victim) {
     extern int BtlCharApi_GetAction(int objId); /* src/battle/btl_capi_b.c */
+    int on, owner;
 
     if (BattleSide_GetCount() <= 2) {
         return 1;
+    }
+    /* a cinematic's two (its owner and the owner's opponent) touch only each other while it plays, as a rush's pair
+       (the Tag Team Mod's cinematic_contact_guard; SPEC-cinematicas.md, C4) */
+    owner = cinema_owner(&on);
+    if (on && owner >= 0) {
+        int other = PortMulti_TargetOf(owner);
+
+        if ((attacker == owner || attacker == other) != (victim == owner || victim == other)) {
+            return 0;
+        }
     }
     return (!PAIR_ACTION(BtlCharApi_GetAction(BattleSide_GetObjId(attacker))) || PortMulti_TargetOf(attacker) == victim) &&
            (!PAIR_ACTION(BtlCharApi_GetAction(BattleSide_GetObjId(victim))) || PortMulti_TargetOf(victim) == attacker);
@@ -311,6 +324,133 @@ int PortMulti_InPair(int fighter) {
     extern int BtlCharApi_GetAction(int objId); /* src/battle/btl_capi_b.c */
 
     return PAIR_ACTION(BtlCharApi_GetAction(BattleSide_GetObjId(fighter)));
+}
+
+/* The fighter a cinematic (the demo camera) is playing on, -1 when none is on or it plays on no fighter (a partner,
+   the stage): the object its animation is attached to (gDemoCam + 0x300, + 0x304), read as DemoCam_IsActive tests
+   it but without its side effect (it ends a camera asked to stop). */
+static int cinema_owner(int *on) {
+    extern char GAME_PTR gDemoCam;              /* src/battle/btl_demo_cam.c (battle/btl_demo_cam.h) */
+    extern void GAME_PTR BtlObj_Get(int id);    /* src/battle/btl_obj.c */
+    void GAME_PTR obj;
+    void GAME_PTR chr;
+    int n = BattleSide_GetCount(), flags, i;
+
+    *on = 0;
+    if (gDemoCam == NULL) {
+        return -1;
+    }
+    flags = *(int GAME_PTR)(gDemoCam + 0x308); /* DEMO_CAM_PLAYING 1, DEMO_CAM_STOP 2 */
+    *on = *(int GAME_PTR)(gDemoCam + 0x32C) != 0 || /* (fixed) */
+          (*(int GAME_PTR)(gDemoCam + 0x2C0) != 0 && (flags & 1) && !(flags & 2)); /* (an animation playing) */
+    obj = *(void GAME_PTR GAME_PTR)(gDemoCam + 0x300);
+    chr = *(void GAME_PTR GAME_PTR)(gDemoCam + 0x304);
+    for (i = 0; *on && i < n; i++) {
+        void GAME_PTR o = BtlObj_Get(BattleSide_GetObjId(i));
+
+        if (o != NULL && (o == obj || o == chr)) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+/* -------------------------------------------------------------- whose technique camera the player sees (C5) */
+
+/* The fighter each side's view shows (btl_cam.c, BtlCam_UpdateView: the lead, or a teammate whose technique camera
+   is higher). Only for choosing the view drawn (PORT_HOST). */
+PORT_HOST static int sViewSubject[2] = {0, 1};
+
+void PortMulti_NoteViewSubject(int view, int fighter) {
+    if (view >= 0 && view < 2) {
+        sViewSubject[view] = fighter;
+    }
+}
+
+/* The fighter whose camera the screen is: the local player's online (its view), else the one player's fighter when
+   one side is a player's and the other the computer's; -1 with two players on one screen or none (the demo). */
+static int viewer(void) {
+    extern int BattleSide_GetControl(int side); /* src/battle/battle_load.c: 0 a pad, 2 the computer */
+    extern int Port_NetActive(void), Port_NetView(void); /* gs/net.c */
+
+    if (Port_NetActive()) {
+        return Port_NetView();
+    }
+    if (BattleSide_GetControl(0) == 0 && BattleSide_GetControl(1) != 0) {
+        return 0;
+    }
+    if (BattleSide_GetControl(1) == 0 && BattleSide_GetControl(0) != 0) {
+        return 1;
+    }
+    return -1;
+}
+
+/* btl_cam.c, BtlCam_UpdateOverride (as the Tag Team Mod's cinematic_camera_state / special_camera_arbitration):
+   whether the screen shows a technique camera of `subject` (a view's priority, or the demo camera's cinematic): with
+   more than two fighters only when the player is in it, its owner or the owner's opponent; else the player keeps its
+   own camera and the technique plays on the stage. Unknown subject (a partner's, the stage's) or no single player:
+   shown, as on the console. */
+int PortMulti_ViewerSees(int subject) {
+    int v = viewer();
+
+    if (BattleSide_GetCount() <= 2 || v < 0 || subject < 0 || subject >= BattleSide_GetCount()) {
+        return 1;
+    }
+    return subject == v || PortMulti_TargetOf(subject) == v;
+}
+
+/* What BtlCam_UpdateOverride chose this frame, for BT3_MFLOG: the view drawn, a cinematic on, and shown. */
+PORT_HOST static int sShownView = -1, sShownCinema, sShownCinemaSeen;
+
+void PortMulti_NoteShown(int view, int cinema, int shown) {
+    sShownView = view;
+    sShownCinema = cinema;
+    sShownCinemaSeen = shown;
+}
+
+int PortMulti_ViewSubject(int view) {
+    return view >= 0 && view < 2 ? sViewSubject[view] : -1;
+}
+
+int PortMulti_CinemaOwner(void) {
+    int on, owner = cinema_owner(&on);
+
+    return on ? owner : -1;
+}
+
+/* btl_act_j.c, at the start of BtlAct_CanUseTechnique, CanUseSkill, QueueComboFinish, CanFuse, QueueFusion and
+   QueueSwitch (as the Tag Team Mod's cinematic_admission): with more than two fighters and a cinematic on, a fighter
+   that takes no part in it (its owner and the owner's opponent) starts none of them until it ends. One cinematic at a
+   time: the demo camera is one, and the fight goes on around it (C1), so a second one took the first's over. */
+int PortMulti_CinemaBusy(int fighter) {
+    int on, owner;
+
+    if (BattleSide_GetCount() <= 2) {
+        return 0;
+    }
+    owner = cinema_owner(&on);
+    if (!on) {
+        return 0;
+    }
+    return owner < 0 || (fighter != owner && fighter != PortMulti_TargetOf(owner));
+}
+
+/* BTL_TIME_STOPPED_FOR (battle/btl_multi.h): whether a model change stops this fighter's input, gauges, timers and
+   moves. With two fighters every change stops both, as on the console; with more, only the changing fighter and its
+   rush or throw pair (the others go on fighting while its model loads; SPEC-cinematicas.md, C2). */
+int PortMulti_TimeStoppedFor(int fighter) {
+    extern int BtlChars_IsTimeStopped(void); /* src/battle/btl_char_ctl_b.c: a change request is active */
+    extern int BtlChange_GetPlayer(void);    /* its fighter, -1 */
+    int n = BattleSide_GetCount(), p;
+
+    if (!BtlChars_IsTimeStopped()) {
+        return 0;
+    }
+    if (n <= 2) {
+        return 1;
+    }
+    p = BtlChange_GetPlayer();
+    return p == fighter || (p >= 0 && p < n && PortMulti_InPair(p) && PortMulti_TargetOf(p) == fighter);
 }
 
 /* While fighter i's camera is worked out (btl_char_mgr.c, around ChrCam_Update), its opponent is its lock-on target
@@ -870,7 +1010,8 @@ void PortMulti_Trace(unsigned vblank, int battle) {
         extern int BtlChars_IsTimeStopped(void);  /* src/battle/btl_char_ctl_b.c */
         extern int BtlCam_GetPriorityView(void);  /* src/battle/btl_cam.c: -1 none */
 
-        fprintf(fp, "%u ts %d pv %d", vblank, BtlChars_IsTimeStopped() != 0, BtlCam_GetPriorityView());
+        fprintf(fp, "%u ts %d pv %d sv %d cin %d/%d", vblank, BtlChars_IsTimeStopped() != 0, BtlCam_GetPriorityView(),
+                sShownView, sShownCinema, sShownCinemaSeen);
     }
     for (i = 0; i < BattleSide_GetCount(); i++) {
         obj = BattleSide_GetObjId(i);

@@ -1,4 +1,5 @@
 #include "common.h"
+#include "battle/btl_multi.h" /* BTL_TIME_STOPPED_FOR */
 #include "battle/btl_char_action.h"
 
 /*
@@ -811,7 +812,7 @@ void BtlAct_UpdateGauges(BtlActChr *chr) {
     BtlActVitals *v;
     s32 cap;
 
-    if (BtlChars_IsTimeStopped()) {
+    if (BTL_TIME_STOPPED_FOR(chr->player)) {
         return;
     }
     if (!BtlChar_TestFlag(chr, 3)) {
@@ -974,7 +975,7 @@ void BtlAct_UpdateTimers(BtlActChr *chr) {
     if (BtlChar_TestFlag(chr, 0x8B)) {
         Vec4_Add(&BtlChar_GetPos(chr)->pos, &BtlChar_GetPos(chr)->pos, &chr->unkF30);
     }
-    if (BtlChars_IsTimeStopped()) {
+    if (BTL_TIME_STOPPED_FOR(chr->player)) {
         return;
     }
     if (!BtlChar_TestFlag(chr, 0x82)) {
