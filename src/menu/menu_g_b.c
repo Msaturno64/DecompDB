@@ -2,6 +2,11 @@
 #include "menu/menu_g.h"
 #ifdef PORT
 extern int Port_NetSession(void); /* port/src/gs/net.c */
+extern s32 PortTeams_Run(void);   /* menu/port_teams.c: the team battle settings; 1 = on to the team select */
+/* The PC's Team Battle screen, between the duel menu's Team and the team select (no game mode of its own: it runs
+   here, where the versus archive it takes its windows from is loaded). Offline: an online session has no duel menu. */
+#define DUEL_MODE_PORT_TEAMS 81
+#define DUEL_PORT_TEAMS() (DUEL_PROG->battleType == 1 && !Port_NetSession())
 #endif
 
 /*
@@ -35,6 +40,12 @@ s32 Duel_Main(void) {
                 Bgm_Play(DUEL_BGM);
             }
             if (DuelMenu_Run(1)) {
+#ifdef PORT
+                if (DUEL_PORT_TEAMS()) {
+                    gProgress->mode = DUEL_MODE_PORT_TEAMS; /* (the duel menu's music goes on) */
+                    break;
+                }
+#endif
                 Adx_StopAll();
                 gProgress->mode = DUEL_PROG->battleType ? 40 : 39;
             } else {
@@ -64,6 +75,21 @@ s32 Duel_Main(void) {
 #endif
             }
             break;
+#ifdef PORT
+        case DUEL_MODE_PORT_TEAMS:
+            if (!bgm) { /* (back from the team select) */
+                bgm = 1;
+                Bgm_Play(DUEL_BGM);
+            }
+            if (PortTeams_Run()) {
+                Adx_StopAll();
+                bgm = 0;
+                gProgress->mode = 40;
+            } else {
+                gProgress->mode = 38;
+            }
+            break;
+#endif
         case 40:
             if (TeamSel_Run(2)) {
                 Adx_StopAll();
@@ -73,6 +99,11 @@ s32 Duel_Main(void) {
                 Adx_StopAll();
                 bgm = 0;
                 gProgress->mode = 38;
+#ifdef PORT
+                if (DUEL_PORT_TEAMS()) {
+                    gProgress->mode = DUEL_MODE_PORT_TEAMS;
+                }
+#endif
 #ifdef PORT /* PC build, online session: there is no versus menu in it; going back leaves for the main menu, which
                ends the session (as cancelling the versus menu does) */
                 if (Port_NetSession()) {

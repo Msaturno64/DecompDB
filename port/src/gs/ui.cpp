@@ -17,6 +17,7 @@
 #include "../quit_dialog.h"
 #include "../multi_fighter.h"
 #include "net_chat.h"
+#include <SDL3/SDL.h>
 
 static int sMeter = -1; // the meter (frame rate, connection): -1 not read yet
 static bool meter_on(void);
@@ -1473,6 +1474,22 @@ static void misc_tab(void) {
     }
 }
 
+// The language of the PC's own screens (menu/port_teams.c): 0 English, 1 Spanish. Setting menu_lang: 0 Windows'
+// language (Spanish when its first preferred language is), 1 English, 2 Spanish.
+extern "C" int Port_MenuLang(void) {
+    static int sys = -1;
+    int v = Port_Setting("menu_lang", 0);
+
+    if (v == 1 || v == 2) { return v - 1; }
+    if (sys < 0) {
+        int n = 0;
+        SDL_Locale **loc = SDL_GetPreferredLocales(&n);
+        sys = loc != NULL && n > 0 && loc[0]->language != NULL && strcmp(loc[0]->language, "es") == 0;
+        SDL_free(loc);
+    }
+    return sys;
+}
+
 static void ui_tab(PortVideo &v) {
     if (ImGui::BeginCombo("Menu font", MenuText_FontName(v.menuFont))) {
         for (int i = 0; i < MenuText_FontCount(); i++) {
@@ -1522,6 +1539,18 @@ static void ui_tab(PortVideo &v) {
         }
         ImGui::SetItemTooltip("In a picture wider than 4:3, show the menus at their own shape with black at the sides\n"
                               "instead of stretched to the width. Fights keep the wide picture.");
+    }
+    {
+        static const char *const kLang[] = {"Windows' language", "English", "Español"};
+        int lang = Port_Setting("menu_lang", 0);
+        if (lang < 0 || lang > 2) { lang = 0; }
+        if (ImGui::Combo("Language of the PC's screens", &lang, kLang, 3)) {
+            Port_SettingSave("menu_lang", lang);
+            Port_SettingsWrite();
+        }
+        ImGui::SetItemTooltip("The language of the screens the PC version adds to the game's menus (Team Battle, in\n"
+                              "the Duel menu). Windows' language: Spanish when Windows is in Spanish, else English.\n"
+                              "The game's own menus are as on the disc.");
     }
     {
         static const char *const kBars[] = {"Black", "Border", "Fighter panels"};

@@ -162,6 +162,22 @@ variables are not put back. So a screen that starts matches notes `Port_NetSessi
 when it asks for a match; when the count has changed, the match is over: it goes to its first page. (The session's
 character select is the versus mode's own, not the screen's mode, so it never opens the screen again.)
 
+**A screen behind another menu's item, without a new plate.** Team Battle (src/menu/port_teams.c) is reached from
+the Duel menu's own Team: `Duel_Main` (src/menu/menu_g_b.c) runs it between the Duel menu and the team select, as a
+mode of its own loop (`DUEL_MODE_PORT_TEAMS`, 81, never seen by `Progress_Main`), where the versus archive its windows
+come from is already loaded; back from the team select returns to it. Its words are English or Spanish
+(`Port_MenuLang`, F1 > UI), in the screens' TrueType letters, which have the accents the game's font may lack.
+
+**Letters beyond ASCII in the game's source** are written as octal escapes (`"compa\303\261eros"`): the PC build's
+ptr32 step takes the source's bytes for its characters, and one such letter shifts every rewrite after it ("expected
+';' after struct" a few lines on).
+
+**Testing a screen without a window:** `research/tests/menu_teams.py` plays a pad recording (`BT3_PAD_PLAY`) from the
+title through the menus and reads what the screen reader says (`BT3_A11Y_LOG`, each line with its blank, so the way
+is found by looking at where each screen opens). `--shot=<from>-<to>` adds pictures from the game's own renderer in a
+window that is never shown (`BT3_HIDDEN=1`, sound off): the software renderer (`BT3_GS=1`) does not draw the
+screens' pictures and letters (`TBO_PSM`).
+
 ## 4. Limits, and what is possible
 
 | | Now | For a mod framework |
@@ -170,7 +186,7 @@ character select is the versus mode's own, not the screen's mode, so it never op
 | More than one new entry | no: one free label row (item 12 would read past sheet 1) | a larger or third label sheet the plates are pointed at: not looked into yet |
 | Its icon | any existing item's | the same, or a new one painted into the icon sheet |
 | Its line in the message window | none yet | `MsgWin_PortDrawString` when the cursor is on it |
-| Entries in other menus | not tried | the same parts (list, label sheet, choice, line) per menu; each menu's list and sheets mapped first |
+| Entries in other menus | a screen behind an existing item (Team Battle, behind the Duel menu's Team); no new plate | the same parts (list, label sheet, choice, line) per menu; each menu's list and sheets mapped first |
 | A screen of its own | in code, in the port's screen mode (80), with the kit of port_screen.c | screens described as data (rows, keypads, windows, prompts, speech) |
 | The game's look | the heading window, the message box, the game's font in the box | any menu's windows (each menu's archive sections listed) |
 | A list in the game's own plates | not done | an existing list movie reused, its labels made from disc letters |

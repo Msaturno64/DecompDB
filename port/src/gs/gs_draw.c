@@ -1667,6 +1667,9 @@ SDL_Window *GsDraw_WindowCreate(int opengl) {
         fprintf(stderr, "bt3: BT3_DISPLAY=%d: there are %d displays\n", pick, count);
     }
     SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_FULLSCREEN_BOOLEAN, sFullscreen);
+    /* BT3_HIDDEN=1 (tests): the window is never shown; the renderer draws into its own targets all the same, so
+       BT3_SHOT's pictures come out (research/tests/menu_teams.py --shot) without a window on the player's screen */
+    SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_HIDDEN_BOOLEAN, getenv("BT3_HIDDEN") != NULL);
     sWindow = SDL_CreateWindowWithProperties(props);
     SDL_DestroyProperties(props);
     SDL_free(displays);
