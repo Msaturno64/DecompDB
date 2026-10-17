@@ -1050,6 +1050,16 @@ void PortMulti_FrameMark(int where) {
 }
 
 /* Battle_Term, before anything is freed. */
+/* btl_char_hit.c, BtlColl_Update: an ordinary attack's hit that took health (path 0: on the attacker's target, the
+   console's way; 1: on another enemy it touched, BtlHit_PortExtraContacts). Counted for BT3_MFSTAT; only says. */
+PORT_HOST static int sMelee[2][FIGHTER_MAX];
+
+void PortMulti_NoteMelee(int path, int victim) {
+    if (victim >= 0 && victim < FIGHTER_MAX) {
+        sMelee[path != 0][victim]++;
+    }
+}
+
 void PortMulti_BattleEnd(void) {
     extern int BattleResult_GetReason(void);     /* src/battle/battle_load.c: BTL_REASON_* (battle/battle.h) */
     extern int BattleResult_GetWinnerSide(void);
@@ -1061,6 +1071,15 @@ void PortMulti_BattleEnd(void) {
         return;
     }
     printf("bt3: mfstat: result reason 0x%X, winner side %d\n", BattleResult_GetReason(), BattleResult_GetWinnerSide());
+    {
+        int i;
+
+        printf("bt3: mfstat: ordinary hits that took health, by victim (as the target / as another enemy touched):");
+        for (i = 0; i < BtlChar_GetCount(); i++) {
+            printf(" %d:%d/%d", i, sMelee[0][i], sMelee[1][i]);
+        }
+        printf("\n");
+    }
     {
         extern int BtlPool_PortPeak(int slot), BtlPool_PortOver(int slot), BtlPool_PortSize(int slot); /* btl_pool.c */
         int s;

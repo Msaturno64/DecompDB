@@ -716,8 +716,17 @@ s32 BtlBodyHit_Test(EftDetObj *atk, EftDetObj *def) {
     if (!BtlBodyHit_TestVolumes(work, body)) {
         return 0;
     }
+#ifdef PORT
+    /* Four bits each, for the console's four objects: with more fighters a number of 4 or more fell out of its four
+       (a target numbered 4 or more was never hit by an ordinary attack: what is read is "touched something",
+       & 0xF000000, btl_char_hit.c; an attacker of 4 or more set the stage contact bits). The number modulo 4 keeps
+       each in its place (0..3 as on the console). */
+    work->hitFlags |= 1 << ((def->id & 3) + 0x18);
+    defWork->hitFlags |= 1 << ((atk->id & 3) + 0x1C);
+#else
     work->hitFlags |= 1 << (def->id + 0x18);
     defWork->hitFlags |= 1 << (atk->id + 0x1C);
+#endif
     return 1;
 }
 

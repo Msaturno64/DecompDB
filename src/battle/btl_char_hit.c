@@ -9,6 +9,9 @@ extern void PortMulti_Engage(s32 victim, s32 attacker);        /* the two are in
 extern s32 PortMulti_CanContact(s32 attacker, s32 victim);     /* 0: a rush keeps them apart */
 extern u32 BtlBodyHit_PortContacts(s32 fighter);                /* eft_det_a.c: the contact matrix */
 extern s32 BtlChar_IsDead(HitChr *chr);
+extern s32 BattleSide_GetObjId(s32 side);                       /* battle_load.c */
+extern s32 BtlCharApi_GetHp(s32 objId);                         /* btl_capi_a.c */
+extern void PortMulti_NoteMelee(s32 path, s32 victim);          /* multi_fighter.c: counted for BT3_MFSTAT */
 void BtlHit_PortExtraContacts(void);
 #endif
 
@@ -1472,11 +1475,16 @@ void BtlHit_PortExtraContacts(void) {
                         BtlMember_Damage(def, BtlAtk_GetGuardDamage(atk), 0xC);
                     }
                 } else if (!BtlHit_CheckThrowBreak(atk, def)) {
+                    s32 hp = BtlCharApi_GetHp(BattleSide_GetObjId(e));
+
                     saved = atk->status.target;
                     atk->status.target = e;
                     BtlHit_ApplyHit(atk);
                     PortMulti_Engage(e, i);
                     atk->status.target = saved;
+                    if (BtlCharApi_GetHp(BattleSide_GetObjId(e)) < hp) {
+                        PortMulti_NoteMelee(1, e); /* (BT3_MFSTAT) */
+                    }
                 }
             }
             PortMulti_SetOverride(i, -1);
@@ -1507,15 +1515,21 @@ void BtlColl_Update(void) {
         for (i = 0; i < BtlChar_GetCount(); i++) {
 #ifdef PORT
             /* (several fighters on the field: the victim's opponent is its attacker while the hit is applied) */
-            if (BtlChar_GetCount() > 2 && BtlChar_Get(i)->status.target >= 0) {
-                PortMulti_SetOverride(BtlChar_Get(i)->status.target, i);
+            s32 victim = BtlChar_Get(i)->status.target;
+            s32 hp = victim >= 0 ? BtlCharApi_GetHp(BattleSide_GetObjId(victim)) : 0;
+
+            if (BtlChar_GetCount() > 2 && victim >= 0) {
+                PortMulti_SetOverride(victim, i);
             }
 #endif
             BtlHit_ApplyHit(BtlChar_Get(i));
 #ifdef PORT
-            if (BtlChar_GetCount() > 2 && BtlChar_Get(i)->status.target >= 0) {
-                PortMulti_SetOverride(BtlChar_Get(i)->status.target, -1);
-                PortMulti_Engage(BtlChar_Get(i)->status.target, i);
+            if (BtlChar_GetCount() > 2 && victim >= 0) {
+                PortMulti_SetOverride(victim, -1);
+                PortMulti_Engage(victim, i);
+            }
+            if (victim >= 0 && BtlCharApi_GetHp(BattleSide_GetObjId(victim)) < hp) {
+                PortMulti_NoteMelee(0, victim); /* (BT3_MFSTAT) */
             }
 #endif
         }
