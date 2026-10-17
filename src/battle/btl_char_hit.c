@@ -13,6 +13,7 @@ extern s32 BattleSide_GetObjId(s32 side);                       /* battle_load.c
 extern s32 BtlCharApi_GetHp(s32 objId);                         /* btl_capi_a.c */
 extern void PortMulti_NoteMelee(s32 path, s32 victim);          /* multi_fighter.c: counted for BT3_MFSTAT */
 extern void PortMulti_NoteThreat(s32 victim, s32 attacker);     /* multi_fighter.c: whose attack reached whom */
+extern s32 PortMulti_Frozen(s32 fighter);                       /* multi_fighter.c: held by another's freeze */
 void BtlHit_PortExtraContacts(void);
 #endif
 
@@ -839,6 +840,11 @@ s32 BtlHit_CheckClash(void) {
         HitChr *a = BtlChar_Get(i);
         HitChr *b = BtlChar_Get(BtlOpp_GetPlayer(a));
 
+#ifdef PORT
+        if (PortMulti_Frozen(i) || PortMulti_Frozen(BtlOpp_GetPlayer(a))) {
+            continue;
+        }
+#endif
         if (BtlChar_TestFlag(a, 3)) {
             s32 same = 0;
             s32 mixed;
@@ -907,6 +913,11 @@ s32 BtlHit_CheckRush(void) {
         if (!BtlChar_TestFlag(a, 0x49)) {
             continue;
         }
+#ifdef PORT
+        if (PortMulti_Frozen(i) || PortMulti_Frozen(BtlOpp_GetPlayer(a))) {
+            continue;
+        }
+#endif
         if (!BtlMove_IsBlockedByOpponent(a)) {
             continue;
         }
@@ -1027,8 +1038,9 @@ void BtlHit_CheckProximityAll(void) {
     for (i = 0; i < BtlChar_GetCount(); i++) {
         for (j = 0; j < BtlChar_GetCount(); j++) {
 #ifdef PORT
-            /* (several fighters on the field: teammates neither grab nor push each other) */
-            if (i != j && (BtlChar_GetCount() <= 2 || BattleSide_GetBand(i) != BattleSide_GetBand(j))) {
+            /* (several fighters on the field: teammates neither grab nor push each other, nor anyone a frozen one) */
+            if (i != j && (BtlChar_GetCount() <= 2 || (BattleSide_GetBand(i) != BattleSide_GetBand(j) &&
+                                                       !PortMulti_Frozen(i) && !PortMulti_Frozen(j)))) {
 #else
             if (i != j) {
 #endif
@@ -1457,8 +1469,8 @@ void BtlHit_PortExtraContacts(void) {
             continue;
         }
         mask = BtlBodyHit_PortContacts(i) & ~sPortLatch[i];
-        for (e = 0; mask != 0 && e < BtlChar_GetCount(); e++) {
-            if (!(mask & (1u << e)) || !PortMulti_CanContact(i, e)) {
+        for (e = 0; mask != 0 && e < BtlChar_GetCount() && !PortMulti_Frozen(i); e++) {
+            if (!(mask & (1u << e)) || !PortMulti_CanContact(i, e) || PortMulti_Frozen(e)) {
                 continue;
             }
             sPortLatch[i] |= 1u << e;
@@ -1511,6 +1523,11 @@ void BtlColl_Update(void) {
         for (i = 0; i < BtlChar_GetCount(); i++) {
             chr = BtlChar_Get(i);
             BtlColl_UpdateFrozen(chr);
+#ifdef PORT
+            if (PortMulti_Frozen(i) || PortMulti_Frozen(BtlOpp_GetPlayer(chr))) {
+                continue;
+            }
+#endif
             BtlHit_TestHit(chr);
         }
         BtlHit_ResolveTrades();

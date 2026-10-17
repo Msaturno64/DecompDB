@@ -178,6 +178,9 @@ static int sEngaged[FIGHTER_MAX] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1}, sEn
    the user's choice: the counter is the player choosing to answer that enemy). */
 #define THREAT_FRAMES 30
 static int sThreat[FIGHTER_MAX], sThreatAt[FIGHTER_MAX];
+/* and the other way round: whom each fighter's attack reached last (BtlChars_UpdateFreeze: whom its freeze holds) */
+#define VICTIM_FRAMES 10
+static int sVictim[FIGHTER_MAX], sVictimAt[FIGHTER_MAX];
 
 void PortMulti_NoteThreat(int victim, int attacker) {
     int n = BattleSide_GetCount();
@@ -186,7 +189,35 @@ void PortMulti_NoteThreat(int victim, int attacker) {
         BattleSide_GetBand(victim) != BattleSide_GetBand(attacker)) {
         sThreat[victim] = attacker;
         sThreatAt[victim] = sTargetFrame;
+        sVictim[attacker] = victim;
+        sVictimAt[attacker] = sTargetFrame;
     }
+}
+
+int PortMulti_TargetOf(int i);
+
+/* With more than two fighters a frozen fighter (another's freeze holds it) takes no part in the melee step: body
+   contacts, clashes, rushes, hits (btl_char_hit.c, eft_det_a.c), as the console skips the whole step while anyone is
+   frozen. Shots still reach it (an ultimate's beam its victim). */
+int PortMulti_Frozen(int i) {
+    extern int BtlChar_IsFrozen(void *chr); /* src/battle/btl_char_get.c */
+
+    return BattleSide_GetCount() > 2 && i >= 0 && i < BattleSide_GetCount() && BtlChar_IsFrozen((void *)BtlChar_Get(i));
+}
+
+/* btl_char_mgr.c, BtlChars_UpdateFreeze, with more than two fighters: the one fighter i's freeze (flag 0x125 of a
+   technique, 0x126 of a blow) holds instead of the whole field (as the Tag Team Mod's special_pause / hitstop12):
+   the enemy its attack reached in the last frames, else its opponent (a rush's or a throw's pair included). */
+int PortMulti_FreezeVictim(int i) {
+    int n = BattleSide_GetCount();
+
+    if (i < 0 || i >= n) {
+        return -1;
+    }
+    if (sVictim[i] >= 0 && sVictim[i] < n && sTargetFrame - sVictimAt[i] <= VICTIM_FRAMES) {
+        return sVictim[i];
+    }
+    return PortMulti_TargetOf(i);
 }
 
 /* btl_char_move.c, BtlMove_WarpBehindOpponent, before it looks at the opponent: a player's counter (action 0x24,
@@ -338,6 +369,7 @@ void PortMulti_ResetTargets(void) {
         sL3Prev[i] = 1; /* (an L3 held into the fight is not a tap) */
         sHpPrev[i] = 0x7FFFFFFF;
         sThreat[i] = -1;
+        sVictim[i] = -1;
     }
     sTargetFrame = 0;
 }
@@ -827,6 +859,10 @@ void PortMulti_Trace(unsigned vblank, int battle) {
         }
         exit(0);
     }
+    if (battle) { /* (BT3_MFSTAT: the blanks each fighter spent frozen) */
+        extern void PortMulti_NoteFrozen(void);
+        PortMulti_NoteFrozen();
+    }
     if (fp == NULL || !battle) {
         return;
     }
@@ -1125,6 +1161,22 @@ void PortMulti_FrameMark(int where) {
 /* btl_char_hit.c, BtlColl_Update: an ordinary attack's hit that took health (path 0: on the attacker's target, the
    console's way; 1: on another enemy it touched, BtlHit_PortExtraContacts). Counted for BT3_MFSTAT; only says. */
 PORT_HOST static int sMelee[2][FIGHTER_MAX];
+PORT_HOST static int sFrozen[FIGHTER_MAX], sFrozenAll, sFrozenBlanks;
+
+/* PortMulti_Trace, each fight blank: who is frozen (held by another's freeze), and whether everyone but one is. */
+void PortMulti_NoteFrozen(void) {
+    extern int BtlChar_IsFrozen(void *chr); /* src/battle/btl_char_get.c */
+    int n = BtlChar_GetCount(), i, k = 0;
+
+    for (i = 0; i < n && i < FIGHTER_MAX; i++) {
+        if (PortMulti_Frozen(i) || (n <= 2 && BtlChar_IsFrozen((void *)BtlChar_Get(i)))) {
+            sFrozen[i]++;
+            k++;
+        }
+    }
+    sFrozenAll += n > 2 && k >= n - 1;
+    sFrozenBlanks++;
+}
 
 void PortMulti_NoteMelee(int path, int victim) {
     if (victim >= 0 && victim < FIGHTER_MAX) {
@@ -1146,6 +1198,12 @@ void PortMulti_BattleEnd(void) {
     {
         int i;
 
+        printf("bt3: mfstat: blanks frozen by another's freeze, by fighter (of %d; the whole field but one: %d):",
+               sFrozenBlanks, sFrozenAll);
+        for (i = 0; i < BtlChar_GetCount(); i++) {
+            printf(" %d:%d", i, sFrozen[i]);
+        }
+        printf("\n");
         printf("bt3: mfstat: ordinary hits that took health, by victim (as the target / as another enemy touched):");
         for (i = 0; i < BtlChar_GetCount(); i++) {
             printf(" %d:%d/%d", i, sMelee[0][i], sMelee[1][i]);

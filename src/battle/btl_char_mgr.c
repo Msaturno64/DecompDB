@@ -590,6 +590,32 @@ void BtlChars_UpdateFreeze(void) {
             max = level[i];
         }
     }
+#ifdef PORT
+    if (max > 0 && BtlChar_GetCount() > 2) {
+        /* several fighters on the field (multi-fighter): a freeze holds the one its fighter is acting on, not the
+           field (the user: a technique paused everybody's game). The stronger of two, or the first of two alike,
+           is not held, as on the console. */
+        extern s32 PortMulti_FreezeVictim(s32 fighter); /* port/src/multi_fighter.c */
+        s32 v;
+
+        for (i = 0; i < BtlChar_GetCount(); i++) {
+            if (level[i] == 0) {
+                continue;
+            }
+            v = PortMulti_FreezeVictim(i);
+            if (v < 0 || v >= BtlChar_GetCount() || v == i || level[v] > level[i] || (level[v] == level[i] && v < i)) {
+                continue;
+            }
+            chr = BtlChar_Get(v);
+            if (level[i] == 1 && BtlChar_TestFlag(chr, 0x127)) {
+                continue;
+            }
+            chr->freezeNext = 1;
+            chr->freezeDelay = 0;
+        }
+        max = 0; /* (the console's way below is not for this) */
+    }
+#endif
     if (max > 0) {
         for (i = 0; i < BtlChar_GetCount(); i++) {
             chr = BtlChar_Get(i);
@@ -646,6 +672,11 @@ void BtlChars_UpdateObjFlag2(void) {
             break;
         }
     }
+#ifdef PORT
+    if (BtlChar_GetCount() > 2) {
+        found = -1; /* (several fighters on the field: the others go on fighting while one has the stage; none is hidden) */
+    }
+#endif
     if (found < 0) {
         for (i = 0; i < BtlChar_GetCount(); i++) {
             chr = BtlChar_Get(i);
@@ -691,6 +722,11 @@ void BtlChars_UpdateCollision(void) {
             break;
         }
     }
+#ifdef PORT
+    if (BtlChar_GetCount() > 2) {
+        nobodyFrozen = 1; /* (several fighters: the step runs; a frozen fighter takes no part in it, btl_char_hit.c) */
+    }
+#endif
     if (nobodyFrozen) {
         BtlBodyHit_Update();
         BtlColl_Update();

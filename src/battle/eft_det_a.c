@@ -757,15 +757,20 @@ void BtlBodyHit_Update(void) {
         s32 e;
 
         if (BattleSide_GetCount() > 2) {
+            extern s32 PortMulti_Frozen(s32 fighter); /* port/src/multi_fighter.c: held by another's freeze */
+
             for (i = 0; i < BattleSide_GetCount(); i++) {
                 a = BtlObj_Get(BattleSide_GetObjId(i));
-                if (PortMulti_CanContact(i, PortMulti_TargetOf(i))) {
+                sPortContacts[i] = 0;
+                if (PortMulti_Frozen(i)) {
+                    continue;
+                }
+                if (PortMulti_CanContact(i, PortMulti_TargetOf(i)) && !PortMulti_Frozen(PortMulti_TargetOf(i))) {
                     BtlBodyHit_Test(a, BtlObj_Get(BattleSide_GetObjId(PortMulti_TargetOf(i))));
                 }
-                sPortContacts[i] = 0;
                 for (e = 0; e < BattleSide_GetCount(); e++) {
                     if (e == PortMulti_TargetOf(i) || BattleSide_GetBand(e) == BattleSide_GetBand(i) ||
-                        !PortMulti_CanContact(i, e)) {
+                        !PortMulti_CanContact(i, e) || PortMulti_Frozen(e)) {
                         continue;
                     }
                     d = BtlObj_Get(BattleSide_GetObjId(e));
