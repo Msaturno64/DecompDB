@@ -172,25 +172,28 @@ static int sEngaged[FIGHTER_MAX] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1}, sEn
 #define ENGAGE_GRACE 15 /* frames an exchange holds anyway: the reaction starts at the victim's next action update */
 /* hit reactions, throws, down and getting up (0xB4..0xEB); techniques and their receiving end (0x105..0x13B) */
 #define ENGAGED_ACTION(a) (((a) >= 0xB4 && (a) <= 0xEB) || ((a) >= 0x105 && (a) <= 0x13B))
-/* A player's fighter stays on whoever hit it only while it takes the hit: the reactions, down and getting up, and the
-   receiving end of a rush (a counter such as the vanish behind the attacker needs it); its own moves and techniques
-   go back to its lock-on at once (the user: a hit from an enemy not locked on kept the player's blasts on that one). */
-#define REACTION_ACTION(a) (((a) >= 0xB4 && (a) <= 0xEB) || ((a) >= 0x139 && (a) <= 0x13B))
 
-/* A hit of `attacker` reached `victim` (btl_char_hit.c, eft_det_a.c). */
+/* A hit of `attacker` reached `victim` (btl_char_hit.c, eft_det_a.c). A player's fighter is never put in an exchange:
+   its opponent is the one it locked on (L3), whoever hits it (the user: being hit by another enemy switched the
+   target back and forth, "dizzying"); the hit itself is still resolved against its attacker (PortMulti_SetOverride),
+   and a rush or a throw still pairs the two (PortMulti_TargetOf). Computer fighters turn to whoever is on them. */
 void PortMulti_Engage(int victim, int attacker) {
     extern int BtlCharApi_IsInTechnique(int objId); /* src/battle/btl_capi_a.c */
     extern int BtlCharApi_GetAction(int objId);     /* src/battle/btl_capi_b.c */
+    extern int BattleSide_GetControl(int side);     /* src/battle/battle_load.c: 0 a pad, 2 the computer */
     int n = BattleSide_GetCount(), a;
 
     if (n <= 2 || victim < 0 || victim >= n || attacker < 0 || attacker >= n ||
         BattleSide_GetBand(victim) == BattleSide_GetBand(attacker)) {
         return;
     }
-    sEngaged[victim] = attacker;
-    sEngagedAt[victim] = sTargetFrame;
+    if (BattleSide_GetControl(victim) != 0) {
+        sEngaged[victim] = attacker;
+        sEngagedAt[victim] = sTargetFrame;
+    }
     a = BtlCharApi_GetAction(BattleSide_GetObjId(attacker));
-    if (BtlCharApi_IsInTechnique(BattleSide_GetObjId(attacker)) || (a >= 0xB4 && a <= 0xBF)) { /* (and a throw) */
+    if (BattleSide_GetControl(attacker) != 0 &&
+        (BtlCharApi_IsInTechnique(BattleSide_GetObjId(attacker)) || (a >= 0xB4 && a <= 0xBF))) { /* (and a throw) */
         sEngaged[attacker] = victim;
         sEngagedAt[attacker] = sTargetFrame;
     }
@@ -368,13 +371,11 @@ void PortMulti_UpdateTargets(void) {
     }
     sTargetFrame++;
     for (i = 0; i < n; i++) {
-        int a = BtlCharApi_GetAction(BattleSide_GetObjId(i));
-
         BtlCharApi_GetPos(BattleSide_GetObjId(i), p[i]);
         k = sEngaged[i];
         if (k >= 0 && (k >= n || BtlChar_IsDead(BtlChar_Get(i)) || BtlChar_IsDead(BtlChar_Get(k)) ||
                        (sTargetFrame - sEngagedAt[i] > ENGAGE_GRACE &&
-                        !(BattleSide_GetControl(i) == 0 ? REACTION_ACTION(a) : ENGAGED_ACTION(a))))) {
+                        !ENGAGED_ACTION(BtlCharApi_GetAction(BattleSide_GetObjId(i)))))) {
             sEngaged[i] = -1; /* the exchange is over: back to the target */
         }
     }
