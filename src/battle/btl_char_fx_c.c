@@ -868,6 +868,9 @@ void BtlPartner_SetFlag80(FxChr *chr, s32 on) {
 
     if (p->active) {
         obj = BtlObj_Get(p->objId);
+        if (obj != NULL && gPortBt4) { /* (BT4: REA, 0x1D3AD4) */
+            set = on != 0;
+        } else
         if (obj != NULL && obj->action != NULL) {
             if (obj->action->attr & 0x200000) {
                 set = on != 0;

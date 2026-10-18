@@ -2760,7 +2760,7 @@ s32 BtlDecide_Attack(BtlActIChr *chr, s32 mask) {
                     return 1;
                 }
             }
-        } else if ((BtlParam_GetFlags3(chr) & 0x1000) && !BtlChar_TestMemberUnk70(chr)) {
+        } else if ((BtlParam_GetFlags3(chr) & 0x1000) && (!BtlChar_TestMemberUnk70(chr) || gPortBt4)) { /* (BT4: REA, 0x202CC4) */
             ret = BtlAct_QueueComboFinish(chr);
             if (ret > 0) {
                 return ret;

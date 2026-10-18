@@ -231,6 +231,14 @@ s32 BtlAct_CanTransform(BtlActJChr *chr, u32 index, s32 needBlast, s32 needAllow
     if (kind == 3 && !BtlStage_HasMoon()) {
         return 0;
     }
+#ifdef PORT
+    if (needBlast && gPortBt4) { /* (BT4: ki, REA 0x2034B8) */
+        extern s32 Bt4_HasKi(void *chr, s32 n) __asm__("BtlMember_HasKi");
+        if (!Bt4_HasKi(chr, cost)) {
+            return 0;
+        }
+    } else
+#endif
     if (needBlast && !BtlMember_HasBlast(chr, cost)) {
         return 0;
     }
@@ -550,7 +558,7 @@ s32 BtlAct_CanUseTechnique(BtlActJChr *chr, s32 slot) {
     if ((u32)(slot - 2) >= 3) {
         return 0;
     }
-    if (BtlChar_TestMemberUnk70(chr)) {
+    if ((!gPortBt4 || slot >= 4) && BtlChar_TestMemberUnk70(chr)) { /* (BT4: REA, 0x3BF71C) */
         return 0;
     }
     if (!BtlChar_TestFlag(chr, 5)) {
@@ -666,7 +674,7 @@ s32 BtlAct_CanUseSkill(BtlActJChr *chr, u32 slot) {
     }
     flags = BtlSkill_GetFlags(chr, slot);
     stack = (flags >> 8) & 1;
-    if (BtlChar_TestMemberUnk70(chr)) {
+    if (BtlChar_TestMemberUnk70(chr) && !gPortBt4) { /* (BT4: REA, 0x203FF8) */
         return 0;
     }
     if (!BtlChar_TestFlag(chr, 5) && (flags & 1)) {

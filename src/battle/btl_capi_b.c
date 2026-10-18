@@ -1610,6 +1610,11 @@ s32 BtlCtrl_Transform(s32 player, s32 id) {
             return 0;
         }
         g = BtlMember_GetActiveGauge(chr);
+#ifdef PORT
+        if (gPortBt4) { /* (REA: 0x20ABEC) */
+            g->ki = BtlUtil_Clamp(BtlParam_GetSlotCost(chr, slot), g->ki, g->kiMax);
+        } else
+#endif
         g->blast = BtlUtil_Clamp(BtlParam_GetSlotCost(chr, slot), g->blast, g->blastMax);
         BtlChar_SetHeldFlag(chr, slot + 0x116);
         BtlChar_ClearFlag(chr, 0xBE);
@@ -1731,7 +1736,7 @@ s32 BtlCtrl_UseTechnique(s32 player, s32 kind) {
     case 2:
     case 3:
     case 4:
-        g->ki = BtlUtil_Clamp(BtlSuper_GetKiCost(chr, kind), g->ki, g->kiMax);
+        g->ki = BtlUtil_Clamp(BtlSuper_GetKiCost(chr, kind), PORT_BT4(g->ki, g->kiMax), g->kiMax); /* (BT4: REA, 0x20AF28) */
         if (kind == 4) {
             BtlChar_SetHeldFlag(chr, 6);
             g->maxPower = 30000;

@@ -1400,7 +1400,7 @@ s32 BtlSuper_GetDamage(BtlTechBChr *chr, s32 slot, s32 guard, s32 total) {
 
 /* Position and yaw of the technique's cutscene on the current stage, entry n of 5. */
 void BtlSuper_GetStagePlacement(BtlTechBChr *chr, s32 slot, s32 n, Vec4 *pos, Vec4 *rot) {
-    s32 stage = Battle_GetStage();
+    s32 stage = Battle_GetStage() % PORT_BT4(0x7FFFFFFF, 35); /* (BT4: REA, 0x3BEBFC) */
     BtlTechPlaceTbl *tbl;
 
     if ((u32)(slot - 2) < 3 && (tbl = chr->place[slot - 2]) != NULL) {

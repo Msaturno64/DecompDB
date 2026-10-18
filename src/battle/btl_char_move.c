@@ -1663,9 +1663,9 @@ void BtlMove_UpdateDefenseTimers(BtlMoveChr *chr) {
         chr->unk106C = -30;
         if (on) {
             if (BtlChar_TestFlag(chr, 0x138)) {
-                chr->unk106C = 4;
+                chr->unk106C = PORT_BT4(4, 2); /* (BT4: REA, 0x1E00E0) */
             } else {
-                chr->unk106C = 2;
+                chr->unk106C = PORT_BT4(2, 1);
             }
         }
     } else {
@@ -1677,7 +1677,7 @@ void BtlMove_UpdateDefenseTimers(BtlMoveChr *chr) {
     if (chr->unk1070 < -30) {
         chr->unk1070 = -30;
         if (BtlInput_TestAction(chr, 0x26, 1)) {
-            chr->unk1070 = 1;
+            chr->unk1070 = PORT_BT4(1, 3); /* (BT4: REA, 0x1E012C) */
         }
     } else {
         if (BtlInput_TestAction(chr, 0x26, 1)) {

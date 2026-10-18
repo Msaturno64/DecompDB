@@ -1363,7 +1363,7 @@ s32 BtlParam_GetSlotId(BtlTechChr *chr, s32 slot) {
 
 /* Parameter +0x9C + slot, times 100000: blast gauge a transformation costs. */
 s32 BtlParam_GetSlotCost(BtlTechChr *chr, s32 slot) {
-    return BtlChar_GetObj(chr)->param->transCost[slot] * 100000;
+    return BtlChar_GetObj(chr)->param->transCost[slot] * PORT_BT4(100000, 20000); /* (BT4: ki, REA 0x20E1C8) */
 }
 
 /* Parameter +0xA0 + slot. */
@@ -1477,6 +1477,11 @@ s32 BtlParam_GetType(BtlTechChr *chr) {
         costume = 0;
     }
     type = param->searchType[costume];
+#ifdef PORT
+    if (gPortBt4) { /* (REA: 0x20E5E0) */
+        type = *(s8 *)(*(u8 **)((u8 *)BtlChar_GetObj(chr) + 0x940) + 853);
+    }
+#endif
     switch (type) {
         case 2:
         case 3:

@@ -251,7 +251,8 @@ s32 DemoCam_Update(void) {
         }
         if (owner != NULL && BtlCharApi_HasMemberUnk70(BtlCharApi_GetPlayer(*(void **)((u8 *)owner + 0x10))) != 0 &&
             gDemoCam->scaleHeight != 0) {
-            f32 scale = (*(f32 **)((u8 *)owner + 0x91C))[1] / 1.1f;
+            f32 scale = (gPortBt4 ? *(f32 *)(*(u8 **)((u8 *)owner + 0x18) + 0x74) /* (BT4: REA, 0x23D918) */
+                                  : (*(f32 **)((u8 *)owner + 0x91C))[1]) / 1.1f;
 
             gDemoCam->view.world2view2.m[3][0] = pose->f.pos[0] + shakePos.x;
             gDemoCam->view.world2view2.m[3][1] = pose->f.pos[1] * scale + shakePos.y;

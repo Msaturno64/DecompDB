@@ -276,6 +276,36 @@ void Bt4Obj_HitTexture(void *chr) {
     BT4_AT(obj, 0x4C, void *) = BT4_AT(obj, 0x24, void *);
 }
 
+/* A character reset (0x3BF04C, BtlChar_Reset): back to the first texture set. */
+void Bt4Obj_ResetTexture(void *chr) {
+    void *obj = BtlChar_GetObj(chr);
+
+    BT4_AT(obj, 0x48, void *) = BT4_AT(obj, 0x1C, void *);
+    BT4_AT(obj, 0x4C, void *) = BT4_AT(obj, 0x28, void *);
+}
+
+/* Script command 2 (0x3BEBD0): story 65 is played in the first voice language (save flag bit 0 off), the flags
+   kept until the mission's result screen puts them back (0x3BECEC, MisResult_Run). */
+extern void BtlScript_SetStory(s32 n);
+static s32 sBt4Story = -1;
+static u32 sBt4StoryFlags;
+
+void Bt4Story_Set(s32 n) {
+    if (n == 65) {
+        sBt4StoryFlags = gSaveData->flags;
+        gSaveData->flags &= ~1;
+    }
+    sBt4Story = n;
+    BtlScript_SetStory(n);
+}
+
+void Bt4Story_End(void) {
+    if (sBt4Story == 65) {
+        gSaveData->flags = sBt4StoryFlags;
+        sBt4Story = -1;
+    }
+}
+
 /* ---- the models' file ids: from 0x1612 each character has its costumes' models, then as many damaged ones ---- */
 
 #define BT4_CHARA_FILE_FIRST 0x1612 /* (0x20081C) */

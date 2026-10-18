@@ -1,4 +1,7 @@
 #include "common.h"
+#ifdef PORT
+extern void Bt4Obj_ResetTexture(void *chr);
+#endif
 #include "battle/battle.h"
 #include "battle/battle_setup.h"
 #include "battle/btl_char_mgr.h"
@@ -345,6 +348,11 @@ void BtlChar_Reset(BtlMgrChr *chr) {
         mem->cpuLevel = BattleSide_GetMember(side, i)->cpuLevel;
         mem->aiType = BattleSide_GetMember(side, i)->aiType;
         m = BattleSide_GetMember(side, i);
+#ifdef PORT
+        if (gPortBt4) { /* (REA: 0x3BF04C) */
+            Bt4Obj_ResetTexture(chr);
+        }
+#endif
         BtlMember_LoadParams(chr, i, 1, m->health, BattleSide_GetMemberVariant(side, i));
     }
     chr->unk99C = 0;

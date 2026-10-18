@@ -2594,6 +2594,11 @@ void BtlObj_SetColorMode(BObj *obj, s32 bit, s32 on) {
     } else if (state->modeBits & 8) {
         SET_COLOR(obj, 0x80000);
     } else if (state->modeBits & 4) {
+#ifdef PORT
+        if (gPortBt4) { /* (REA: 0x250180) */
+            obj->state.flags = (obj->state.flags & 0xFF02FFFF) | 0x40000;
+        } else
+#endif
         SET_COLOR(obj, 0x40000);
     } else if (state->modeBits & 0x40) {
         SET_COLOR(obj, 0x400000);

@@ -485,6 +485,11 @@ s32 BtlStage_GetChangeTarget(void) {
     if (!BtlStage_IsReady()) {
         return -1;
     }
+#ifdef PORT
+    if (gPortBt4) { /* (REA: 0x24349C) */
+        return ((s8 *)gBtlStage->data->info)[13];
+    }
+#endif
     kind = gBtlStage->data->info->changeKind;
     if (kind == 1) {
         return 0xF;

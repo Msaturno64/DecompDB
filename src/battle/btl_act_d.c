@@ -427,7 +427,7 @@ s32 BtlAct_NeutralHandler(BtlActDChr *chr, s32 phase) {
         }
     }
     if (phase == PHASE_DECIDE) {
-        if (Battle_GetMode() != 1) {
+        if (Battle_GetMode() != 1 && !gPortBt4) { /* (BT4: REA, 0x1EEB6C) */
             if (BtlChar_TestFlag(chr, 3)) {
                 if (((BtlActDMember *)BtlMember_GetActive(chr))->unkA0 <= 0) {
                     if (!BtlChar_TestFlag(chr, 0xB1)) {
@@ -439,6 +439,13 @@ s32 BtlAct_NeutralHandler(BtlActDChr *chr, s32 phase) {
             }
         }
         BtlDecide_Main(chr, 0x22FCBFEB);
+#ifdef PORT
+        if (gPortBt4 && BtlInput_IsHeld(chr, 0x4000) && BtlInput_IsHeld(chr, 1)) { /* (REA: 0x19BF3C) */
+            extern void Bt4_ClearQueue(void *chr) __asm__("BtlAct_ClearQueue");
+            BtlAct_Request(chr, 0x43);
+            Bt4_ClearQueue(chr);
+        }
+#endif
         BtlDecide_Attack(chr, 0x0800054F);
         BtlDecide_Common(chr, 0xF);
         BtlAct_Request(chr, BtlAct_GetQueued(chr));

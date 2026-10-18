@@ -729,6 +729,12 @@ s32 BtlScriptCmd_WaitButton(u32 phase, void *taskWork) {
 /* Command 2 "story": n. Sets the story number that picks the text, lip and voice files. */
 s32 BtlScriptCmd_SetStory(u32 phase, void *taskWork) {
     if (phase == GSC_PHASE_BEGIN || phase == GSC_PHASE_BEGIN_ABORT) {
+#ifdef PORT
+        if (gPortBt4) {
+            extern void Bt4Story_Set(s32 n);
+            Bt4Story_Set(Gsc_GetInt());
+        } else
+#endif
         BtlScript_SetStory(Gsc_GetInt());
     }
     return 1;
@@ -907,6 +913,14 @@ s32 BtlScriptCmd_Battle(u32 phase, void *taskWork) {
         case 29:
             BtlFacade_ForceAction4(side);
             break;
+#ifdef PORT
+        case 30: /* (BT4: its jump table entry 30, REA 0x3BE9D8) */
+            if (gPortBt4) {
+                extern void Bt4_ForceActions(s32 a, s32 b) __asm__("BtlFacade_ForceActions");
+                Bt4_ForceActions(3, 4);
+            }
+            break;
+#endif
         }
         BtlFacade_ResetSubClock();
     }

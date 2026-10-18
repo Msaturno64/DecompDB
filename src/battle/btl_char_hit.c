@@ -560,7 +560,13 @@ s32 BtlHit_CheckDodge(HitChr *atk, HitChr *def) {
             done = 1;
             free = 1;
             if (flags & 0x100000) {
-                paid = BtlMember_HasKi(def, 20000) != 0;
+                paid = BtlMember_HasKi(def, PORT_BT4(20000, 5000)) != 0; /* (BT4: REA, 0x3BEA7C) */
+#ifdef PORT
+                if (gPortBt4 && !paid) {
+                    BtlChar_SetFlag(def, 0x76);
+                    goto port_bt4_sidestep;
+                }
+#endif
             }
         }
         if (!done) {
@@ -621,6 +627,9 @@ s32 BtlHit_CheckDodge(HitChr *atk, HitChr *def) {
                     BtlChar_SetFlag(def, 0x76);
                     break;
                 }
+#ifdef PORT
+            port_bt4_sidestep:
+#endif
                 if (flags & 0x1000000) {
                     BtlChar_SetFlag(def, 0x78);
                 }
@@ -954,8 +963,8 @@ s32 BtlHit_CheckRush(void) {
                     } else {
                         flag = 0x75;
                     }
-                    BtlChar_SetFlag(b, flag);
-                    if (BtlMember_HasAbility(b, 0x22)) {
+                    BtlChar_SetFlag(b, PORT_BT4(flag, 0x7C)); /* (BT4: REA, 0x1C9498) */
+                    if (BtlMember_HasAbility(b, 0x22) || gPortBt4) {
                         BtlMember_AddBlast(b, 100000);
                     }
                     continue;

@@ -137,6 +137,12 @@ s32 BtlCharApi_GetMemberUnk60(s32 objId) {
     BtlCharApiChr *chr = BtlChar_FindByObjId(objId);
 
     if (chr != NULL) {
+#ifdef PORT
+        if (gPortBt4) { /* (REA: 0x1E118C) */
+            extern s32 Bt4_HasAbility(void *chr, s32 id) __asm__("BtlMember_HasAbility");
+            return BtlMember_GetActiveGauge(chr)->unk20 != 0 || Bt4_HasAbility(chr, 0x7A);
+        }
+#endif
         return BtlMember_GetActiveGauge(chr)->unk20;
     }
     return 0;

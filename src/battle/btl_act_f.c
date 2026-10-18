@@ -1,4 +1,8 @@
 #include "common.h"
+#ifdef PORT
+/* (BT4: the gauge word, or ability 0x7A: REA, 0x1E118C) */
+#define BT4_DAMAGED(chr, v) (gPortBt4 ? ((v) != 0 || BtlMember_HasAbility(chr, 0x7A)) : (v))
+#endif
 #include "battle/btl_act_f.h"
 
 /*
@@ -597,7 +601,7 @@ void BtlAct_SuperBeamHandler(BtlSuperChr *chr, s32 phase) {
         BtlSuper_RequestCut(chr, cls);
         BtlMember_SpendKi(chr, BtlSuper_GetKiCost(chr, cls), 1);
         BtlChar_ResetLook(chr);
-        if ((flagsB & 0x2000) && BtlMember_GetActiveGauge(chr)->variant == 0) {
+        if ((flagsB & 0x2000) && BT4_DAMAGED(chr, BtlMember_GetActiveGauge(chr)->variant) == 0) {
             chr->work[0] |= 1;
         }
     }
@@ -893,6 +897,11 @@ void BtlAct_SuperWarpBeamHandler(BtlSuperChr *chr, s32 phase) {
         }
         if (!warped) {
             if (aim) {
+#ifdef PORT
+                if (gPortBt4) { /* (REA: 0x1F71B0) */
+                    BtlChar_SetFlag(chr, 0x126);
+                } else
+#endif
                 BtlMove_Step(chr, 2, 5, 2, 0.0f, BTL_KMH(100.0f));
                 BtlMove_ApplyGravity(chr);
             } else {
@@ -3040,7 +3049,7 @@ void BtlAct_ClashStruggleHandler(ActGChr *chr, s32 phase) {
         BtlChar_SetFlag(chr, 0x46);
         BtlChar_SetFlag(chr, 0x134);
         if (chr->actionFrame >= 0x10 && BtlInput_TestAction(chr, 0x33, 1)) {
-            chr->clashPower++;
+            chr->clashPower += PORT_BT4(1, 3); /* (BT4: REA, 0x1FB9D0) */
 #ifdef PORT /* PC build: BT3_CLASH_LOG=1 says what a clash counts (testing the Square option) */
             Port_ClashLog(chr->player, "beam clash", 1, chr->clashPower, chr->actionFrame);
 #endif
@@ -3081,7 +3090,7 @@ void BtlAct_ClashLostHandler(ActGChr *chr, s32 phase) {
     if (phase == 0) {
         BtlAnim_Play(chr, 0x172, 0.0f);
         ChrCam_RequestCut(chr, 1, chr->player + 0x21);
-        if (BtlMember_GetActiveGauge(chr)->variant == 0) {
+        if (BT4_DAMAGED(chr, BtlMember_GetActiveGauge(chr)->variant) == 0) {
             chr->work[0] |= 1;
             BtlAct_SetFormCurrent(chr);
         }

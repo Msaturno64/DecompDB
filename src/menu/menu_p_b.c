@@ -725,6 +725,12 @@ void MisResult_Input(s32 *result) {
 s32 MisResult_Run(s32 section) {
     s32 result = 1;
 
+#ifdef PORT
+    if (gPortBt4) { /* (REA: 0x37DADC -> 0x3BECEC) */
+        extern void Bt4Story_End(void);
+        Bt4Story_End();
+    }
+#endif
     MisResult_Init(section);
     ColorFade_StartIn(0, 0, 0, 0x14);
     while (1) {
