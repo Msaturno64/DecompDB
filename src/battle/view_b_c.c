@@ -183,7 +183,7 @@ void Demo_SetupBattle(void) {
         DEMO_PAIR(0xA, 0x93, 0x1D);
         break;
     case 1:
-        DEMO_PAIR(0x2A, 0x6C, 6);
+        DEMO_PAIR(0x2A, PORT_BT4(0x6C, 107), 6);
         break;
     case 2:
         DEMO_PAIR(0x19, 0x5C, 2);
@@ -195,10 +195,10 @@ void Demo_SetupBattle(void) {
         DEMO_PAIR(0x17, 0x6F, 1);
         break;
     case 5:
-        DEMO_PAIR(0x49, 0x5B, 0x10);
+        DEMO_PAIR(0x49, 0x5B, PORT_BT4(0x10, 51));
         break;
     case 6:
-        DEMO_PAIR(0, 0x1E, 0x19);
+        DEMO_PAIR(0, 0x1E, PORT_BT4(0x19, 1)); /* (BT4: REA, 0x26191C) */
         break;
     case 7:
         DEMO_PAIR(0x32, 0x72, 5);

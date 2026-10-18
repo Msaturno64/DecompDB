@@ -1373,9 +1373,9 @@ void EftGfx_UpdateClipPlanes(void) {
     EftVec eye;
     f32 angle = 30.0f * 3.14159265f / 180.0f;
 #ifdef PORT
-    f32 aspect = 0.75f / Port_WideFactor(); /* the side planes of a 16:9 view */
+    f32 aspect = PORT_BT4(0.75f, 0.5625f) / Port_WideFactor(); /* (BT4: REA, 0x130BF0) */ /* the side planes of a 16:9 view */
 #else
-    f32 aspect = 0.75f;
+    f32 aspect = PORT_BT4(0.75f, 0.5625f);
 #endif
     f32 one = 1.0f;
     f32 angle2;

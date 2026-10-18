@@ -243,7 +243,7 @@ void View_InitLayout(View *view, s32 layout) {
     s32 split;
     s32 left;
 
-    view->aspect = 1.1666667f;
+    view->aspect = PORT_BT4(1.1666667f, 1.555167f); /* (BT4 is drawn for 16:9: REA, 0x23E774) */
     switch (layout) {
         case VIEW_LAYOUT_FULL:
             split = 0;

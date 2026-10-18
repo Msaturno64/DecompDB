@@ -130,6 +130,11 @@ void BtlMember_LoadParams(BtlMemberChr *chr, s32 member, s32 init, f32 healthPct
     if (init) {
         g->unk30 = 0;
         g->fused = 0;
+#ifdef PORT
+        if (gPortBt4) { /* (REA: 0x3BEFBC) */
+            g->unk28 = 0;
+        }
+#endif
     }
     if (g->fused == 0) {
         g->healthMax = gBtlChars->paramTbl[m->chara].healthMax;
@@ -830,6 +835,13 @@ void BtlMembers_UpdateQueuedDamage(void) {
                     amount = chr->queue.drainKi;
                     chr->queue.drainKi = 0;
                 }
+#ifdef PORT
+                if (gPortBt4) { /* (BT4: spent, unless flag 0xBE; REA 0x282018) */
+                    s32 f = BtlChar_TestFlag(other, 0xBE);
+
+                    lost = f ? f : BtlMember_SpendKi(other, amount, 0);
+                } else
+#endif
                 lost = BtlMember_DrainKi(other, amount);
                 if (!BtlChar_TestFlag(chr, 0x13C)) {
                     BtlMember_AddKi(chr, lost);

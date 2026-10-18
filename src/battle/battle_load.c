@@ -1420,6 +1420,11 @@ void BtlMember_Init(BattleMember *m, s32 chara, s32 costume, s32 variant, s32 cp
     BtlMember_ApplyItems(m);
     m->chara = chara;
     m->costume = costume;
+#ifdef PORT
+    if (gPortBt4 && (((u8 *)m)[0x57] & 8)) { /* (BT4: an item that makes the model the damaged one, REA 0x3BEA0C) */
+        variant = 1;
+    }
+#endif
     m->variant = variant;
     m->cpuLevel = cpuLevel;
     m->health = health;
@@ -2150,7 +2155,14 @@ void BattleSide_SetMemberItems(s32 side, s32 idx, BattleItemSet *items) {
 
 /* 1 when character id is in the side's usable-character bits. */
 s32 BattleSide_IsCharaUsable(s32 side, s32 chara) {
-    u64 *bits = Side(side)->charaBits.bits;
+    u64 *bits;
+
+#ifdef PORT
+    if (gPortBt4 && chara >= 0xA5) { /* (BT4's characters past the markers: always, REA 0x3BF68C) */
+        return 1;
+    }
+#endif
+    bits = Side(side)->charaBits.bits;
 
     return (bits[chara / 64] >> (chara % 64)) & 1;
 }

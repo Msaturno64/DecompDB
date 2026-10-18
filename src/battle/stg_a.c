@@ -380,7 +380,7 @@ void StgFrustum_Build(StgView *view, StgFrustum *fr) {
     if ((f32)(view->x1 - view->x0) > 256.0f) {
         STG_FRUSTUM_PLANES(448.0f / 3.0f);
     } else {
-        STG_FRUSTUM_PLANES(896.0f / 3.0f);
+        STG_FRUSTUM_PLANES(PORT_BT4(896.0f / 3.0f, 398.12274f)); /* (BT4: REA, 0x2401E4) */
     }
 #ifdef PORT
     fr->plane[0].z *= Port_WideFactor(); /* the side planes of a 16:9 view: a third more half width */

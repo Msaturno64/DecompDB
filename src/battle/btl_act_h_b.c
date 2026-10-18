@@ -36,7 +36,7 @@ s32 BtlAct_Throw(BtlActHChr *chr, s32 phase) {
                 BtlMove_TurnYaw(chr, alt ? 8 : 7, BTL_DEG(180.0f));
             }
         }
-        if (BtlMember_GetActive(chr)->chara == 0x6E && !(BtlOpp_GetParamWord0(chr) & 0x80)) {
+        if (BtlMember_GetActive(chr)->chara == PORT_BT4(0x6E, 193) && !(BtlOpp_GetParamWord0(chr) & 0x80)) {
             chr->unkE60 = BtlUtil_Clamp(chr->unkE60 + 1, 0, 10);
         }
     }
@@ -603,7 +603,8 @@ s32 BtlActSwitch_SetLeaveCut(BtlActHChr *chr) {
     }
     if (onFighter) {
         ChrCam_SetCut(chr, &D_002EC2A0, &D_002EC2A0, &D_002EC2A0, &D_002EC2A0, &D_002EC2A0, &D_002EC2A0, 3, 0.0f,
-                      BTL_DEG(90.0f), -0.9f, -0.4f, BtlCharApi_GetHeight(chr->objId) * 1.5f, BtlCharApi_GetHeight(chr->objId) * 0.5f,
+                      PORT_BT4(BTL_DEG(90.0f), 0.024543691f), PORT_BT4(-0.9f, -0.634375f), PORT_BT4(-0.4f, -0.0062499996f), /* (BT4: REA, 0x1FDD30) */
+                      BtlCharApi_GetHeight(chr->objId) * 1.5f, BtlCharApi_GetHeight(chr->objId) * 0.5f,
                       3, 3, 3, 0x3C, 0xC5);
     } else {
         BtlStage_GetPlace(&pos, &rot);

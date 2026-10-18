@@ -941,12 +941,12 @@ s32 BtlAtk_ApplyAbilities(BtlTechChr *chr, s32 val, u32 id) {
             val += val / 10;
         }
         if (BtlMember_HasAbility(chr, 5)) {
-            val -= val / 10;
+            val -= val / PORT_BT4(10, 2); /* (BT4: REA, 0x20D31C) */
         }
     }
     if (id - 0x13 < 0xF) {
         if (BtlMember_HasAbility(chr, 6)) {
-            val += val / 10;
+            val += val / PORT_BT4(10, 2); /* (BT4: REA, 0x20D354) */
         }
         if (BtlMember_HasAbility(chr, 7)) {
             val -= val / 10;

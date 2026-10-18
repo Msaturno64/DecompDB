@@ -461,6 +461,14 @@ void EftStorm_Init(EftTask *task) {
     memset(gEftStorm, 0, sizeof(EftStorm));
     EftTexSet_Load32(gEftStorm, BtlScene_GetPackEntry((s32 *)pack, 14));
     EftStorm_Reset(task);
+#ifdef PORT
+    {
+        extern s32 Bt4Stage_NoRain(void);
+        if (gPortBt4 && Bt4Stage_NoRain()) { /* (REA: 0x3BE9A8) */
+            return;
+        }
+    }
+#endif
     EftStorm_InitRain();
 }
 

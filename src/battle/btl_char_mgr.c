@@ -252,7 +252,9 @@ void BtlChar_BindObject(BtlMgrChr *chr) {
             chr->objTbl[i] = FILE_TABLE(obj->file[i], 3);
         }
     }
-    BtlChar_ClearFlag(chr, 0xBE);
+    if (!gPortBt4) { /* (BT4 keeps flag 0xBE: REA, 0x1C00C8) */
+        BtlChar_ClearFlag(chr, 0xBE);
+    }
     BtlChar_ClearFlagRange(chr, 0x98, 0x99);
     BtlObj_InitChains(obj);
     memset(chr->unkE00, 0, 0x40);

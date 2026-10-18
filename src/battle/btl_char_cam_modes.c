@@ -218,8 +218,8 @@ void ChrCam_CalcLockOn(ChrCamChr *chr, Vec4 *eye, Vec4 *rot, Vec4 *target) {
     horiz = BtlUtil_LengthXZ(&toOpp);
     ofsLen = BtlUtil_LengthXZ(&ofs);
     width = Battle_IsSplitScreen() ? 256.0f : 512.0f;
-    fov = Mathf_Atan(width * 0.5f / 433.0f) * 2.0f;
-    half = fov * 0.7f;
+    fov = Mathf_Atan(width * 0.5f / PORT_BT4(433.0f, 578.0f)) * 2.0f; /* (BT4: REA, 0x1C602C) */
+    half = fov * PORT_BT4(0.7f, 0.6375f);
     tn = Mathf_Tan(half);
     if (0.01f < horiz) {
         spread = Mathf_Atan(tn * (ofsLen / horiz));
@@ -237,7 +237,7 @@ void ChrCam_CalcLockOn(ChrCamChr *chr, Vec4 *eye, Vec4 *rot, Vec4 *target) {
     Vec4_Set(&ang2, 0.0f, turn * side, 0.0f, 0.0f);
     ofs.w = 0.0f;
     Vec4_RotateEuler(&ofs, &ang2, &ofs);
-    turn = turn + spread * (limit / HALF_PI);
+    turn = turn + spread * (limit / PORT_BT4(HALF_PI, 1.8207963f)); /* (BT4: REA, 0x1C6110) */
     turn = turn * 0.5f;
     turn = turn * side;
     cam->yawOfs = turn;

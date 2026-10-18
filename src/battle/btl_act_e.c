@@ -1362,9 +1362,9 @@ void BtlAct_ClashBlowsHandler(BtlActEChr *chr, s32 phase) {
             case 0x173:
             case 0x174:
                 BtlAnim_AdvanceLoop(chr, 0);
-                BtlChar_SetFlag(chr, 0xE6);
+                BtlChar_SetFlag(chr, PORT_BT4(0xE6, 316));
                 BtlChar_SetFlag(chr, 0xED);
-                if (BtlInput_TestAction(chr, 0x33, 1)) {
+                if (BtlInput_TestAction(chr, PORT_BT4(0x33, 79), 1)) {
                     BtlAct_CountAndMarkOpponent(chr);
 #ifdef PORT /* PC build: BT3_CLASH_LOG=1 */
                     Port_ClashLog(chr->player, "blow clash", 1, chr->clashCountB, chr->actionFrame);

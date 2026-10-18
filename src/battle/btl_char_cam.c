@@ -37,8 +37,8 @@ f32 ChrCam_GetOffset(ChrCamChr *chr, Vec4 *out, s32 mode) {
         case 2:
             out->x = 0.0f;
             out->y = -dist * 2.0f;
-            out->z = -dist * 3.3f;
-            pitch = scale * -0.001f + -0.1f;
+            out->z = -dist * PORT_BT4(3.3f, 3.690625f); /* (BT4: REA, 0x1C4CBC) */
+            pitch = scale * -0.001f + PORT_BT4(-0.1f, -0.061718747f);
             break;
         case 0:
             out->x = 0.0f;

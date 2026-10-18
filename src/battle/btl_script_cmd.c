@@ -462,10 +462,10 @@ s32 BtlScriptCmd_LoadText(u32 phase, void *taskWork) {
         base = -1;
         switch (gProgress->unk0) {
         case 0:
-            base = 0x231;
+            base = PORT_BT4(0x231, 623);
             break;
         case 1:
-            base = 0x263;
+            base = PORT_BT4(0x263, 623);
             break;
         }
         BtlScript_RequestTextFile(base + BtlScript_GetStory());
@@ -479,9 +479,9 @@ s32 BtlScriptCmd_LoadFile8(u32 phase, void *taskWork) {
         s32 base;
 
         if (gSaveData->flags & SAVE_FLAG_VOICE) {
-            base = 0x2C7;
+            base = PORT_BT4(0x2C7, 846);
         } else {
-            base = 0x295;
+            base = PORT_BT4(0x295, 734);
         }
         BtlScript_RequestFile8(base + BtlScript_GetStory());
     }

@@ -1340,6 +1340,13 @@ s32 BtlInput_TestAction(BtlInputChr *chr, s32 id, s32 want) {
             result = 1;
         }
         break;
+#ifdef PORT
+    case 115: /* (BT4's own: button bit 0 pressed; REA, its jump table entry 114 -> 0x1D4E20) */
+        if (gPortBt4) {
+            result = BtlInput_IsPressed(chr, 1);
+        }
+        break;
+#endif
     }
     return result ^ invert;
 }

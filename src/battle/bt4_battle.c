@@ -180,6 +180,11 @@ s32 Bt4Stage_TransitionFile(void) {
     return 0x1BB + BT4_AT(BT4_AT(info, 0x14, void *), 0xC, s8);
 }
 
+/* Whether the stage has no rain for the storm effect (0x3BE9A8, EftStorm_Init): bit 0 of its data's word 1. */
+s32 Bt4Stage_NoRain(void) {
+    return BT4_AT(BT4_AT(BT4_AT(gBtlStage, 4, void *), 0x14, void *), 4, u32) & 1;
+}
+
 /* ---- the models' file ids: from 0x1612 each character has its costumes' models, then as many damaged ones ---- */
 
 #define BT4_CHARA_FILE_FIRST 0x1612 /* (0x20081C) */

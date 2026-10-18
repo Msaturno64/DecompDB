@@ -1348,7 +1348,7 @@ s32 BtlSuper_GetDamage(BtlTechBChr *chr, s32 slot, s32 guard, s32 total) {
     }
     damage = BtlUtil_RoundUp(damage, 10);
     if (BtlChar_TestFlag(chr, 0xA4)) {
-        damage = BtlUtil_RoundUp(damage * 3 / 10, 10);
+        damage = BtlUtil_RoundUp(damage * 3 / PORT_BT4(10, 5), 10); /* (BT4: REA, 0x211B78) */
     }
     if (BtlChar_TestFlag(chr, 6) && slot != 4) {
         damage = BtlUtil_RoundUp(damage + damage / 5, 10);

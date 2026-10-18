@@ -1248,7 +1248,7 @@ s32 BtlAct_Action42(Chr *chr, s32 phase) {
         BtlChar_SetHeldFlag(chr, 0xE);
         BtlChar_GetPos(chr)->unk98 = 0.0f;
         BtlChar_GetPos(chr)->unk9C = 0.0f;
-        BtlMember_Damage(chr, 5000, 0x42B);
+        BtlMember_Damage(chr, PORT_BT4(5000, 8000), 0x42B);
         BtlChar_SetHeldFlag(chr, 0x4B);
         BtlCharSnd_PlayCommon(chr, 0x24);
         BtlChar_PlayVoice(chr, 6);
