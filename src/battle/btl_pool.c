@@ -39,8 +39,9 @@ s32 BtlPool_PortSize(s32 slot) {
 #ifdef PORT
 /* What one fighter beyond the two adds to each arena, from BT3_MFSTAT's "most held" of a 1v1 and a 2v1 demo with
    about half again for margin (slot 1: +0x9A00 measured, 3: +0x600, 8: +0x14EC0, 0 and 6: a little; the others
-   did not grow). A 1v1 gets the console's sizes. */
-static const s32 kPortArenaPerFighter[9] = {0x400, 0x10000, 0, 0x400, 0, 0, 0x100, 0, 0};
+   did not grow). Slot 3 holds a block that grows with the fighters too (0x3480 in a 5v5, more than 0x400 each
+   gave: it went to the heap, never given back): 0x500 each measured, 0x800 given. A 1v1 gets the console's sizes. */
+static const s32 kPortArenaPerFighter[9] = {0x400, 0x10000, 0, 0x800, 0, 0, 0x100, 0, 0};
 
 static s32 BtlPool_PortFighters(void) {
     extern s32 BattleSide_GetCount(void); /* battle_load.c: the battle's fighters */

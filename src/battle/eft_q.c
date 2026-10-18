@@ -856,7 +856,11 @@ void EftChar_SetPool(s32 chr) {
 
 /* Empties the character's pool. */
 void EftChar_ResetPool(s32 chr) {
+#ifdef PORT
+    BtlPool_Reset(BtlPool_PortCharPool(chr, 1)); /* (a fighter beyond the two: its own pool, not fighter 1's) */
+#else
     BtlPool_Reset(chr == 0 ? 7 : 8);
+#endif
 }
 
 /* Creates the manager task of one kind for a character; its init gets {character, kind}. */
