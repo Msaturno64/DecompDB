@@ -546,6 +546,11 @@ s32 BtlAct_VanishStepHandler(BtlActEChr *chr, s32 phase) {
             }
             --*counter;
             if (*counter >= 2) {
+#ifdef PORT
+                if (gPortBt4 && BtlChar_TestFlag(chr, 0x76)) { /* (REA: 0x3BEAC8) */
+                    c = 18.625f;
+                } else
+#endif
                 c = BtlAct_ScaleSpeedByDist(chr, BtlMoveParam_GetSpeed(chr, 0x12), 3.14159265f, 6.0f);
             } else if (*counter == 1) {
                 c = 0.0f;

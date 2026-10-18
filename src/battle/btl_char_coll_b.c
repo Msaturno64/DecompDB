@@ -1,4 +1,12 @@
 #include "common.h"
+#ifdef PORT
+extern void Bt4Act_TransformCost(void *chr, s32 cost);
+extern void Bt4Act_CpuTransform(void *chr);
+extern void Bt4Act_ForcedEvasion(void *chr);
+extern void Bt4Act_TauntCount(void *chr);
+extern void Bt4Act_Taunt(void *chr);
+extern void Bt4Obj_HitTexture(void *chr);
+#endif
 #include "battle/btl_char_coll.h"
 
 /*
@@ -678,6 +686,11 @@ s32 BtlColl_HitByBlast(BtlCollChr *chr, BtlCollHit *hit) {
     }
     time = 0.1f;
     BtlMember_Damage(chr, dmg, 0);
+#ifdef PORT
+    if (gPortBt4) { /* (REA: 0x3BEFAC) */
+        Bt4Obj_HitTexture(chr);
+    }
+#endif
     ChrCam_AddShake(chr, 3.0f, time);
     BtlChar_Vibrate(chr, 1.0f, time);
     switch (hit->atk->kind) {
@@ -1192,7 +1205,7 @@ s32 BtlColl_TryDodge(s32 objId, BtlCollHit *hit) {
     if (rush) {
         if (!BtlChar_TestFlag(chr, 0x80)) {
             if (free) {
-                if (BtlMember_HasAbility(chr, 0x22)) {
+                if (BtlMember_HasAbility(chr, 0x22) || gPortBt4) { /* (BT4: a dodge always gives the stock, REA 0x1CCB14) */
                     BtlMember_AddBlast(chr, 100000);
                 }
             }

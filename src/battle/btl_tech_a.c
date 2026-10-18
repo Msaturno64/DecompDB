@@ -539,6 +539,12 @@ s32 BtlCtrl_GetChangePrompt(s32 side, s32 *button, s32 *kind, s32 *padStatus) {
     if (chr->injectOn) {
         return 0;
     }
+#ifdef PORT
+    if (gPortBt4 && BtlChar_TestFlag(chr, 0x13C)) { /* (BT4: one more prompt, REA 0x1D4D5C) */
+        btn = BtlCharApi_GetButtonIcon(chr, 0x1E);
+        k = 1;
+    }
+#endif
     if (BtlChar_TestFlag(chr, 0xE7)) {
         btn = BtlCharApi_GetButtonIcon(chr, 0);
         k = 1;

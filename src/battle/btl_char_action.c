@@ -1,4 +1,12 @@
 #include "common.h"
+#ifdef PORT
+extern void Bt4Act_TransformCost(void *chr, s32 cost);
+extern void Bt4Act_CpuTransform(void *chr);
+extern void Bt4Act_ForcedEvasion(void *chr);
+extern void Bt4Act_TauntCount(void *chr);
+extern void Bt4Act_Taunt(void *chr);
+extern void Bt4Obj_HitTexture(void *chr);
+#endif
 #include "battle/btl_multi.h" /* BTL_TIME_STOPPED_FOR */
 #include "battle/btl_char_action.h"
 
@@ -561,7 +569,7 @@ void BtlAct_PrepareAttack(BtlActChr *chr, s32 id) {
                 chr->nextAttack.cut = BtlChar_FrameMod(2) ? rec->cut : rec->cutAlt;
             }
         }
-        if (BtlChar_TestFlag(chr, 6) && !BtlChar_TestMemberUnk70(chr)) {
+        if (BtlChar_TestFlag(chr, 6) && (!BtlChar_TestMemberUnk70(chr) || gPortBt4)) { /* (BT4: REA, 0x1E0EDC) */
             for (i = 0; i < 2; i++) {
                 if (BtlAct_TestAttackSkill(chr, rec->followAlt[i])) {
                     chr->nextAttack.follow[i] = rec->followAlt[i];
@@ -721,6 +729,11 @@ void BtlAct_CheckForced(BtlActChr *chr) {
     if (BtlChar_TestFlag(chr, 0x7C)) {
         BtlDecide_QueueAttack(chr, BtlAct_GetEvasionAttack(chr));
         BtlAct_Request(chr, BtlAct_GetQueued_(chr));
+#ifdef PORT
+        if (gPortBt4) { /* (REA: 0x19BEDC) */
+            Bt4Act_ForcedEvasion(chr);
+        }
+#endif
     }
     if (BtlChar_TestFlag(chr, 0x6D)) {
         BtlAct_Request(chr, 0xC9);
@@ -868,6 +881,11 @@ void BtlAct_UpdateGauges(BtlActChr *chr) {
             if (BtlMember_HasKi(chr, BtlParam_GetGaugeB(chr))) {
                 BtlChar_ClearFlag(chr, 0xBE);
             }
+#ifdef PORT
+            else if (gPortBt4 && Battle_GetMode() != 1) { /* (REA: 0x3BFA84) */
+                Bt4Act_CpuTransform(chr);
+            }
+#endif
         } else if (!BtlChar_TestFlag(chr, 0x98)) {
             if (!BtlMember_HasKi(chr, BtlParam_GetKiRegenLimit(chr))) {
                 BtlMember_AddKi(chr, BtlParam_GetKiRegenRate(chr));
@@ -1342,7 +1360,9 @@ s32 BtlAct_Action04(BtlActChr *chr, s32 phase) {
         BtlChar_GetPos(chr)->unk98 = 0.0f;
         BtlChar_GetPos(chr)->unk9C = 0.0f;
         BtlChar_SetFlag(chr, 0x29);
-        BtlAct_EndFlag98(chr);
+        if (!gPortBt4) { /* (BT4: REA, 0x1E2AFC) */
+            BtlAct_EndFlag98(chr);
+        }
         BtlChar_ClearFlag(chr, 0xBE);
         chr->unkFE0 = 0;
         BtlChar_ClearFlag(chr, 0xFA);

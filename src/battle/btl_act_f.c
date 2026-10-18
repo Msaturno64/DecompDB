@@ -190,7 +190,9 @@ void BtlSuper_RequestHitStop(BtlSuperChr *chr, s32 light) {
     if (light) {
         BtlChar_SetFlag(chr, 0x44);
         BtlChar_SetFlag(chr, 0x45);
-        BtlChar_SetFlag(chr, 0x126);
+        if (!gPortBt4) { /* (BT4: REA, 0x1F55D4) */
+            BtlChar_SetFlag(chr, 0x126);
+        }
     } else {
         BtlChar_SetFlag(chr, 0x42);
         BtlChar_SetFlag(chr, 0x43);

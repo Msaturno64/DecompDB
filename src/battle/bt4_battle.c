@@ -185,6 +185,97 @@ s32 Bt4Stage_NoRain(void) {
     return BT4_AT(BT4_AT(BT4_AT(gBtlStage, 4, void *), 0x14, void *), 4, u32) & 1;
 }
 
+/* ---- fighting: transformation cost, the CPU's transformation, the taunt, damaged clothes ---- */
+
+extern s32 BtlChar_TestFlag(void *chr, s32 bit);
+extern void BtlChar_SetFlag(void *chr, s32 bit);
+extern s32 BtlMember_DrainKi(void *chr, s32 amount);
+extern void BtlMember_SubMaxPower(void *chr, s32 amount);
+extern void BtlMember_AddBlast(void *chr, s32 amount);
+extern void *BtlMember_GetActive(void *chr);
+extern void *BtlMember_GetActiveGauge(void *chr);
+extern s32 BtlUtil_Clamp(s32 v, s32 lo, s32 hi);
+extern s32 BtlParam_GetSlotId(void *chr, s32 slot);
+extern s32 BtlParam_GetSlotA0(void *chr, s32 slot);
+extern void BtlAct_QueueTransform(void *chr, s32 slot);
+extern void BtlAct_Request(void *chr, s32 id);
+extern s32 BtlAct_GetQueued(void *chr);
+
+/* What a transformation (or the taunt) takes (0x3BFAB8): ki, or with flag 6 a part of the max power gauge. */
+void Bt4Act_TransformCost(void *chr, s32 cost) {
+    if (BtlChar_TestFlag(chr, 6)) {
+        BtlMember_SubMaxPower(chr, cost / 2 - cost / 5);
+    } else {
+        BtlMember_DrainKi(chr, cost);
+    }
+}
+
+/* Out of ki, the CPU takes its third slot's transformation when it has one (0x3BFA20, BtlAct_UpdateGauges). */
+void Bt4Act_CpuTransform(void *chr) {
+    if (BtlParam_GetSlotId(chr, 3) != 0xFF && BtlParam_GetSlotA0(chr, 3) == 1) {
+        BtlAct_QueueTransform(chr, 3);
+        BtlAct_Request(chr, BtlAct_GetQueued(chr));
+    }
+}
+
+/* After BtlAct_CheckForced's evasion (0x19BEDC): with the first fighter at that state's third step, both fighters'
+   flag 98. */
+void Bt4Act_ForcedEvasion(void *chr) {
+    s32 i;
+
+    if (BtlChar_Get(0) != chr || BT4_AT(chr, 0xD88, s32) < 3) {
+        return;
+    }
+    for (i = 0; i < 2; i++) {
+        BtlChar_SetFlag(BtlChar_Get(i), 98);
+    }
+}
+
+/* The taunt's start (0x19BE8C, action 39): the member's taunt count, kept within -20..80. */
+void Bt4Act_TauntCount(void *chr) {
+    void *m = BtlMember_GetActive(chr);
+
+    BT4_AT(m, 0x14, s32) = BtlUtil_Clamp(BT4_AT(m, 0x14, s32) + 1, -20, 80);
+    BT4_AT(m, 0x4C, s32) = BT4_AT(m, 0x50, s32);
+}
+
+/* The taunt (0x19BFA0, action 43): blast for the taunter and ki off the other fighter, less the more it is used. */
+void Bt4Act_Taunt(void *chr) {
+    s32 n = BT4_AT(BtlMember_GetActive(chr), 0xA0, s32);
+    void *other;
+
+    /* (the PS2 divides by zero without a trap; never zero once a taunt has started) */
+    BtlMember_AddBlast(chr, n != 0 ? 50000 / n : 0);
+    other = BtlChar_Get(BT4_AT(chr, 0, s32) ^ 1);
+    if (BtlChar_TestFlag(other, 0xBE)) {
+        return;
+    }
+    if (!BtlChar_TestFlag(other, 6) && BT4_AT(BtlMember_GetActiveGauge(other), 0x1C, s32) != 0) {
+        return;
+    }
+    Bt4Act_TransformCost(other, n != 0 ? 40000 / n : 0);
+}
+
+/* Hit by a blast (0x3BEE9C): a fighter with a second texture set and a gauge state of 1 or 2 is drawn with it
+   from then on (its clothes torn). */
+void Bt4Obj_HitTexture(void *chr) {
+    void *obj = BtlChar_GetObj(chr);
+    void *g;
+    u32 st;
+
+    if (BT4_AT(obj, 0x20, void *) == NULL) {
+        return;
+    }
+    g = BtlMember_GetActiveGauge(chr);
+    st = BT4_AT(g, 0x24, u32);
+    if (st == 0 || st == 3) {
+        return;
+    }
+    BT4_AT(g, 0x24, u32) = st | 2;
+    BT4_AT(obj, 0x48, void *) = BT4_AT(obj, 0x20, void *);
+    BT4_AT(obj, 0x4C, void *) = BT4_AT(obj, 0x24, void *);
+}
+
 /* ---- the models' file ids: from 0x1612 each character has its costumes' models, then as many damaged ones ---- */
 
 #define BT4_CHARA_FILE_FIRST 0x1612 /* (0x20081C) */

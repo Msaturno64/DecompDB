@@ -299,7 +299,7 @@ s32 BtlClash_UpdateA(s32 state) {
             }
         }
         c->timer++;
-        if (c->timer >= 0x6A) {
+        if (c->timer >= PORT_BT4(0x6A, 0xA4)) { /* (BT4: REA, 0x1D8FD0) */
             c->timer = 0;
             state++;
         }

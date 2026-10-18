@@ -569,7 +569,7 @@ s32 BtlAct_RushRapidHandler(BtlActAChr *chr, s32 phase) {
                 break;
         }
         if (can) {
-            if (BtlChar_TestFlag(chr, 6) && BtlAct_TestAttackSkill(chr, 0x3C) && !BtlChar_TestMemberUnk70(chr)) {
+            if (BtlChar_TestFlag(chr, 6) && BtlAct_TestAttackSkill(chr, 0x3C) && (!BtlChar_TestMemberUnk70(chr) || gPortBt4)) { /* (BT4: REA, 0x1E42A0) */
                 BtlDecide_QueueAttack(chr, 0xAC);
             } else {
                 BtlDecide_QueueAttack(chr, 0x9D);

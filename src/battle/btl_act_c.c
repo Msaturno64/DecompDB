@@ -1,4 +1,12 @@
 #include "common.h"
+#ifdef PORT
+extern void Bt4Act_TransformCost(void *chr, s32 cost);
+extern void Bt4Act_CpuTransform(void *chr);
+extern void Bt4Act_ForcedEvasion(void *chr);
+extern void Bt4Act_TauntCount(void *chr);
+extern void Bt4Act_Taunt(void *chr);
+extern void Bt4Obj_HitTexture(void *chr);
+#endif
 #include "battle/btl_act_c.h"
 
 /*
@@ -909,6 +917,11 @@ s32 BtlAct_GuardHandler(Chr *chr, s32 phase) {
 s32 BtlAct_Action39(Chr *chr, s32 phase) {
     if (phase == 0) {
         BtlAnim_Play(chr, 0xEC, 0.0f);
+#ifdef PORT
+        if (gPortBt4) { /* (REA: 0x19BE8C) */
+            Bt4Act_TauntCount(chr);
+        }
+#endif
     }
     if (phase == 1) {
         if (BtlAnim_Advance(chr, 0)) {
@@ -1286,6 +1299,11 @@ s32 BtlAct_Action43(Chr *chr, s32 phase) {
     if (phase == 1) {
         if (BtlAnim_Advance(chr, 0)) {
             BtlAct_Request(chr, 0xB);
+#ifdef PORT
+            if (gPortBt4) { /* (REA: 0x19BFA0) */
+                Bt4Act_Taunt(chr);
+            }
+#endif
         }
         BtlMove_Step(chr, 6, 5, 2, 0.0f, BTL_KMH(100.0f));
         BtlMove_ApplyGravity(chr);

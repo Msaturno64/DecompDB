@@ -1047,7 +1047,7 @@ s32 BtlAct_AscendHandler(BtlActDChr *chr, s32 phase) {
 
     if (phase == PHASE_ENTER) {
         motion = 0x2B;
-        if (chr->unkFF0 > 0) {
+        if (chr->unkFF0 > 0 && !gPortBt4) { /* (BT4: REA, 0x1F0428) */
             motion = 0x2E;
             BtlCharSnd_PlayCommon(chr, 0x1F);
         }
@@ -1101,7 +1101,7 @@ s32 BtlAct_DescendHandler(BtlActDChr *chr, s32 phase) {
 
     if (phase == PHASE_ENTER) {
         motion = 0x2C;
-        if (chr->unkFF0 > 0) {
+        if (chr->unkFF0 > 0 && !gPortBt4) { /* (BT4: REA, 0x1F0670) */
             motion = 0x1F;
             BtlCharSnd_PlayCommon(chr, 0x1F);
         }

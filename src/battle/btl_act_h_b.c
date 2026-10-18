@@ -1,4 +1,19 @@
 #include "common.h"
+#ifdef PORT
+#define BTL_FORM_COST(chr, c) (gPortBt4 ? Bt4Act_TransformCost(chr, c) : BtlMember_SubBlast(chr, c))
+/* (BT4 waits for motion 0x1A4 where BT3 waits for 0x177: REA, 0x1FE70C) */
+#define BTL_FORMC_ANIM(id) (!gPortBt4 ? (id) : (id) == 0x1A4 ? 0x177 : (id) == 0x177 ? -1 : (id))
+#else
+#define BTL_FORMC_ANIM(id) (id)
+#endif
+#ifdef PORT
+extern void Bt4Act_TransformCost(void *chr, s32 cost);
+extern void Bt4Act_CpuTransform(void *chr);
+extern void Bt4Act_ForcedEvasion(void *chr);
+extern void Bt4Act_TauntCount(void *chr);
+extern void Bt4Act_Taunt(void *chr);
+extern void Bt4Obj_HitTexture(void *chr);
+#endif
 #include "battle/btl_multi.h" /* BTL_TIME_STOPPED_FOR */
 #include "battle/btl_act_h.h"
 
@@ -95,6 +110,12 @@ s32 BtlAct_Throw(BtlActHChr *chr, s32 phase) {
  */
 s32 BtlAct_Thrown(BtlActHChr *chr, s32 phase) {
     if (phase == 0) {
+#ifdef PORT
+        if (gPortBt4) { /* (REA: 0x3BEAF8) */
+            extern void Bt4_ClearFlag(void *chr, s32 n) __asm__("BtlChar_ClearFlag");
+            Bt4_ClearFlag(chr, 29);
+        }
+#endif
         BtlAnim_Play(chr, BtlAct_GetCurrent(chr) == 0xBA ? 0x189 : 0x97, chr->react.unk10 != 0 ? 0.0f : 0.3f);
         BtlChar_SetHeldFlag(chr, 0xE);
         BtlActThrow_TurnByRootYaw(chr);
@@ -687,7 +708,7 @@ s32 BtlAct_TransformA(BtlActHChr *chr, s32 phase) {
             BtlActChange_PushBack(chr);
             if (BtlChange_IsLoadedFor(chr->player)) {
                 BtlAnim_Request(chr, 0x179, 0.0f);
-                BtlMember_SubBlast(chr, chr->form.cost);
+                BTL_FORM_COST(chr, chr->form.cost); /* (BT4: ki, REA 0x3BFAB8) */
                 BtlChange_SetReady(chr->player);
             }
             break;
@@ -771,7 +792,9 @@ s32 BtlAct_TransformB(BtlActHChr *chr, s32 phase) {
             BtlAnim_AdvanceLoop(chr, 0);
             if (BtlChange_IsLoadedFor(chr->player)) {
                 BtlAnim_Request(chr, 0x191, 0.0f);
-                BtlMember_SubBlast(chr, chr->form.cost);
+                if (!gPortBt4) { /* (BT4: free, REA 0x1FE4CC) */
+                    BtlMember_SubBlast(chr, chr->form.cost);
+                }
                 BtlChange_SetReady(chr->player);
             }
             break;
@@ -831,12 +854,12 @@ s32 BtlAct_TransformC(BtlActHChr *chr, s32 phase) {
             BtlChange_RequestChara(chr->player, chr->form.chara, chr->form.costume, chr->form.variant,
                                    chr->form.animChara, chr->form.unk1C, chr->form.voiceChara);
         }
-        switch (BtlAnim_GetId(chr)) {
+        switch (BTL_FORMC_ANIM(BtlAnim_GetId(chr))) {
         case 0x177:
             if (BtlAnim_Advance(chr, 0)) {
                 if (BtlChange_IsLoadedFor(chr->player)) {
                     BtlAnim_Request(chr, 0x179, 0.0f);
-                    BtlMember_SubBlast(chr, chr->form.cost);
+                    BTL_FORM_COST(chr, chr->form.cost); /* (BT4: ki, REA 0x3BFAB8) */
                     BtlChange_SetReady(chr->player);
                 }
             }
@@ -947,7 +970,7 @@ s32 BtlAct_TransformD(BtlActHChr *chr, s32 phase) {
             }
             if (BtlAnim_Advance(chr, 0) && BtlChange_IsLoadedFor(chr->player)) {
                 BtlAnim_Request(chr, 0x179, 0.0f);
-                BtlMember_SubBlast(chr, chr->form.cost);
+                BTL_FORM_COST(chr, chr->form.cost); /* (BT4: ki, REA 0x3BFAB8) */
                 BtlChange_SetReady(chr->player);
             }
             BtlPartner_StepAnim(chr);
@@ -1048,7 +1071,7 @@ s32 BtlAct_TransformE(BtlActHChr *chr, s32 phase) {
             waiting = 1;
             if (BtlChange_IsLoadedFor(chr->player)) {
                 BtlAnim_Request(chr, 0x179, 0.0f);
-                BtlMember_SubBlast(chr, chr->form.cost);
+                BTL_FORM_COST(chr, chr->form.cost); /* (BT4: ki, REA 0x3BFAB8) */
                 BtlChange_SetReady(chr->player);
             }
             break;
