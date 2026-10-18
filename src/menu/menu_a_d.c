@@ -257,7 +257,13 @@ void ModeMenu_Init(s32 section) {
         TextBox_SetRect(&gModeMenu->box[i], 0, 0x200, 0, 0x1A1);
     }
 
-    switch (gProgress->subMenu) {
+    i = gProgress->subMenu;
+#ifdef PORT
+    if (gPortBt4 && (i == 2 || i == 3)) {
+        i--; /* (BT4: sagas 2 and 3 play what 1 and 2 do, REA: its jump table at 0x3B1390) */
+    }
+#endif
+    switch (i) {
     case 0:
         Bgm_Play(PORT_BT4(MODEMENU_BGM, 0x834));
         StreamSe_PlayDefault(0, PORT_BT4(0x10BDC, 0x159));

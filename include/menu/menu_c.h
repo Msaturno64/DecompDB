@@ -165,7 +165,10 @@ typedef struct HistSel {
     /* 0x23C */ s32 talk[2];        /* [0] Goku, [1] the guest */
     /* 0x244 */ f32 scroll[3];      /* vertical offset of the three haze layers ("mc_yuragi") */
     /* 0x250 */ s32 seTimer;        /* frames until the next ambient sound (300..840) */
-} HistSel; /* 0x254 */
+#ifdef PORT
+    /* 0x254 */ f32 bt4Fall;        /* BT4: alpha of "mc_taki", fading once guide 6 walked in (REA 0x3BEB54) */
+#endif
+} HistSel; /* 0x254 (BT4: 0x258) */
 
 #define HISTSEL_CHOSEN 1
 #define HISTSEL_LEAVING 2
@@ -174,6 +177,7 @@ typedef struct HistSel {
 #define HISTSEL_FIRST_VISIT 0x10  /* set by Init (unlockFlags 0x80 clear): the script starts at step 1 */
 #define HISTSEL_EVENT 0x20        /* set by Init (HistSel_RollEvent picked a guest): step 651 */
 #define HISTSEL_COMPLETE 0x40     /* set by Init (100 % and unlockFlags 0x100 clear): step 1151 */
+#define HISTSEL_BT4_GUIDE6 0x80   /* BT4: guide 6's clip was sent to a label (REA 0x3BEB30) */
 
 extern HistSel *gHistSel; /* 0x3B12FC */
 

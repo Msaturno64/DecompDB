@@ -970,7 +970,7 @@ void SimDay_Init(s32 section) {
     SD_RES(31);
     gSimDay->tex0[5] = MTEX(res, 0);
     SD_RES(8);
-    gSimDay->tex0[53] = MTEX(res, QPROG->member.chara);
+    gSimDay->tex0[53] = MTEX(res, PORT_BT4(QPROG->member.chara, 0)); /* (BT4: REA, 0x381DE0) */
     gSimDay->faceResA = (MTexRes *)MPACK_AT(gSimDay->res, 6);
     Res_RelocateOffsets(&gSimDay->faceResA, gSimDay->faceResA, gSimDay->faceResA);
     SimDay_SetFaceA(0);

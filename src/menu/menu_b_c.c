@@ -33,10 +33,10 @@ void HistOutro_GuideGoto(s32 movie, s32 side, s32 out) {
     MFlash *flash = &gHistOutro->flash[movie];
 
     if (side == 0) {
-        sprintf(name, "mc_guide_%02d", gProgress->subMenu);
+        sprintf(name, "mc_guide_%02d", PORT_BT4(gProgress->subMenu, 0)); /* (BT4: guides 0 and 6 only, REA 0x33AC00) */
         strcpy(label, out ? "fl_right_out" : "fl_right_in");
     } else {
-        sprintf(name, "mc_guide_%02d", gHistOutro->partner);
+        sprintf(name, "mc_guide_%02d", PORT_BT4(gHistOutro->partner, 6));
         strcpy(label, out ? "fl_left_out" : "fl_left_in");
     }
     Flash_FindLabel(flash, NULL, name, &ref);
@@ -107,7 +107,7 @@ void HistOutro_Init(s32 section) {
     gHistOutro->fileRes = Sprite_Unpack(gHistOutro->file, NULL, NULL);
     ModeBg_Init(gHistOutro->fileRes);
     OUTRO_RES(gHistOutro->fileRes, 7);
-    switch (gProgress->subMenu) {
+    switch (PORT_BT4(gProgress->subMenu, 0)) { /* (BT4: REA, 0x33AF40) */
     case 0:
         OUTRO_ICONS(1, 2, 3);
         break;
@@ -134,7 +134,7 @@ void HistOutro_Init(s32 section) {
         break;
     }
     OUTRO_RES(gHistOutro->fileRes, 8);
-    switch (gHistOutro->partner) {
+    switch (PORT_BT4(gHistOutro->partner, 6)) { /* (BT4: REA, 0x33B194) */
     case 0:
         OUTRO_ICONS(1, 2, 3);
         break;
@@ -260,9 +260,9 @@ void HistOutro_Draw(void) {
     flash = &gHistOutro->flash[0];
     for (i = 0; i < 2; i++) {
         if (i != 0) {
-            guide = gHistOutro->partner;
+            guide = PORT_BT4(gHistOutro->partner, 6); /* (BT4: REA, 0x33B90C) */
         } else {
-            guide = gProgress->subMenu;
+            guide = PORT_BT4(gProgress->subMenu, 0);
         }
         sprintf(name, "mc_guide_%02d", guide);
         sprintf(sub, "mc_guide_%02d_eye", guide);
@@ -302,7 +302,7 @@ void HistOutro_Update(void) {
     }
     if (!(gHistOutro->flags & HISTOUTRO_STARTED) && (gHistOutro->flash[0].trig & 2)) {
         MsgWin_Open();
-        switch (gProgress->subMenu) {
+        switch (PORT_BT4(gProgress->subMenu, 7)) { /* (BT4: REA, 0x33BB80) */
         case 4:
             HistOutro_GuideGoto(0, 0, 0);
         case 7:
@@ -354,9 +354,10 @@ void HistOutro_Input(s32 *result) {
 
 #define OUTRO_PLAY() Voice_PlayWithSubtitle(gHistOutro->subtitles, gHistOutro->voiceBase, gHistOutro->voiceLine)
 
-/* The first line of the dialogue, said by guide `who` (0 = the saga's, 1 = the partner). */
+/* The first line of the dialogue, said by guide `who` (0 = the saga's, 1 = the partner; BT4: always the partner,
+   REA 0x33BE58 and the other sagas' first lines). */
 #define OUTRO_SAY_FIRST(who) \
-    gHistOutro->speaker = (who); \
+    gHistOutro->speaker = PORT_BT4(who, 1); \
     gHistOutro->voiceLine = gHistOutro->lineBase; \
     OUTRO_PLAY(); \
     gHistOutro->step++
@@ -389,14 +390,39 @@ void HistOutro_Input(s32 *result) {
     gHistOutro->step++; \
     gHistOutro->step++
 
+#ifdef PORT
+/* BT4's script (REA: its jump table at 0x3B18C0): its steps that do what another BT3 step does, as that step. */
+static const s16 sBt4OutroStep[][2] = {
+    { 103, 105 }, { 104, 106 }, { 105, 103 }, { 106, 104 }, { 107, 109 }, { 109, 107 }, { 111, 109 }, { 115, 125 },
+    { 153, 157 }, { 154, 158 }, { 157, 161 }, { 158, 156 }, { 161, 159 }, { 163, 161 }, { 165, 163 }, { 166, 164 },
+    { 167, 125 }, { 205, 207 }, { 211, 125 }, { 253, 259 }, { 255, 257 }, { 256, 258 }, { 257, 255 }, { 258, 256 },
+    { 259, 261 }, { 261, 259 }, { 263, 261 }, { 265, 321 }, { 303, 257 }, { 304, 274 }, { 313, 321 }, { 355, 357 },
+    { 357, 359 }, { 359, 357 }, { 361, 321 }, { 403, 353 }, { 404, 408 }, { 407, 409 }, { 408, 406 }, { 409, 405 },
+    { 413, 465 }, { 457, 455 }, { 463, 461 },
+};
+#endif
+
 /* The scene's script: step 101 + 50 * saga starts that saga's dialogue; 51 closes it; 501.. is the closing text. */
 void HistOutro_UpdateStep(void) {
     SaveSlot *slot;
+    s32 step = gHistOutro->step;
 
     if (gHistOutro->step == 0) {
         return;
     }
-    switch (gHistOutro->step) {
+#ifdef PORT
+    if (gPortBt4) {
+        u32 k;
+
+        for (k = 0; k < sizeof(sBt4OutroStep) / sizeof(sBt4OutroStep[0]); k++) {
+            if (sBt4OutroStep[k][0] == step) {
+                step = sBt4OutroStep[k][1];
+                break;
+            }
+        }
+    }
+#endif
+    switch (step) {
     case 1:
         slot = gSaveData->slot;
         slot += gProgress->subMenu;
@@ -444,7 +470,7 @@ void HistOutro_UpdateStep(void) {
         OUTRO_WAIT();
         break;
     case 105:
-        HistOutro_GuideGoto(0, 1, 0);
+        HistOutro_GuideGoto(0, PORT_BT4(1, 0), 0); /* (BT4: REA) */
         gHistOutro->step++;
         break;
     /* saga 1 */
@@ -477,7 +503,7 @@ void HistOutro_UpdateStep(void) {
         gHistOutro->step++;
         break;
     case 157:
-        HistOutro_GuideGoto(0, 1, 0);
+        HistOutro_GuideGoto(0, PORT_BT4(1, 0), 0); /* (BT4: REA) */
         gHistOutro->step++;
         break;
     /* saga 2 */
@@ -508,7 +534,7 @@ void HistOutro_UpdateStep(void) {
         OUTRO_WAIT();
         break;
     case 203:
-        HistOutro_GuideGoto(0, 1, 0);
+        HistOutro_GuideGoto(0, PORT_BT4(1, 0), 0); /* (BT4: REA) */
         gHistOutro->step++;
         break;
     case 219:
@@ -551,7 +577,7 @@ void HistOutro_UpdateStep(void) {
         OUTRO_WAIT();
         break;
     case 257:
-        HistOutro_GuideGoto(0, 1, 0);
+        HistOutro_GuideGoto(0, PORT_BT4(1, 0), 0); /* (BT4: REA) */
         gHistOutro->step++;
         break;
     case 273:
@@ -623,7 +649,7 @@ void HistOutro_UpdateStep(void) {
         OUTRO_WAIT();
         break;
     case 353:
-        HistOutro_GuideGoto(0, 1, 0);
+        HistOutro_GuideGoto(0, PORT_BT4(1, 0), 0); /* (BT4: REA) */
         gHistOutro->step++;
         break;
     case 371:

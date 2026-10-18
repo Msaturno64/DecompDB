@@ -27,6 +27,11 @@ void HistGuide_ClipGoto(HistSel *menu, s32 guide, char *label) {
     char name[64];
     MFlash *flash = &menu->flash[0];
 
+#ifdef PORT
+    if (gPortBt4 && guide == 6) { /* (REA: the calls of HistGuide_Update go through 0x3BEB30) */
+        menu->flags |= HISTSEL_BT4_GUIDE6;
+    }
+#endif
     sprintf(name, "mc_guide_%02d", guide);
     Flash_FindLabel(flash, NULL, name, &ref);
     Flash_ClipGotoLabel(flash, &ref, label);
@@ -71,11 +76,44 @@ void HistGuide_ClipGoto(HistSel *menu, s32 guide, char *label) {
     break
 
 /* One step of the guide script. Writes *result when a script ends the screen. */
+#ifdef PORT
+/* BT4's guide script (REA: its jump table at 0x3B2500): its steps that do what another BT3 step does, as that step.
+   Its step 309 is new (0x3BEB14). */
+static const s16 sBt4GuideStep[][2] = {
+    { 255, 253 }, { 259, 261 }, { 261, 259 }, { 263, 261 }, { 265, 267 }, { 303, 305 }, { 305, 303 }, { 307, 305 },
+    { 310, 308 }, { 311, 305 }, { 312, 308 }, { 313, 267 }, { 353, 355 }, { 355, 353 }, { 357, 355 }, { 359, 357 },
+    { 361, 359 }, { 363, 361 }, { 365, 369 }, { 405, 403 }, { 411, 407 }, { 415, 421 }, { 457, 453 }, { 461, 463 },
+    { 463, 469 }, { 503, 505 }, { 505, 503 }, { 509, 511 }, { 513, 511 }, { 515, 521 }, { 555, 553 }, { 561, 557 },
+    { 607, 609 }, { 613, 615 }, { 615, 617 },
+};
+#endif
+
 void HistGuide_Update(HistSel *menu, s32 *result) {
+    s32 step = menu->script;
+
     if (menu->script == 0) {
         return;
     }
-    switch (menu->script) {
+#ifdef PORT
+    if (gPortBt4) {
+        u32 k;
+
+        if (step == 309) {
+            menu->voiceLine = 20;
+            menu->talker = 1;
+            HistSel_PlayVoice();
+            menu->script++;
+            return;
+        }
+        for (k = 0; k < sizeof(sBt4GuideStep) / sizeof(sBt4GuideStep[0]); k++) {
+            if (sBt4GuideStep[k][0] == step) {
+                step = sBt4GuideStep[k][1];
+                break;
+            }
+        }
+    }
+#endif
+    switch (step) {
     case 1:
         MSAVE->unlockFlags |= MUNLOCK_HIST_INTRO;
         menu->guide = 8;
@@ -181,7 +219,7 @@ void HistGuide_Update(HistSel *menu, s32 *result) {
         break;
     case 151:
         Flash_GotoLabel(&menu->flash[0], "fl_scenario_ok", 1);
-        menu->guest = menu->items[menu->cursor[1]];
+        menu->guest = PORT_BT4(menu->items[menu->cursor[1]], 6); /* (BT4: REA, 0x33FA78) */
         HistGuide_ClipGoto(menu, menu->guest, "fl_in");
         menu->guide = menu->items[menu->cursor[1]];
         menu->script++;

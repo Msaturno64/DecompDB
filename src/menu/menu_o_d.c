@@ -79,7 +79,19 @@ void MisSel_SetupBattle(void) {
         bgm = 0x18;
     }
     teamSize = 0;
+#ifdef PORT
+    if (gPortBt4) { /* the kind is a halfword, the next one a battle script (REA: 0x37A0F4, 0x37A108) */
+        Battle_ClearWork();
+        if ((u16)def->kind == 9) { /* (its jump table at 0x3B8430 -> 0x3BE7A0) */
+            extern void BattleSetup_SetScript(s32 script);
+
+            BattleSetup_SetScript(((u16 *)&def->kind)[1]);
+        }
+    }
+    switch (PORT_BT4(def->kind, (u16)def->kind)) {
+#else
     switch (def->kind) {
+#endif
     case 0:
         teamSize = 1;
         break;
@@ -106,8 +118,10 @@ void MisSel_SetupBattle(void) {
             break;
         }
     }
-    Battle_ClearWork();
-    BattleSetup_SetRule(0, 2, bgm, timeLimit, announcer, stage, unk10);
+    if (!PORT_BT4(0, 1)) {
+        Battle_ClearWork();
+    }
+    BattleSetup_SetRule(0, PORT_BT4(2, def->announcer), bgm, timeLimit, announcer, stage, unk10); /* (BT4: REA, 0x37A214) */
     BattleSetup_SetSide(1, 2, 1, count, unk1FC, 1, 0, NULL);
     for (i = 0; i < count; i++) {
         opp = &gMisSel->opps[def->opp[i]];
@@ -278,7 +292,7 @@ void MisSel_Draw(void) {
     }
     cur = gMisSel->mission;
     Flash_FindLabel(flash, NULL, "mc_missionkari01", &ref);
-    TextBox_AttachLine(flash, &ref, 0, 0, gMisSel->missions[cur].kind + 0x148, &gMisSel->box[5]);
+    TextBox_AttachLine(flash, &ref, 0, 0, PORT_BT4(gMisSel->missions[cur].kind, (u16)gMisSel->missions[cur].kind) + 0x148, &gMisSel->box[5]); /* (BT4: REA, 0x37AD38) */
     Flash_FindLabel(flash, NULL, "mc_missionkari02", &ref);
     if (gMisSel->missions[cur].dpRule != 0) {
         TextBox_AttachLine(flash, &ref, 0, 0, gMisSel->missions[cur].dpRule + 0x156, &gMisSel->box[6]);

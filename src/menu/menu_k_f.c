@@ -519,6 +519,10 @@ s32 Bracket_IsPlayerOut(LBracket *b) {
  * fits the level (level 0: below 4, level 1: below 8, level 2: 7 or more; given up after 15 misses in a row), no
  * character twice and never the boss. The boss (entrant 16) depends on the tournament.
  */
+#ifdef PORT
+extern s32 MChr_PortBt4Valid(s32 id);
+#endif
+
 void Bracket_FillEntrants(LBracket *b) {
     s32 miss = 0;
     s32 boss = -1;
@@ -532,12 +536,18 @@ void Bracket_FillEntrants(LBracket *b) {
         boss = 0x37;
         break;
     case LTOUR_CELL:
-        boss = Rand_Range(2) ? 0x6B : 0x6C;
+        boss = Rand_Range(2) ? 0x6B : PORT_BT4(0x6C, 0x6B); /* (BT4: REA, 0x3693AC) */
         break;
     case LTOUR_OTHERWORLD:
         boss = Rand_Range(2) ? 0x3D : 6;
         break;
     case LTOUR_YAMCHA:
+#ifdef PORT
+        if (gPortBt4) { /* (REA: its jump table at 0x3B7170 -> 0x3BF0F4) */
+            boss = Rand_Range(2) ? 0x97 : 0x40;
+            break;
+        }
+#endif
         boss = 0x1A;
         break;
     }
@@ -548,6 +558,21 @@ void Bracket_FillEntrants(LBracket *b) {
 
         if (i < LTOUR_PROG->entryNum) {
             memcpy(&b->entrant[i], &LTOUR_PROG->entrant[i], sizeof(LTourEntrant));
+#ifdef PORT
+        } else if (gPortBt4) { /* a character entrant, then one of its forms that is a character (REA: 0x369450 -> 0x2006C0, 0x3BF074) */
+            s32 k;
+
+            do {
+                cell = (LChrCell *)(Rand_Range(b->gridCount) * sizeof(LChrCell) + (u32)b->grid);
+            } while (!MChr_PortBt4Valid(cell->id));
+            chara = cell->id;
+            if (cell->formCount != 0) { /* (the game assumes one; it would loop without a character form) */
+                do {
+                    k = Rand_Range(cell->formCount);
+                } while (!MChr_PortBt4Valid(cell->form[k]));
+                chara = cell->form[k];
+            }
+#endif
         } else {
             for (;;) {
                 /* written as integer arithmetic: `&b->grid[n]` adds the two operands the other way round */

@@ -111,12 +111,14 @@ void Logo_Show(u32 *pack, s32 section, s32 frames, s32 fade, s32 skip, s32 inBla
 
 /* The six boot pictures in order: sections 6, 7, 8, 3, 4, 5 of the unpacked pack, 120 frames each. */
 void Logo_ShowAll(u32 *pack) {
-    Logo_Show(pack, 6, 0x78, 0x3C, LOGO_SKIP_ANY, 1, 0, 0);
-    Logo_Show(pack, 7, 0x78, 0x3C, LOGO_SKIP_ANY, 0, 0, 0);
-    Logo_Show(pack, 8, 0x78, 0x3C, LOGO_SKIP_ANY, 0, 0, 0);
-    Logo_Show(pack, 3, 0x78, 0x3C, LOGO_SKIP_ANY, 0, 0, 0);
-    Logo_Show(pack, 4, 0x78, 0x3C, LOGO_SKIP_ANY, 0, 0, 0);
-    Logo_Show(pack, 5, 0x78, 0x3C, LOGO_SKIP_NONE, 0, 1, 0);
+    s32 b = PORT_BT4(0, 1); /* (BT4: every logo fades in from and out to black, REA 0x35DD88..0x35DE44) */
+
+    Logo_Show(pack, 6, 0x78, 0x3C, LOGO_SKIP_ANY, 1, b, 0);
+    Logo_Show(pack, 7, 0x78, 0x3C, LOGO_SKIP_ANY, b, b, 0);
+    Logo_Show(pack, 8, 0x78, 0x3C, LOGO_SKIP_ANY, b, b, 0);
+    Logo_Show(pack, 3, 0x78, 0x3C, LOGO_SKIP_ANY, b, b, 0);
+    Logo_Show(pack, 4, 0x78, 0x3C, LOGO_SKIP_ANY, b, b, 0);
+    Logo_Show(pack, 5, 0x78, 0x3C, LOGO_SKIP_NONE, b, 1, 0);
 }
 
 /* If partition `pt` is not loaded yet, shows the loading screen until it is. */

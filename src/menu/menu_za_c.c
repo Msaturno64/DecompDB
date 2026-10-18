@@ -169,7 +169,7 @@ s32 PassChk_IsValid(ZaChrPass *pass) {
     s32 i;
     s32 j;
 
-    if (chara > 0xA0) {
+    if (chara > PORT_BT4(0xA0, 249)) { /* (BT4: REA, 0x3AEFE0) */
         return 0;
     }
     extra = pass->extraSlots;

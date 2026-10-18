@@ -181,17 +181,24 @@ void HistResult_Init(s32 section) {
     gHistResult->file = File_LoadSync(gProgress->baseFile + gProgress->subMenu + 0x10, NULL, 0);
     gHistResult->fileRes = Sprite_Unpack(gHistResult->file, NULL, NULL);
     if (flags & 1) {
+#ifdef PORT
+        if (gPortBt4) { /* the saga's own background (REA: 0x340E38 -> 0x3BE8A4, bytes 0x3BE7D8) */
+            static const s8 bt4Bg[8] = { 0, 1, 0, 0, 4, 2, 0, 0 };
+
+            bg = (u32)gProgress->subMenu < 8 ? bt4Bg[gProgress->subMenu] : 0;
+        } else
+#endif
         bg = Rand_Range(3);
         MSAVE->slot[gProgress->subMenu].val[1] |= (s32)(1U << gProgress->subMenuItem);
     } else {
         bg = 3;
         gHistResult->flags |= HISTRESULT_LOST;
     }
-    gHistResult->bgFile = File_LoadSync(bg + 0x3FE, NULL, 0);
+    gHistResult->bgFile = File_LoadSync(bg + PORT_BT4(0x3FE, 8), NULL, 0); /* (BT4: REA, 0x340E98) */
     gHistResult->bgRes = Sprite_Unpack(gHistResult->bgFile, NULL, NULL);
     res = gHistResult->bgRes;
     Res_RelocateOffsets(&res, res, res);
-    switch (bg) {
+    switch (PORT_BT4(bg, 0)) { /* (BT4: always the first layout, REA 0x340EEC) */
     case 0:
         gHistResult->tex[10] = MTEX(res, 0);
         gHistResult->tex[9] = MTEX(res, 1);

@@ -141,8 +141,8 @@ void HistSel_Init(s32 section) {
     s32 j;
     s32 cleared;
 
-    gHistSel = Heap_Alloc(0x254, 0x20, 0, 2);
-    memset(gHistSel, 0, 0x254);
+    gHistSel = Heap_Alloc(PORT_BT4(0x254, 0x258), 0x20, 0, 2); /* (BT4: REA, 0x33D458) */
+    memset(gHistSel, 0, PORT_BT4(0x254, 0x258));
     gHistSel->pack = (u32 *)MPACK_AT(gMenuArc2, section);
     gHistSel->res = Sprite_Unpack(gHistSel->pack, NULL, NULL);
     StreamSe_PlayDefault(0, PORT_BT4(0x10BDB, 0x158));
@@ -200,7 +200,7 @@ void HistSel_Init(s32 section) {
     SEL_TEX(38, 6);
     SEL_TEX(77, 8);
     for (i = 0; i < 8; i++) {
-        SEL_RES(33 + i);
+        SEL_RES(PORT_BT4(33 + i, 33)); /* (BT4: one icon set, REA 0x33D9E4) */
         switch (i) {
         case 0:
             SEL_ICONS(46, 47, 48);
@@ -304,7 +304,9 @@ void HistSel_Init(s32 section) {
         gHistSel->blink[i] = Rand_Range(0x20);
     }
     if (gSaveData->unlockFlags & 0x80) {
-        HistSel_RollEvent();
+        if (!PORT_BT4(0, 1)) { /* (BT4: no guest events, REA 0x33E09C) */
+            HistSel_RollEvent();
+        }
         if (gHistSel->guest >= 0) {
             gHistSel->flags |= HISTSEL_EVENT;
         }
@@ -377,6 +379,20 @@ void HistSel_Draw(void) {
             FlashAnim_ShowNext2(flash, &ref, 0);
         }
     }
+#ifdef PORT
+    if (gPortBt4) { /* (REA: 0x33E338 -> 0x3BEB54) */
+        if (gHistSel->flags & HISTSEL_BT4_GUIDE6) {
+            gHistSel->bt4Fall -= 0.075f;
+            if (gHistSel->bt4Fall <= 0.0f) {
+                gHistSel->bt4Fall = 0.0f;
+            }
+        } else {
+            gHistSel->bt4Fall = 1.0f;
+        }
+        Flash_FindLabel(flash, NULL, "mc_taki", &ref);
+        Flash_ClipSetAlpha(flash, &ref, gHistSel->bt4Fall);
+    }
+#endif
     Num_Draw(flash, "mc_tassei_num_%d", 0, 3, gHistSel->percent, 0x20, 0x20, 0);
 
     for (i = 0; i < 2; i++) {
