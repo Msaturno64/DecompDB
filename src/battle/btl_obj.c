@@ -1351,6 +1351,18 @@ void BtlRes_Reload(s32 number, s32 model, s32 anim0, s32 anim1) {
 
     if (res->pending < 0 && number < BTL_RES_FIXED_MAX) {
         slot = BtlRes_GetSlot(number);
+#ifdef PORT
+        if (slot != NULL) { /* (the buffers read over below: the demo camera must not stay on them, btl_demo_cam.c) */
+            extern void DemoCam_PortForget(void *buf, s32 size);
+            s32 size = model >= 0 ? File_GetSize(model) : 0;
+            s32 k;
+
+            DemoCam_PortForget(res->next->buf, size > res->next->size ? size : res->next->size);
+            for (k = 1; k < 3; k++) {
+                DemoCam_PortForget(slot->file[k].buf, slot->file[k].size);
+            }
+        }
+#endif
         if (slot != NULL) {
             if (model != -1 && anim0 == -1) {
                 modelOnly = anim1 == anim0;

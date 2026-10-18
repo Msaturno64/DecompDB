@@ -382,6 +382,18 @@ void DemoCam_StartAutoOnce(void) {
     }
 }
 
+#ifdef PORT
+/* A buffer is about to be read over (BtlRes_Reload): an animation of the model it held must not be played on. The
+   demo camera kept the one of a cinematic that had ended (Super Buu's absorption: the first fighter's camera, its
+   model then the spare buffer the second fighter's change read its own into). The console read whatever was there
+   for a frame; here the new file's offsets are not relocated yet. Without an animation DemoCam_Update does nothing. */
+void DemoCam_PortForget(void *buf, s32 size) {
+    if (gDemoCam != NULL && buf != NULL && (u8 *)gDemoCam->anim >= (u8 *)buf && (u8 *)gDemoCam->anim < (u8 *)buf + size) {
+        gDemoCam->anim = NULL;
+    }
+}
+#endif
+
 /* Asks for the animation to end at the next DemoCam_IsActive(). */
 void DemoCam_Stop(void) {
     if (gDemoCam->anim != NULL) {
