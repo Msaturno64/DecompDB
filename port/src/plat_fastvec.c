@@ -143,6 +143,56 @@ int Port_FastMtxApply(const uint32_t *r, const uint32_t *v, uint32_t *out) {
     }
     return 1;
 }
+
+/*
+ * Port_FastMtxApply's sequence as src/port/vu0_a.c runs it on its model of the VU0 (Ref_Mtx_Mul,
+ * Ref_Mtx_TranslateLocal): vmulax, vmadday, vmaddaz, vmaddw, for n (1..4) vectors in turn, out = n vectors. Also
+ * gives the accumulator after the last vector's third step and the zero / sign flags of the steps (vu0_a.c's
+ * setFlags: bit 0 a component is +-0, bit 1 one is negative), every step's added to *any, the last step's in
+ * *last. Returns 0, writing nothing, where the quick way does not cover an operand or a result.
+ */
+int Port_FastMtxSeq(const uint32_t *r, const uint32_t *v, int n, uint32_t *acc, uint32_t *out, unsigned *any, unsigned *last) {
+    unsigned bad = 0, fl = 0, f = 0;
+    double m[16], s[4][4], a[4], res[4][4]; /* s: step, component */
+    int i, c, k;
+
+    for (k = 0; k < 16; k++) {
+        m[k] = wide(r[k], &bad);
+    }
+    for (i = 0; i < n; i++) {
+        double vx = wide(v[4 * i], &bad), vy = wide(v[4 * i + 1], &bad), vz = wide(v[4 * i + 2], &bad), vw = wide(v[4 * i + 3], &bad);
+
+        for (c = 0; c < 4; c++) {
+            s[0][c] = mul(m[c], vx, &bad);
+            s[1][c] = add(s[0][c], mul(m[4 + c], vy, &bad), &bad);
+            s[2][c] = add(s[1][c], mul(m[8 + c], vz, &bad), &bad);
+            s[3][c] = add(s[2][c], mul(m[12 + c], vw, &bad), &bad);
+            a[c] = s[2][c];
+            res[i][c] = s[3][c];
+        }
+        for (k = 0; k < 4; k++) {
+            f = 0;
+            for (c = 0; c < 4; c++) {
+                f |= (unsigned)(s[k][c] == 0.0) | (unsigned)(bits_of(s[k][c]) >> 63) << 1;
+            }
+            fl |= f;
+        }
+    }
+    if (bad) {
+        return 0;
+    }
+    for (c = 0; c < 4; c++) {
+        float x = (float)a[c]; /* exact: 24 bits, in range */
+        __builtin_memcpy(&acc[c], &x, sizeof(x));
+        for (i = 0; i < n; i++) {
+            x = (float)res[i][c];
+            __builtin_memcpy(&out[4 * i + c], &x, sizeof(x));
+        }
+    }
+    *any |= fl;
+    *last = f;
+    return 1;
+}
 #else
 /*
  * The same with SSE2, two components per register (the functions above, lane by lane; `bad` collects lanes'
@@ -224,6 +274,53 @@ int Port_FastMtxApply(const uint32_t *r, const uint32_t *v, uint32_t *out) {
         return 0;
     }
     _mm_storeu_ps((float *)out, _mm_movelh_ps(_mm_cvtpd_ps(lo), _mm_cvtpd_ps(hi))); /* exact: 24 bits, in range */
+    return 1;
+}
+
+/* the zero / sign flags of four components (Port_FastMtxSeq) */
+static inline unsigned flags4(__m128d lo, __m128d hi) {
+    __m128d z = _mm_setzero_pd();
+
+    return (unsigned)(_mm_movemask_pd(_mm_or_pd(_mm_cmpeq_pd(lo, z), _mm_cmpeq_pd(hi, z))) != 0) |
+           (unsigned)(_mm_movemask_pd(_mm_or_pd(lo, hi)) != 0) << 1;
+}
+
+int Port_FastMtxSeq(const uint32_t *r, const uint32_t *v, int n, uint32_t *acc, uint32_t *out, unsigned *any, unsigned *last) {
+    __m128i bad = _mm_setzero_si128();
+    Pair r0 = wide4(r, &bad), r1 = wide4(r + 4, &bad), r2 = wide4(r + 8, &bad), r3 = wide4(r + 12, &bad);
+    __m128d lo = _mm_setzero_pd(), hi = lo, alo = lo, ahi = lo;
+    __m128 res[4];
+    unsigned fl = 0, f = 0;
+    int i;
+
+    for (i = 0; i < n; i++) {
+        Pair vv = wide4(v + 4 * i, &bad);
+        __m128d vx = _mm_unpacklo_pd(vv.lo, vv.lo), vy = _mm_unpackhi_pd(vv.lo, vv.lo);
+        __m128d vz = _mm_unpacklo_pd(vv.hi, vv.hi), vw = _mm_unpackhi_pd(vv.hi, vv.hi);
+
+        lo = cut2(_mm_mul_pd(r0.lo, vx), &bad);
+        hi = cut2(_mm_mul_pd(r0.hi, vx), &bad);
+        fl |= flags4(lo, hi);
+        lo = add2(lo, cut2(_mm_mul_pd(r1.lo, vy), &bad), &bad);
+        hi = add2(hi, cut2(_mm_mul_pd(r1.hi, vy), &bad), &bad);
+        fl |= flags4(lo, hi);
+        alo = lo = add2(lo, cut2(_mm_mul_pd(r2.lo, vz), &bad), &bad);
+        ahi = hi = add2(hi, cut2(_mm_mul_pd(r2.hi, vz), &bad), &bad);
+        fl |= flags4(lo, hi);
+        lo = add2(lo, cut2(_mm_mul_pd(r3.lo, vw), &bad), &bad);
+        hi = add2(hi, cut2(_mm_mul_pd(r3.hi, vw), &bad), &bad);
+        fl |= f = flags4(lo, hi);
+        res[i] = _mm_movelh_ps(_mm_cvtpd_ps(lo), _mm_cvtpd_ps(hi));
+    }
+    if (_mm_movemask_epi8(bad) != 0) {
+        return 0;
+    }
+    for (i = 0; i < n; i++) {
+        _mm_storeu_ps((float *)out + 4 * i, res[i]); /* exact: 24 bits, in range */
+    }
+    _mm_storeu_ps((float *)acc, _mm_movelh_ps(_mm_cvtpd_ps(alo), _mm_cvtpd_ps(ahi)));
+    *any |= fl;
+    *last = f;
     return 1;
 }
 #endif

@@ -1551,9 +1551,78 @@ void Ref_Mtx_Translate(RefMtx44 *dst, RefMtx44 *src, RefVec4 *v) {
     op_sqc2(5, AT(dst, 0x30));             /* 120178  sqc2 vf5, 0x30(a0) */
 }
 
+#ifdef REF_VU0_EXTERN_ARITH
+/* The port: Ref_Mtx_TranslateLocal and Ref_Mtx_Mul with the processor's arithmetic where that is exact
+   (port/src/plat_fastvec.c), leaving the registers, the accumulator and the flags as their instructions do (the
+   bulk of a battle frame's time with ten fighters: their bones' matrices). 0: nothing done, the long way. */
+extern int Port_FastMtxSeq(const uint32_t *r, const uint32_t *v, int n, uint32_t *acc, uint32_t *out, unsigned *any,
+                           unsigned *last);
+
+/* setFlags after a run of steps with masks XYZW: the sticky bits gather every step's, the others the last's. */
+static void fast_flags(unsigned any, unsigned last) {
+    gRefVu0.status = (gRefVu0.status & 0xFC0) | last | (any << 6);
+}
+
+static int fast_translate_local(RefMtx44 *dst, RefMtx44 *src, RefVec4 *v) {
+    RefMtx44 m;
+    RefVec4 t;
+    uint32_t acc[4], out[4];
+    unsigned any = 0, last = 0;
+    int i;
+
+    if (mode(0) || mode(2)) {
+        return 0;
+    }
+    memcpy(&m, src, sizeof(m));
+    memcpy(&t, v, sizeof(t));
+    if (!Port_FastMtxSeq(m.r[0].u, t.u, 1, acc, out, &any, &last)) {
+        return 0;
+    }
+    put(8, t.u, M_XYZW);
+    for (i = 0; i < 3; i++) {
+        put(4 + i, m.r[i].u, M_XYZW);
+    }
+    put(7, out, M_XYZW);
+    putAcc(acc, M_XYZW);
+    fast_flags(any, last);
+    memcpy(dst, &m, 0x30);
+    memcpy(&dst->r[3], out, 16);
+    return 1;
+}
+
+static int fast_mtx_mul(RefMtx44 *dst, RefMtx44 *a, RefMtx44 *b) {
+    RefMtx44 ma, mb;
+    uint32_t acc[4], out[4][4];
+    unsigned any = 0, last = 0;
+    int i;
+
+    if (mode(0) || mode(2)) {
+        return 0;
+    }
+    memcpy(&ma, a, sizeof(ma));
+    memcpy(&mb, b, sizeof(mb));
+    if (!Port_FastMtxSeq(ma.r[0].u, mb.r[0].u, 4, acc, out[0], &any, &last)) {
+        return 0;
+    }
+    for (i = 0; i < 4; i++) {
+        put(4 + i, ma.r[i].u, M_XYZW);
+        put(8 + i, out[i], M_XYZW);
+    }
+    putAcc(acc, M_XYZW); /* (the last row's) */
+    fast_flags(any, last);
+    memcpy(dst, out, sizeof(out));
+    return 1;
+}
+#endif
+
 /* 0x120180: dst rows 0-2 = src rows 0-2; dst row 3 = ((row0 * v.x + row1 * v.y) + row2 * v.z) + row3 * v.w, four
  * components. Everything is loaded before anything is stored. */
 void Ref_Mtx_TranslateLocal(RefMtx44 *dst, RefMtx44 *src, RefVec4 *v) {
+#ifdef REF_VU0_EXTERN_ARITH
+    if (fast_translate_local(dst, src, v)) {
+        return;
+    }
+#endif
     op_lqc2(8, v);                         /* 120180  lqc2 vf8, 0x0(a2) */
     op_lqc2(4, src);                       /* 120184  lqc2 vf4, 0x0(a1) */
     op_lqc2(5, AT(src, 0x10));             /* 120188  lqc2 vf5, 0x10(a1) */
@@ -1572,6 +1641,11 @@ void Ref_Mtx_TranslateLocal(RefMtx44 *dst, RefMtx44 *src, RefVec4 *v) {
 /* 0x1201B8: dst.row[i] = ((a.row0 * b[i].x + a.row1 * b[i].y) + a.row2 * b[i].z) + a.row3 * b[i].w for i = 0..3,
  * four components each. Everything is loaded before anything is stored (dst may alias a or b). */
 void Ref_Mtx_Mul(RefMtx44 *dst, RefMtx44 *a, RefMtx44 *b) {
+#ifdef REF_VU0_EXTERN_ARITH
+    if (fast_mtx_mul(dst, a, b)) {
+        return;
+    }
+#endif
     op_lqc2(4, a);                         /* 1201B8  lqc2 vf4, 0x0(a1) */
     op_lqc2(5, AT(a, 0x10));               /* 1201BC  lqc2 vf5, 0x10(a1) */
     op_lqc2(6, AT(a, 0x20));               /* 1201C0  lqc2 vf6, 0x20(a1) */

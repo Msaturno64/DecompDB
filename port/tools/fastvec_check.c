@@ -1,5 +1,6 @@
 /*
- * Compares Port_FastMtxApply (port/src/plat_fastvec.c) with the long way (softfloat_ps2_inl.h), bit for bit.
+ * Compares Port_FastMtxApply and Port_FastMtxSeq (port/src/plat_fastvec.c) with the long way (softfloat_ps2_inl.h),
+ * bit for bit (Port_FastMtxSeq: its accumulator and the flags of its steps too).
  *     cc -O2 -Iport/src port/tools/fastvec_check.c port/src/plat_fastvec.c -o /tmp/fastvec_check && /tmp/fastvec_check [millions]
  * Prints how often the quick way gave up, too: wherever it answers, the answer must be the long way's.
  */
@@ -8,6 +9,7 @@
 #include "softfloat_ps2_inl.h"
 
 extern int Port_FastMtxApply(const uint32_t *r, const uint32_t *v, uint32_t *out);
+extern int Port_FastMtxSeq(const uint32_t *r, const uint32_t *v, int n, uint32_t *acc, uint32_t *out, unsigned *any, unsigned *last);
 extern uint32_t Port_FastAdd(uint32_t a, uint32_t b);
 extern uint32_t Port_FastMul(uint32_t a, uint32_t b);
 
@@ -28,13 +30,22 @@ static uint32_t operand(int kind) {
     if (kind == 3) { return (u & 0x80700000) | (uint32_t)(127 - 3 + rnd() % 7) << 23; } /* few bits: sums cancel */
     return u;
 }
-static void long_way(const uint32_t *r, const uint32_t *v, uint32_t *o) {
-    int c;
+/* also the accumulator after the third step and the flags as src/port/vu0_a.c's setFlags makes them */
+static void long_way(const uint32_t *r, const uint32_t *v, uint32_t *o, uint32_t *acc, unsigned *any, unsigned *last) {
+    uint32_t s[4][4];
+    int c, k;
     for (c = 0; c < 4; c++) {
-        uint32_t a = Sf_MulBits(r[c], v[0]);
-        a = Sf_AddBits(a, Sf_MulBits(r[4 + c], v[1]));
-        a = Sf_AddBits(a, Sf_MulBits(r[8 + c], v[2]));
-        o[c] = Sf_AddBits(a, Sf_MulBits(r[12 + c], v[3]));
+        s[0][c] = Sf_MulBits(r[c], v[0]);
+        s[1][c] = Sf_AddBits(s[0][c], Sf_MulBits(r[4 + c], v[1]));
+        s[2][c] = Sf_AddBits(s[1][c], Sf_MulBits(r[8 + c], v[2]));
+        s[3][c] = o[c] = Sf_AddBits(s[2][c], Sf_MulBits(r[12 + c], v[3]));
+        acc[c] = s[2][c];
+    }
+    *any = 0;
+    for (k = 0; k < 4; k++) {
+        *last = 0;
+        for (c = 0; c < 4; c++) { *last |= ((s[k][c] & 0x7FFFFFFF) == 0) | ((s[k][c] & SIGN) ? 2 : 0); }
+        *any |= *last;
     }
 }
 int main(int argc, char **argv) {
@@ -49,9 +60,33 @@ int main(int argc, char **argv) {
             if (Port_FastAdd(x, y) != Sf_AddBits(x, y) && bad++ < 10) { printf("add %08x %08x: quick %08x long %08x\n", x, y, Port_FastAdd(x, y), Sf_AddBits(x, y)); }
             if (Port_FastMul(x, y) != Sf_MulBits(x, y) && bad++ < 10) { printf("mul %08x %08x: quick %08x long %08x\n", x, y, Port_FastMul(x, y), Sf_MulBits(x, y)); }
         }
-        long_way(r, v, a);
+        /* the sequence on four vectors (Ref_Mtx_Mul): v and r's rows 1-3; then on v alone (Ref_Mtx_TranslateLocal) */
+        unsigned any = 0, last = 0, one, oneLast = 0, qany = 0, qlast = 9, up = 0;
+        uint32_t vs[16], a4[16], acc[4], acc1[4], qacc[4], q[16];
+        for (k = 0; k < 4; k++) { vs[k] = v[k]; vs[4 + k] = r[4 + k]; vs[8 + k] = r[8 + k]; vs[12 + k] = r[12 + k]; }
+        for (k = 0; k < 4; k++) {
+            unsigned f, fl;
+            long_way(r, vs + 4 * k, a4 + 4 * k, acc, &fl, &f);
+            any |= fl;
+            last = f;
+            if (k == 0) { one = fl; oneLast = f; memcpy(acc1, acc, sizeof(acc)); }
+            up |= !Port_FastMtxApply(r, vs + 4 * k, b);
+        }
+        if (Port_FastMtxSeq(r, vs, 4, qacc, q, &qany, &qlast) ? up || memcmp(a4, q, sizeof(a4)) != 0 || memcmp(acc, qacc, sizeof(acc)) != 0 || qany != any || qlast != last : !up) {
+            if (bad++ < 10) { printf("seq of 4 differs (kind %d, apply gave up %u): acc %08x/%08x flags %x/%x %x/%x\n", kind, up, acc[0], qacc[0], any, qany, last, qlast); }
+        }
+        memcpy(a, a4, sizeof(a));
         per[kind]++;
-        if (!Port_FastMtxApply(r, v, b)) { gaveUp[kind]++; continue; }
+        qany = 0;
+        if (!Port_FastMtxApply(r, v, b)) {
+            gaveUp[kind]++;
+            if (Port_FastMtxSeq(r, v, 1, qacc, q, &qany, &qlast) && bad++ < 10) { printf("seq answered where apply gave up\n"); }
+            continue;
+        }
+        if ((!Port_FastMtxSeq(r, v, 1, qacc, q, &qany, &qlast) || memcmp(a, q, sizeof(a)) != 0 || memcmp(acc1, qacc, sizeof(acc1)) != 0 ||
+             qany != one || qlast != oneLast) && bad++ < 10) {
+            printf("seq differs (kind %d): acc %08x/%08x out %08x/%08x flags %x/%x %x/%x\n", kind, acc1[0], qacc[0], a[0], q[0], one, qany, oneLast, qlast);
+        }
         if (memcmp(a, b, sizeof(a)) != 0 && bad++ < 10) {
             printf("differs (kind %d): long %08x %08x %08x %08x quick %08x %08x %08x %08x\n", kind, a[0], a[1], a[2], a[3], b[0], b[1], b[2], b[3]);
         }
