@@ -305,6 +305,14 @@ void Quat_Unpack(Quat *out, u64 packed) {
     float w;
 
     largest = packed >> 60;
+#ifdef PORT
+    /* BT4's new models have nodes that the motions they share with BT3 have no track for, only stray offsets into
+       other tracks (Kid Gohan's 64 and 66): their "quaternions" are noise. The PS2 stores v[largest] past the array
+       harmlessly; here that would be the return address. */
+    if (largest > 3) {
+        largest = 3;
+    }
+#endif
     for (i = 0; i < 3; i++) {
         sum = (u32)(packed >> (i * 20)) & 0xFFFFF;
         v[i] = (sum * (1.0f / 1048575.0f) - 0.5f) * 1.41421356f;

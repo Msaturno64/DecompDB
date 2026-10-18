@@ -106,6 +106,12 @@ INCLUDE_RODATA("asm/nonmatchings/battle/bobj_a", D_002F2420);
 /* Moves the translation keys of a motion from the skeleton it was made for to this object's skeleton: subtracts
    the source rest translation, scales y by the height ratio and adds this object's rest translation. The source
    is the built-in reference table (useTable), the character's own reference pose (useOwn) or another object. */
+#ifdef PORT /* (BT4 keeps a character's height in its model pack's entry 3, + 0x74: REA, 0x24BC44) */
+#define BOBJ_HEIGHT(o) (gPortBt4 ? *(f32 *)(*(u8 **)(o)->mdl.unk00 + 0x74) : (o)->mdl.param->height)
+#else
+#define BOBJ_HEIGHT(o) ((o)->mdl.param->height)
+#endif
+
 void BtlObjAnim_Retarget(BobjAnim *anim, BobjObj *obj, BobjObj *other, s32 useTable, s32 useOwn) {
     BobjBone *bone;
     f32 scale;
@@ -121,11 +127,11 @@ void BtlObjAnim_Retarget(BobjAnim *anim, BobjObj *obj, BobjObj *other, s32 useTa
         useOwn = 0;
     }
     if (useTable != 0) {
-        scale = obj->mdl.param->height;
+        scale = BOBJ_HEIGHT(obj);
     } else if (useOwn != 0) {
-        scale = obj->mdl.param->height / 1.1f;
+        scale = BOBJ_HEIGHT(obj) / 1.1f;
     } else {
-        scale = obj->mdl.param->height / other->mdl.param->height;
+        scale = BOBJ_HEIGHT(obj) / BOBJ_HEIGHT(other);
     }
     while (1) {
         id = bone->id;
@@ -360,6 +366,7 @@ void BtlObjAnim_SamplePosRot(BobjTrack *trk, Vec4 *pos, Quat *rot, u16 *cursor, 
 BobjAnim *BtlObjAnim_Load(BobjObj *obj, void *buf, s32 anim, s32 *size) {
     void **tbl = (void **)&obj->mdl;
     void *ret;
+
 
     if (anim >= BOBJ_ANIM_MAX) {
         ret = (tbl + anim)[0x2A]; /* mdl->anims[anim]: runs on into modelAnims[] and the tables behind it */
@@ -2519,6 +2526,13 @@ void BtlObj_BindCommonTables(BObj *obj) {
     }
     res = gCommonRes;
     mdl = &obj->mdl;
+#ifdef PORT
+    if (gPortBt4) { /* (BT4: only common entry 13, REA: 0x24FFE8) */
+        mdl->common900 = res->file3.buf[0xE] != res->file3.buf[0xD] ? (u8 *)res->file3.buf + (res->file3.buf[0xD] >> 2 << 2)
+                                                                     : NULL;
+        return;
+    }
+#endif
     /* Entry 0xE + first + i, written the way the original's address arithmetic comes out. */
     ofs = first * 4 + 0x38;
     for (i = 0; i < 100; i++) {
