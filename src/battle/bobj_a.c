@@ -2292,6 +2292,12 @@ typedef struct BObjBindView {
     } res;
 } BObjBindView;
 
+#ifdef PORT
+/* src/battle/bt4_battle.c: the BT4 disc's own (read with REA) */
+extern void *Bt4Data_Get(BObjSlot *slot, s32 row);
+extern void *Bt4Pack_Entry(void *pack, s32 n);
+#endif
+
 void BtlObj_BindTables(BObj *obj) {
     BObjMdl *mdl;
     BObjSlot *slot;
@@ -2324,6 +2330,18 @@ void BtlObj_BindTables(BObj *obj) {
         }
     }
     mdl->eyes = BObjFile_GetEntry(&slot->file[0], 0xD);
+#ifdef PORT
+    if (gPortBt4) { /* (BT4: entries 1..3 of entry 3 of the character's first data file, REA: 0x3BF9A8) */
+        void *data = Bt4Data_Get(slot, 0);
+        void *sub = data != NULL ? Bt4Pack_Entry(data, 3) : NULL;
+
+        if (sub != NULL) {
+            for (i = 0; i < 3; i++) {
+                ((BObjBindView *)obj)->res.mdl.unk98[i] = Bt4Pack_Entry(sub, i + 1);
+            }
+        }
+    } else
+#endif
     for (i = 0; i < 3; i++) {
         ((BObjBindView *)obj)->res.mdl.unk98[i] = BObjFile_GetEntry(&slot->file[0], i + 0x29);
     }
@@ -2333,6 +2351,17 @@ void BtlObj_BindTables(BObj *obj) {
     for (i = 0; i < 4; i++) {
         mdl->unk8F0[i] = BObjFile_GetEntry(&slot->file[0], i + 0x25);
     }
+#ifdef PORT
+    if (gPortBt4) { /* (BT4: its second data file, and the lip tracks from the third, REA: 0x24FC28, 0x3BF434) */
+        u32 *lips = Bt4Data_Get(slot, 2);
+
+        mdl->unkA4 = Bt4Data_Get(slot, 1);
+        for (i = 0; lips != NULL && i < 100; i++) {
+            mdl->lip[i] = lips[i + 1] != lips[i + 2] ? (BObjLipData *)((u8 *)lips + lips[i + 1]) : NULL;
+        }
+        goto port_bt4_lips;
+    }
+#endif
     mdl->unkA4 = BObjFile_GetEntry(&slot->file[0], gProgress->unk00 + 0x2D);
     base = 0x64;
     if (!(gSaveData->flags & 1)) {
@@ -2341,16 +2370,50 @@ void BtlObj_BindTables(BObj *obj) {
     for (i = 0; i < 100; i++) {
         mdl->lip[i] = BObjFile_GetEntry(&slot->file[0], base + 0x35 + i);
     }
+#ifdef PORT
+port_bt4_lips:
+#endif
     if (slot->file[2].buf != NULL) {
         for (i = 0; i < 5; i++) {
             mdl->unk84[i] = BObjFile_GetEntry(&slot->file[2], i + 1);
         }
         mdl->unk40 = BObjFile_GetEntry(&slot->file[2], 6);
     }
+#ifdef PORT
+    if (gPortBt4) { /* (BT4: entry 1 of the first data file, REA: 0x3BEF48) */
+        void *data = Bt4Data_Get(slot, 0);
+
+        mdl->unk38 = data != NULL ? Bt4Pack_Entry(data, 1) : NULL;
+    } else
+#endif
     mdl->unk38 = BObjFile_GetEntry(&slot->file[0], 1);
     if (mdl->unk38 != NULL) {
         Res_RelocateOffsets(&mdl->unk38, mdl->unk38, mdl->unk38);
     }
+#ifdef PORT
+    if (gPortBt4) { /* (BT4: nine tables in a row in entry 2 of the first data file; the second texture set and
+                       entry 52 of the model pack, REA: 0x24FCDC) */
+        void *data = Bt4Data_Get(slot, 0);
+        u8 *t = data != NULL ? Bt4Pack_Entry(data, 2) : NULL;
+
+        if (t != NULL) { /* (BT4 sets the eight after the first without testing it: never NULL on its disc) */
+            mdl->unk904 = (s8 *)t;
+            mdl->unk908 = t + 0x100;
+            mdl->unk90C = t + 0x2240;
+            mdl->unk910 = t + 0x2500;
+            mdl->unk924 = t + 0x25C0;
+            mdl->unk914 = t + 0x29D0;
+            mdl->unk918 = t + 0x2C50;
+            mdl->unk91C = t + 0x2D50;
+            mdl->unk920 = t + 0x2F50;
+        }
+        ((void **)mdl->unk08)[0] = BObjFile_GetEntry(&slot->file[0], 26);
+        ((void **)mdl->unk08)[1] = BObjFile_GetEntry(&slot->file[0], 52);
+        ((void **)mdl->unk08)[2] = mdl->eyes;
+        mdl->chain = BObjFile_GetEntry(&slot->file[0], 0x17);
+        return;
+    }
+#endif
     mdl->unk924 = BObjFile_GetEntry(&slot->file[0], 0x16);
     mdl->unk904 = BObjFile_GetEntry(&slot->file[0], 0x12);
     mdl->unk908 = BObjFile_GetEntry(&slot->file[0], 0x13);

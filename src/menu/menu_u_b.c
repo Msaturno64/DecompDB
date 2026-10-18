@@ -1,3 +1,4 @@
+#include "common.h"
 #include "menu/menu_u.h"
 
 /* SimEvent, 0x391430..0x391B70: the rock game (gSimEvent[32]). Read-only data 0x3BAEC0..0x3BAF5C. */

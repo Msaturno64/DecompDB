@@ -25,6 +25,9 @@
 #include "battle/btl_obj.h"
 #include "battle/battle.h"
 #include "battle/btl_cam.h"
+#ifdef PORT
+#include "battle/battle_work.h" /* (the BT4 file ids) */
+#endif
 #include "sys/common.h"
 #include "sys/dma.h"
 #include "sys/file.h"
@@ -465,6 +468,13 @@ void BtlObj_Setup(BtlObj *obj, s32 type, BtlResSlot *res, s32 id, s32 active) {
     BtlObjMdl_Create(type, obj, res);
     obj->active = active;
     obj->id = id;
+#ifdef PORT
+    if (gPortBt4) { /* (REA: 0x3BF8AC and 0x26BE6C) */
+        extern void Bt4Obj_PickTexture(s32 id, BtlObj *obj);
+        Bt4Obj_PickTexture(id, obj);
+        obj->chara = Bt4Chr_OfModelFile(res->file[0].id);
+    } else
+#endif
     obj->chara = (res->file[0].id - 0x590) / 10;
     BtlObj_InitChains(obj);
 }
@@ -530,6 +540,10 @@ s32 BtlObj_RequestCharaModel(s32 side, s32 chara, s32 costume, s32 variant) {
     } else {
         model = chara * 10 + costume + 0x590;
     }
+#ifdef PORT
+    return BtlRes_Request(1, BTL_FILE_CHARA_MODEL(chara, costume, variant), BTL_FILE_CHARA_ANIM(chara),
+                          BTL_FILE_CHARA_ANIM2(chara));
+#endif
     return BtlRes_Request(1, model, chara * 10 + 0x598, chara * 10 + 0x599);
 }
 

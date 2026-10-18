@@ -123,7 +123,11 @@ typedef struct ObjPlane8 {
    entries become (slot + row * 15), and the slot's base alpha is copied into the model header. */
 void BtlObjMdl_InitAlphaSlots(void *res, ObjMdl *mdl, s32 row) {
     ObjMdlFile *model = mdl->model;
+#ifdef PORT
+    TexFile *tex = gPortBt4 ? (TexFile *)res : mdl->tex; /* (BT4 gives the texture table: REA, 0x113214) */
+#else
     TexFile *tex = mdl->tex;
+#endif
     s32 first;
     s32 count;
     s32 skip;
@@ -185,10 +189,31 @@ void BtlObjMdl_BindFiles(ObjMdlObj *obj) {
                                    0, 0);
             }
         }
+#ifdef PORT
+        if (gPortBt4) { /* (REA: 0x3BEE20, 0x3BF138) */
+            TexFile **tex2 = (TexFile **)&mdl->unk08[0];
+
+            if (*tex2 != NULL) {
+                Res_RelocateOffsets(tex2, (u8 *)*tex2, *tex2);
+                BtlObjMdl_InitAlphaSlots(*tex2, mdl, mdl->model->alphaRow);
+            }
+            Res_RelocateOffsets(&mdl->tex, (u8 *)mdl->texFile, mdl->texFile);
+            BtlObjMdl_InitAlphaSlots(mdl->tex, mdl, mdl->model->alphaRow);
+            mdl->model->bound = 1;
+            return;
+        }
+#endif
         Res_RelocateOffsets(&mdl->tex, (u8 *)mdl->texFile, mdl->texFile);
         BtlObjMdl_InitAlphaSlots(res, mdl, mdl->model->alphaRow);
         mdl->model->bound = 1;
     } else {
+#ifdef PORT
+        if (gPortBt4 && *(TexFile **)&mdl->unk08[0] != NULL) { /* (REA: 0x3BEE44) */
+            TexFile **tex2 = (TexFile **)&mdl->unk08[0];
+
+            Res_RelocateOffsets(tex2, (u8 *)*tex2, *tex2);
+        }
+#endif
         Res_RelocateOffsets(&obj->mdl.tex, (u8 *)mdl->texFile, mdl->texFile);
         BtlObjVis_AllocBit(mdl->model->alphaRow);
     }

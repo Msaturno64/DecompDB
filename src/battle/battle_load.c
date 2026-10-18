@@ -19,8 +19,8 @@
    the training mode's guide voice lines, and with n stages added the first n of them were replaced by stage
    files. Found 2026-10-08 while listing the file ids for added characters.) */
 #define PORT_ADDED_STAGE_FILE(stage) (0xD48 + 70000 + ((stage) - 0x24))
-#define BTL_STAGE_MODEL(stage) ((stage) >= 0x24 ? PORT_ADDED_STAGE_FILE(stage) : (stage) + BTL_FILE_STAGE)
-#define BTL_STAGE_BANK(stage) (((stage) >= 0x24 ? 0 : (stage)) + BTL_FILE_SND_STAGE)
+#define BTL_STAGE_MODEL(stage) ((stage) >= 0x24 && !gPortBt4 ? PORT_ADDED_STAGE_FILE(stage) : (stage) + BTL_FILE_STAGE)
+#define BTL_STAGE_BANK(stage) (((stage) >= 0x24 && !gPortBt4 ? 0 : (stage)) + BTL_FILE_SND_STAGE)
 #else
 #define BTL_STAGE_MODEL(stage) ((stage) + BTL_FILE_STAGE)
 #define BTL_STAGE_BANK(stage) ((stage) + BTL_FILE_SND_STAGE)
@@ -203,7 +203,7 @@ s32 BtlLoad_StepStageReload(BtlJob *job) {
         /* PC build: a stage added from outside the disc (id 0x24 on) has one model only, and the file id its
            split-screen model would have belongs to other files (the menu archives, the stage transitions): it
            is loaded for split screen too. The disc's own stages keep their lighter split-screen model. */
-        if (Battle_GetStage() >= 0x24) {
+        if (Battle_GetStage() >= 0x24 && !gPortBt4) {
             id = BTL_STAGE_MODEL(Battle_GetStage());
         } else
 #endif
@@ -247,6 +247,12 @@ s32 BtlLoad_StepStageChange(BtlJob *job) {
         job->state++;
         break;
     case 1:
+#ifdef PORT
+        if (gPortBt4) { /* (BT4: the stage's own transition, REA: 0x240940) */
+            extern s32 Bt4Stage_TransitionFile(void);
+            res->transition = File_Request3(Bt4Stage_TransitionFile(), NULL, 0);
+        } else
+#endif
         if (job->kind == 3) {
             res->transition = File_Request3(BTL_FILE_TRANSITION_3, NULL, 0);
         } else {
@@ -333,9 +339,17 @@ s32 BtlLoad_StepObject(BtlJob *job) {
             } else {
                 id = job->chara * 10 + job->animChara + BTL_FILE_CHARA;
             }
+#ifdef PORT
+            id = BTL_FILE_CHARA_MODEL(job->chara, job->animChara, job->unk1C);
+#endif
         }
         gBtlLoadHandle = BtlRes_Request(0, id, -1, -1);
         job->state++;
+#ifdef PORT
+        if (gPortBt4 && job->chara < 0x100) { /* (its lip tracks, REA: 0x12772C) */
+            Bt4Data_LoadObject(job->chara);
+        }
+#endif
         return 0;
     case 1:
         if (!File_UpdateRequests()) {
@@ -402,15 +416,28 @@ s32 BtlLoad_StepChara(BtlJob *job) {
         } else {
             model = job->chara * 10 + job->costume + BTL_FILE_CHARA;
         }
+#ifdef PORT
+        model = BTL_FILE_CHARA_MODEL(job->chara, job->costume, job->variant);
+#endif
         if (job->modelOnly == 0) {
+#ifdef PORT
+            file8 = BTL_FILE_CHARA_ANIM(job->animChara);
+            file9 = BTL_FILE_CHARA_ANIM2(job->unk1C);
+#else
             file8 = job->animChara * 10 + (BTL_FILE_CHARA + 8);
             file9 = job->unk1C * 10 + (BTL_FILE_CHARA + 9);
+#endif
             voice = job->voiceChara + ((gSaveData->flags & SAVE_FLAG_VOICE) ? BTL_FILE_VOICE_ALT : BTL_FILE_VOICE);
             BtlRes_Reload(BattleSide_GetModelSlot(job->side), model, file8, file9);
 #ifdef PORT
             if (job->side < 2) /* (the sound unit has a voice bank for each of the two sides only: 0x10, 0x20) */
 #endif
             res->bank = File_Request3(voice, res->bank, res->bankSize);
+#ifdef PORT
+            if (gPortBt4) { /* (its three data files, REA: 0x2009F0) */
+                Bt4Data_LoadSide(job->side, job->voiceChara);
+            }
+#endif
             if (!BtlCtrl_IsSwitching(job->side)) {
                 BattleMember *next;
 
@@ -589,7 +616,7 @@ s32 BtlLoad_StepInitial(BtlJob *job) {
         }
 #ifdef PORT
         /* PC build: see the note in the stage-swap job: an added stage has one model, for split screen too. */
-        if (Battle_GetStartStage() >= 0x24) {
+        if (Battle_GetStartStage() >= 0x24 && !gPortBt4) {
             id = BTL_STAGE_MODEL(Battle_GetStartStage());
         } else
 #endif
@@ -605,6 +632,11 @@ s32 BtlLoad_StepInitial(BtlJob *job) {
                 m->buf[0] = File_Request3(m->chara * 2 + BTL_SIDE_TEAM(side) + BTL_FILE_CHARA_DATA, m->buf[0], BTL_MEMBER_BUF_SIZE);
             }
         }
+#ifdef PORT
+        if (gPortBt4) { /* (each fighter's three data files, REA: 0x200900) */
+            Bt4Data_LoadAll();
+        }
+#endif
         res->unk8 = File_Request3(gProgress->unk0[0] + 6, NULL, 0);
         job->state++;
         break;
@@ -861,6 +893,11 @@ void BtlLoad_FreeAll(void) {
     Heap_Free(res->bank);
     res->bank = NULL;
     Heap_Free(res->unk8);
+#ifdef PORT
+    if (gPortBt4) { /* (REA: 0x200880) */
+        Bt4Data_FreeAll();
+    }
+#endif
     res->unk8 = NULL;
     Heap_Free(res->stage);
     res->stage = NULL;

@@ -111,18 +111,32 @@ typedef struct BattleRes {
 } BattleRes; /* size 0x50 */
 
 /* File ids used by the loader. */
-#define BTL_FILE_CHARA_DATA 8        /* + character * 2 + side: 0x1000-byte per-member block */
+#define BTL_FILE_CHARA_DATA PORT_BT4(8, 0xD48) /* + character * 2 + side: 0x1000-byte per-member block */
 #define BTL_FILE_SND_COMMON 0x14A
-#define BTL_FILE_SND_STAGE 0x14E     /* + stage */
-#define BTL_FILE_STAGE 0x171         /* + stage */
-#define BTL_FILE_STAGE_SPLIT 0x198   /* + stage, split-screen version */
+#define BTL_FILE_SND_STAGE PORT_BT4(0x14E, 0x590) /* + stage */
+#define BTL_FILE_STAGE PORT_BT4(0x171, 0x5F3) /* + stage */
+#define BTL_FILE_STAGE_SPLIT PORT_BT4(0x198, 0x656) /* + stage, split-screen version */
 #define BTL_FILE_TRANSITION_3 0x1BF  /* stage change to stage 3 */
 #define BTL_FILE_TRANSITION 0x1C0
 #define BTL_FILE_SCRIPT 0x1FF        /* + setup.script - 1 */
 #define BTL_FILE_CHARA 0x590         /* + character * 10 + costume; +4: variant; +8, +9: two more files */
-#define BTL_FILE_VOICE 0xBDA         /* + character */
-#define BTL_FILE_VOICE_ALT 0xC7B     /* + character, when gSaveData->flags bit 0 */
+#define BTL_FILE_VOICE PORT_BT4(0xBDA, 0x1D012) /* + character */
+#define BTL_FILE_VOICE_ALT PORT_BT4(0xC7B, 0x1D10C) /* + character, when gSaveData->flags bit 0 */
 #define BTL_FILE_OBJECT 0xC1C        /* + id, for ids >= 0x100 */
+/* (BT4, read with REA: its battle files at the new ids above; its models and the two files of each character
+   through src/battle/bt4_battle.c, which also loads the three data files of each fighter) */
+#ifdef PORT
+s32 Bt4Chr_ModelFile(s32 chara, s32 costume, s32 damaged);
+s32 Bt4Chr_OfModelFile(s32 id);
+void Bt4Data_LoadAll(void);
+void Bt4Data_LoadSide(s32 side, s32 chara);
+void Bt4Data_LoadObject(s32 id);
+void Bt4Data_FreeAll(void);
+#define BTL_FILE_CHARA_ANIM(chara) (gPortBt4 ? 0x141E + (chara) : (chara) * 10 + (BTL_FILE_CHARA + 8))
+#define BTL_FILE_CHARA_ANIM2(chara) (gPortBt4 ? 0x1518 + (chara) : (chara) * 10 + (BTL_FILE_CHARA + 9))
+#define BTL_FILE_CHARA_MODEL(chara, costume, variant) \
+    (gPortBt4 ? Bt4Chr_ModelFile(chara, costume, variant) : (chara) * 10 + (costume) + BTL_FILE_CHARA + ((variant) ? 4 : 0))
+#endif
 
 #define BTL_STAGE_BUF_SIZE 0x6CB800
 #define BTL_BANK_BUF_SIZE 0x90800

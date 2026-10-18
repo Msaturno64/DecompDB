@@ -175,7 +175,7 @@ void IconWin_SetIcon(s32 icon);
 /* ---- ChrView (view_a_d.c) ---- */
 
 #define CHRVIEW_SLOT_COUNT 2
-#define CHRVIEW_MODEL_SIZE 0xCE000
+#define CHRVIEW_MODEL_SIZE PORT_BT4(0xCE000, 0xE7000) /* (BT4: REA, ChrView_Init) */
 #define CHRVIEW_FILE_FIRST 0x590   /* model of character c, costume n: 0x590 + c * 10 + n (+4 for the damaged model) */
 #define CHRVIEW_FILE_STAGE 0x197   /* the viewer's backdrop, loaded once by ChrView_Init */
 #define CHRVIEW_CHARA_COUNT 0xA1
