@@ -15,6 +15,14 @@
 #define FILE_PT1_FIRST_ID 1     /* ids <= 0 are entries of partition 0 */
 #define FILE_PT2_FIRST_ID 0xD48 /* ids 1..0xD47 are partition 1, the rest partition 2 */
 #define FILE_PT_COUNT 3
+#ifdef PORT
+/* The BT4 disc (TeamBT4, PRIVATE; port/src/plat_mem.c): four partitions, ids split its own way (its code at 0x100954,
+   0x100974, 0x19BDC4, 0x19BE04, read with REA): ids >= 0x20000 partition 3, 1..0xD47 partition 1, 0xD48..0x10CBF
+   partition 2, the rest partition 0. */
+extern int gPortBt4;
+#define FILE_BT4_PT0_FIRST_ID 0x10CC0
+#define FILE_BT4_PT3_FIRST_ID 0x20000
+#endif
 
 #define ADX_PLAYER_COUNT 6
 

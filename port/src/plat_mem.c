@@ -391,6 +391,13 @@ static void data_fail(const char *what, const char *path) {
     exit(2);
 }
 
+/* The BT4 disc (TeamBT4's B14 REV2; PRIVATE, SPEC-bt4.md of the project around this repository): its program
+   SLUS_219.78 instead of SLUS_216.78, the same layout (patched in place), its data different in 9 of the runs (the
+   AFS partition table and names, the battle time limits), hence its own checksum. Set once here, before the game
+   starts; the game code reads it (sys/file.h). */
+#define PORT_BT4_HASH 0x01331AE1061785F4ull
+PORT_HOST int gPortBt4 = 0;
+
 static void Port_LoadGameData(void) {
     char exe[1024], path[1200];
     const char *root = getenv("BT3_DATA") != NULL ? getenv("BT3_DATA") : "gamedata";
@@ -460,6 +467,11 @@ static void Port_LoadGameData(void) {
     }
     snprintf(path, sizeof(path), "%s/disc/SLUS_216.78", root);
     elf = read_file(path, &elfSize);
+    if (elf == NULL) {
+        snprintf(path, sizeof(path), "%s/disc/SLUS_219.78", root);
+        elf = read_file(path, &elfSize);
+        gPortBt4 = elf != NULL;
+    }
     if (elf == NULL || elfSize < 0x34 || memcmp(elf, "\177ELF", 4) != 0) {
         data_fail("the game's program was not found", path);
     }
@@ -501,8 +513,10 @@ static void Port_LoadGameData(void) {
     free(src[0]);
     free(src[1]);
     free(list);
-    if (hash != want) {
-        data_fail("the game's programs in your game data are not the unmodified USA release (SLUS-21678)", NULL);
+    if (hash != (gPortBt4 ? PORT_BT4_HASH : want)) {
+        data_fail(gPortBt4 ? "the game's programs in your game data are not BT4 B14 REV2 (SLUS-21978)"
+                           : "the game's programs in your game data are not the unmodified USA release (SLUS-21678)",
+                  NULL);
     }
 }
 

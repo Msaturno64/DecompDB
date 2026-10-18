@@ -158,6 +158,12 @@ void File_InitAdx(void) {
 void File_LoadPartition1(void) {
     File_LoadPartitionNw(1);
     File_WaitPartition(1);
+#ifdef PORT
+    if (gPortBt4) { /* (BT4's File_Init loads partition 3 too: its name is not in the table of three) */
+        ADXF_LoadPartitionNw(3, "pzs4us3.afs", NULL, NULL);
+        File_WaitPartition(3);
+    }
+#endif
 }
 
 /* Empty stub called once per frame by three frame loops. */
@@ -440,14 +446,41 @@ FileReqQueue *File_GetRequestQueue(void) {
     return &gFileReq;
 }
 
+#ifdef PORT
+/* The BT4 disc's split of the ids (sys/file.h). */
+static s32 File_PortBt4Part(s32 id) {
+    return id >= FILE_BT4_PT3_FIRST_ID ? 3 : id <= 0 ? 0 : id < FILE_PT2_FIRST_ID ? 1 : id < FILE_BT4_PT0_FIRST_ID ? 2 : 0;
+}
+
+static s32 File_PortBt4Index(s32 pt, s32 id) {
+    return pt == 3 ? id - FILE_BT4_PT3_FIRST_ID : pt == 0 ? id - FILE_BT4_PT0_FIRST_ID
+         : pt == 2 ? id - FILE_PT2_FIRST_ID : id - FILE_PT1_FIRST_ID;
+}
+#endif
+
 /* Opens file `id`, translating the global id into (partition, index). */
 ADXF File_OpenById(s32 id) {
+#ifdef PORT
+    if (gPortBt4) {
+        s32 pt = File_PortBt4Part(id);
+
+        return ADXF_OpenAfs(pt, File_PortBt4Index(pt, id));
+    }
+#endif
     return ADXF_OpenAfs(id <= 0 ? 0 : id < FILE_PT2_FIRST_ID ? 1 : 2,
                         id <= 0 ? id : id < FILE_PT2_FIRST_ID ? id - FILE_PT1_FIRST_ID : id - FILE_PT2_FIRST_ID);
 }
 
 /* Starts streaming file `id` on an ADXT player, with the same id translation as File_OpenById. */
 void File_StartAdxById(ADXT_HN adxt, s32 id) {
+#ifdef PORT
+    if (gPortBt4) {
+        s32 pt = File_PortBt4Part(id);
+
+        ADXT_StartAfs(adxt, pt, File_PortBt4Index(pt, id));
+        return;
+    }
+#endif
     ADXT_StartAfs(adxt, id <= 0 ? 0 : id < FILE_PT2_FIRST_ID ? 1 : 2,
                   id <= 0 ? id : id < FILE_PT2_FIRST_ID ? id - FILE_PT1_FIRST_ID : id - FILE_PT2_FIRST_ID);
 }

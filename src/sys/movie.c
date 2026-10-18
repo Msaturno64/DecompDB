@@ -248,6 +248,11 @@ void Movie_Close(void) {
 
 /* Plays the opening movie from start to end (or until it is skipped). */
 void Movie_PlayOpening(void) {
+#ifdef PORT
+    if (gPortBt4) { /* (the BT4 disc's names, sys/file.h) */
+        Movie_Open("zs4usop.pss", "zs4usop.adx");
+    } else
+#endif
     Movie_Open("zs3usop.pss", "zs3usop.adx");
     Movie_Run();
     Movie_Close();
@@ -255,6 +260,11 @@ void Movie_PlayOpening(void) {
 
 /* Plays the ending movie. */
 void Movie_PlayEnding(void) {
+#ifdef PORT
+    if (gPortBt4) {
+        Movie_Open("zs4used.pss", "zs4used.adx");
+    } else
+#endif
     Movie_Open("zs3used.pss", "zs3used.adx");
     Movie_Run();
     Movie_Close();

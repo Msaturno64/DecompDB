@@ -76,7 +76,11 @@ void Heap_Create(void) {
 #ifdef PORT
     {
         extern u32 Port_HeapExtra(void); /* port/src/plat_mem.c: the PC's heap is larger than the console's */
+        extern int gPortBt4;            /* the BT4 disc (sys/file.h): its DBZP.BIN, and so _end, is 0x1AB8 longer */
         size += Port_HeapExtra();
+        if (gPortBt4) {
+            size -= 0x3C01D4 - 0x3BE71C;
+        }
     }
 #endif
     size += Mem_Align4Pad(size);
