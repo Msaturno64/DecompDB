@@ -288,7 +288,7 @@ void PortMulti_Engage(int victim, int attacker) {
    0x139..0x13B) and a throw (thrower and thrown 0xB5..0xBC, the carry pair 0xBE / 0xBF; not the grab dash 0xB4) are
    between their two fighters only: no outside contact reaches either, and neither touches anyone else (as the Tag
    Team Mod's cinematic contact guard; before, a rush also hit the bystanders and its attacker turned to them, and two
-   could grab one fighter at once). btl_char_hit.c, eft_det_a.c. */
+   could grab one fighter at once). btl_char_hit.c, eft_det_a.c; btl_char_mgr.c for a freeze (BtlChars_UpdateFreeze). */
 #define PAIR_ACTION(a)                                                                                                 \
     (((a) >= 0xB5 && (a) <= 0xBC) || (a) == 0xBE || (a) == 0xBF || ((a) >= 0x12D && (a) <= 0x12F) ||                   \
      ((a) >= 0x139 && (a) <= 0x13B))

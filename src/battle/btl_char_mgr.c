@@ -596,6 +596,7 @@ void BtlChars_UpdateFreeze(void) {
            field (the user: a technique paused everybody's game). The stronger of two, or the first of two alike,
            is not held, as on the console. */
         extern s32 PortMulti_FreezeVictim(s32 fighter); /* port/src/multi_fighter.c */
+        extern s32 PortMulti_CanContact(s32 attacker, s32 victim);
         s32 v;
 
         for (i = 0; i < BtlChar_GetCount(); i++) {
@@ -604,6 +605,11 @@ void BtlChars_UpdateFreeze(void) {
             }
             v = PortMulti_FreezeVictim(i);
             if (v < 0 || v >= BtlChar_GetCount() || v == i || level[v] > level[i] || (level[v] == level[i] && v < i)) {
+                continue;
+            }
+            /* nor one in a rush, a throw or a cinematic with another: held alone, its partner ran ahead and it
+               waited for ever for the partner's model load (Goten 3v3: an outsider's technique held a rush's attacker) */
+            if (!PortMulti_CanContact(i, v)) {
                 continue;
             }
             chr = BtlChar_Get(v);
