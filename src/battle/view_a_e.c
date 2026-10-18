@@ -539,7 +539,7 @@ void Num_DrawEx(Flash *flash, NumStyle *style, char *a, char *b, s32 value) {
 s32 ChrGrid_IsSelectable(ChrGridCell *cells, s32 index) {
     s32 ok = 1;
 
-    if (cells[index].id >= CHRGRID_ID_LOCKED) {
+    if (CHRGRID_PAST(cells[index].id, CHRGRID_ID_LOCKED)) {
         ok = cells[index].id == CHRGRID_ID_CUSTOM;
     }
     return ok;
@@ -561,7 +561,7 @@ s32 ChrGrid_MoveRight(ChrGridCell *cells, s32 *col, s32 row) {
             break;
         }
         id = cells[row * CHRGRID_COLS + *col].id;
-        if (id < CHRGRID_ID_LOCKED) {
+        if (!CHRGRID_PAST(id, CHRGRID_ID_LOCKED)) {
             break;
         }
         if (id == CHRGRID_ID_CUSTOM) {
@@ -588,7 +588,7 @@ s32 ChrGrid_MoveLeft(ChrGridCell *cells, s32 *col, s32 row) {
             break;
         }
         id = cells[row * CHRGRID_COLS + *col].id;
-        if (id < CHRGRID_ID_LOCKED) {
+        if (!CHRGRID_PAST(id, CHRGRID_ID_LOCKED)) {
             break;
         }
         if (id == CHRGRID_ID_CUSTOM) {
@@ -609,7 +609,7 @@ void ChrGrid_MoveDown(ChrGridCell *cells, s32 *col, s32 *row, s32 rows) {
             *row = 0;
         }
         id = cells[*row * CHRGRID_COLS + *col].id;
-        if (id < CHRGRID_ID_LOCKED) {
+        if (!CHRGRID_PAST(id, CHRGRID_ID_LOCKED)) {
             return;
         }
         if (id == CHRGRID_ID_CUSTOM) {
@@ -628,7 +628,7 @@ void ChrGrid_MoveUp(ChrGridCell *cells, s32 *col, s32 *row, s32 rows) {
             *row = rows - 1;
         }
         id = cells[*row * CHRGRID_COLS + *col].id;
-        if (id < CHRGRID_ID_LOCKED) {
+        if (!CHRGRID_PAST(id, CHRGRID_ID_LOCKED)) {
             return;
         }
         if (id == CHRGRID_ID_CUSTOM) {
@@ -649,7 +649,7 @@ void ChrGrid_NextForm(s32 *forms, s32 *index) {
         if (start == *index) {
             break;
         }
-    } while (forms[*index] >= CHRGRID_ID_RANDOM);
+    } while (CHRGRID_PAST(forms[*index], CHRGRID_ID_RANDOM));
 }
 
 /* Steps to the previous form of a cell that is a character, wrapping in the seven slots. */
@@ -664,13 +664,13 @@ void ChrGrid_PrevForm(s32 *forms, s32 *index) {
         if (start == *index) {
             break;
         }
-    } while (forms[*index] >= CHRGRID_ID_RANDOM);
+    } while (CHRGRID_PAST(forms[*index], CHRGRID_ID_RANDOM));
 }
 
 /* Puts the cursor on a character if it is on a marker cell: right in the row first, then down.
  * Declared with a result that it never sets: the call of ChrGrid_MoveDown is not a tail call. */
 s32 ChrGrid_FixCursor(ChrGridCell *cells, s32 *col, s32 *row, s32 rows) {
-    if (cells[*row * CHRGRID_COLS + *col].id >= CHRGRID_ID_RANDOM) {
+    if (CHRGRID_PAST(cells[*row * CHRGRID_COLS + *col].id, CHRGRID_ID_RANDOM)) {
         if (ChrGrid_MoveRight(cells, col, *row) == 0) {
             ChrGrid_MoveDown(cells, col, row, rows);
         }
@@ -679,7 +679,7 @@ s32 ChrGrid_FixCursor(ChrGridCell *cells, s32 *col, s32 *row, s32 rows) {
 
 /* Non-zero if the stage cell is an unlocked stage. */
 s32 StgGrid_IsSelectable(s32 *ids, s32 index) {
-    return ids[index] < STGGRID_ID_LOCKED;
+    return !STGGRID_PAST(ids[index]);
 }
 
 /* Moves the stage cursor right to the next unlocked stage; it stops in column 6 (the column past the grid). */
@@ -691,7 +691,7 @@ void StgGrid_MoveRight(s32 *ids, s32 *col, s32 row) {
         } else if (*col == STGGRID_COLS) {
             break;
         }
-    } while (ids[row * STGGRID_COLS + *col] >= STGGRID_ID_LOCKED);
+    } while (STGGRID_PAST(ids[row * STGGRID_COLS + *col]));
 }
 
 /* Moves the stage cursor left to the next unlocked stage; from column 0 it goes to column 6. */
@@ -702,7 +702,7 @@ void StgGrid_MoveLeft(s32 *ids, s32 *col, s32 row) {
             *col = STGGRID_COLS;
             return;
         }
-        if (ids[row * STGGRID_COLS + *col] < STGGRID_ID_LOCKED) {
+        if (!STGGRID_PAST(ids[row * STGGRID_COLS + *col])) {
             return;
         }
     }
@@ -722,7 +722,7 @@ s32 StgGrid_MoveRightWrap(s32 *ids, s32 *col, s32 row) {
             ok = 0;
             break;
         }
-    } while (ids[row * STGGRID_COLS + *col] >= STGGRID_ID_LOCKED);
+    } while (STGGRID_PAST(ids[row * STGGRID_COLS + *col]));
     return ok;
 }
 
@@ -734,7 +734,7 @@ void StgGrid_MoveDown(s32 *ids, s32 *col, s32 *row, s32 rows) {
         if (*row > rows - 1) {
             *row = 0;
         }
-        if (ids[*row * STGGRID_COLS + *col] < STGGRID_ID_LOCKED) {
+        if (!STGGRID_PAST(ids[*row * STGGRID_COLS + *col])) {
             break;
         }
         if (StgGrid_MoveRightWrap(ids, col, *row) != 0) {
@@ -751,7 +751,7 @@ void StgGrid_MoveUp(s32 *ids, s32 *col, s32 *row, s32 rows) {
         if (*row < 0) {
             *row = rows - 1;
         }
-        if (ids[*row * STGGRID_COLS + *col] < STGGRID_ID_LOCKED) {
+        if (!STGGRID_PAST(ids[*row * STGGRID_COLS + *col])) {
             break;
         }
         if (StgGrid_MoveRightWrap(ids, col, *row) != 0) {
@@ -760,7 +760,11 @@ void StgGrid_MoveUp(s32 *ids, s32 *col, s32 *row, s32 rows) {
     }
 }
 
+#ifdef PORT /* (BT4's characters past the markers have no save bit: always there, REA 0x3BF668 / 0x3BF2C0) */
+#define CHARA_UNLOCKED(id) ((gPortBt4 && (id) >= 0xA5) || (s32)((SAVE_CHARA_WORD(gSaveData, id) >> ((id) % 64)) & 1))
+#else
 #define CHARA_UNLOCKED(id) ((s32)((SAVE_CHARA_WORD(gSaveData, id) >> ((id) % 64)) & 1))
+#endif
 
 /* Build flags of ChrGrid_Build. */
 #define CHRGRID_ALL 1        /* no unlock test (never set here) */
@@ -922,7 +926,7 @@ void StgGrid_ApplyUnlocks(s32 *count, s32 *ids) {
             break;
         default:
             if (!(flags & 1)) {
-                if (!(s32)((gSaveData->stageBits >> id) & 1LL)) {
+                if ((!gPortBt4 || id < 39) && !(s32)((gSaveData->stageBits >> id) & 1LL)) { /* (BT4: REA, 0x3BF770) */
                     ids[i] = STGGRID_ID_LOCKED;
                 }
             }
@@ -971,6 +975,15 @@ void TextBox_Init(TextBox *box, void *text, u32 preset) {
     memset(box, 0, sizeof(TextBox));
     box->text = text;
     switch (preset) {
+#ifdef PORT
+    case 7: /* (BT4's own, the costume name: its jump table entry 7 -> 0x36C930, read with REA) */
+        if (gPortBt4) {
+            TextBox_SetUnk50(box, 1);
+            TextBox_SetUnkC(box, 0x18, 0x28);
+            TextBox_SetMaxWidth(box, 0xD0);
+        }
+        break;
+#endif
     case 1:
         TextBox_SetUnk50(box, 2);
         TextBox_SetUnkC(box, 0x100, 0);

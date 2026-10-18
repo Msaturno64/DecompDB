@@ -23,8 +23,8 @@ static s32 sPortStageRows = TS_STAGE_COLS; /* rows of the stage reel: the game's
 #define TS_STAGE_PICTURE(id) (TS_STAGE_FILE + ((id) < 0x24 || gPortBt4 ? (id) : (id) - 0x24))
 /* include/battle/view_a.h holds these; repeated here (pulling it in clashes with the menu headers). The PC build
    moves the locked / empty markers up so added stages keep their own ids. */
-#define STGGRID_ID_LOCKED 0x3E
-#define STGGRID_ID_EMPTY 0x3F
+#define STGGRID_ID_LOCKED PORT_BT4(0x3E, 0x24) /* (view_a.h) */
+#define STGGRID_ID_EMPTY PORT_BT4(0x3F, 0x25)
 #endif
 
 /*
@@ -144,7 +144,7 @@ void TeamSel_SetStageChips(void) {
         /* PC build: the markers moved up, so they keep the locked / empty icons (37, 38). */
         {
             /* (a stage added from outside the disc, id 0x24 on, borrows an icon as in the duel's select) */
-            s32 icon = id == STGGRID_ID_LOCKED ? 37 : (id == STGGRID_ID_EMPTY ? 38 : (id >= 0x24 ? 1 + (id - 0x24) % 36 : id + 1));
+            s32 icon = gPortBt4 ? id + 1 : id == STGGRID_ID_LOCKED ? 37 : (id == STGGRID_ID_EMPTY ? 38 : (id >= 0x24 ? 1 + (id - 0x24) % 36 : id + 1));
             res = (MTexRes *)MPACK_AT(gTeamSel->stagePack, icon);
         }
 #else

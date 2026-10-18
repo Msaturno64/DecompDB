@@ -303,10 +303,16 @@ typedef struct ChrGridCell {
 
 /* Stage grid: 6 columns of stage ids. */
 #define STGGRID_COLS 6
-#ifdef PORT /* the PC build adds stages from outside the disc, so the "locked"/"empty" markers move past them */
-#define STGGRID_ID_LOCKED 0x3E
-#define STGGRID_ID_EMPTY 0x3F
+#ifdef PORT /* the PC build adds stages from outside the disc, so the "locked"/"empty" markers move past them;
+               BT4's stages go on past its markers 0x24..0x26 (read with REA, 0x3BEC5C and the rest) */
+#define STGGRID_ID_LOCKED PORT_BT4(0x3E, 0x24)
+#define STGGRID_ID_EMPTY PORT_BT4(0x3F, 0x25)
+#define STGGRID_PAST(id) (gPortBt4 ? (id) >= 0x24 && (id) < 0x27 : (id) >= STGGRID_ID_LOCKED)
+/* a marker cell at or past `first`: BT4's characters go on past the markers 0xA1..0xA4 (REA, 0x3BF320 and the rest) */
+#define CHRGRID_PAST(id, first) ((id) >= (first) && (!gPortBt4 || (id) < 0xA5))
 #else
+#define STGGRID_PAST(id) ((id) >= STGGRID_ID_LOCKED)
+#define CHRGRID_PAST(id, first) ((id) >= (first))
 #define STGGRID_ID_LOCKED 0x24
 #define STGGRID_ID_EMPTY 0x25
 #endif

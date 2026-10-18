@@ -12,8 +12,8 @@
 /* include/battle/view_a.h holds these, but pulling it in clashes with menu_d.h (MsgWin_Init); the values are
    fixed, so they are repeated here for the stage list of the PC build. */
 #define STGGRID_COLS 6
-#define STGGRID_ID_LOCKED 0x3E
-#define STGGRID_ID_EMPTY 0x3F
+#define STGGRID_ID_LOCKED PORT_BT4(0x3E, 0x24) /* (view_a.h) */
+#define STGGRID_ID_EMPTY PORT_BT4(0x3F, 0x25)
 static s32 sPortStagesAdded; /* this stage select shows stages from outside the disc */
 static s32 sPortSongsAdded;  /* ... and its music list songs from outside the disc */
 static s32 sPortSongNameHidden, sPortStageNameHidden;
@@ -99,7 +99,9 @@ void CharSel_SetStageChips(void) {
            from outside the disc (id >= 0x24) borrows an icon; the markers keep theirs even though they moved up. */
         {
             s32 icon;
-            if (id == STGGRID_ID_LOCKED) {
+            if (gPortBt4) { /* (BT4: one icon per id, its markers too) */
+                icon = id + 1;
+            } else if (id == STGGRID_ID_LOCKED) {
                 icon = 37;
             } else if (id == STGGRID_ID_EMPTY) {
                 icon = 38;
