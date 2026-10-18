@@ -217,7 +217,7 @@ typedef struct SimEventRow {
     s32 weight[5];
 } SimEventRow; /* 0x14 */
 
-#define SIMDAY_BGM_FIRST 0x10B16  /* Bgm_Play id of music 0 */
+#define SIMDAY_BGM_FIRST PORT_BT4(0x10B16, 0x816)  /* Bgm_Play id of music 0 */
 #define SIMDAY_FACE_FILE 0x2F9     /* + character id: compressed portrait */
 #define SIMDAY_FACE_SIZE 0x16800
 #define SIMDAY_FACE_RES_SIZE 0x20800

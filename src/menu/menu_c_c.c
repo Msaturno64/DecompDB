@@ -225,12 +225,12 @@ void HistResult_Init(s32 section) {
     GetWin_Init(MPACK_AT(gHistResult->res, 5), 1);
     if (gHistResult->flags & HISTRESULT_LOST) {
         gHistResult->pointsTotal = 0;
-        StreamSe_PlayPausedDefault(0, 0x10BC8);
+        StreamSe_PlayPausedDefault(0, PORT_BT4(0x10BC8, 0x14F));
     } else {
         if (HistResult_IsMenuCleared() && !(MSAVE->slot[gProgress->subMenu].flags & MSLOT_OUTRO_SEEN)) {
-            StreamSe_PlayPausedDefault(0, 0x10BC9);
+            StreamSe_PlayPausedDefault(0, PORT_BT4(0x10BC9, 0x150));
         } else {
-            StreamSe_PlayPausedDefault(0, 0x10BC7);
+            StreamSe_PlayPausedDefault(0, PORT_BT4(0x10BC7, 0x14E));
         }
         HistResult_BuildRewards();
     }
@@ -492,7 +492,7 @@ void HistResult_UpdateSe(void) {
         }
         break;
     case 3:
-        Bgm_Play(0x10B18);
+        Bgm_Play(PORT_BT4(0x10B18, 0x86C));
         gHistResult->seState = 0;
         break;
     }

@@ -541,7 +541,7 @@ s32 BtlScriptCmd_SetWindow(u32 phase, void *taskWork) {
 /* Command 1501 "music": n. Plays stream 0x10B16 + n as the battle music. */
 s32 BtlScriptCmd_PlayBgm(u32 phase, void *taskWork) {
     if (phase == GSC_PHASE_BEGIN || phase == GSC_PHASE_BEGIN_ABORT) {
-        Bgm_Play(Gsc_GetInt() + 0x10B16);
+        Bgm_Play(Gsc_GetInt() + PORT_BT4(0x10B16, 0x816));
     }
     return 1;
 }

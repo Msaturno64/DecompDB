@@ -16,8 +16,8 @@ extern s32 CharSel_Run(s32 kind);  /* the character select (chunk 5, menu_e) */
 #define MODE_TRAIN_SELECT 45
 #define MODE_CHAR_REF 60
 
-#define BGM_CHAR_REF 0x10B18
-#define BGM_TRAIN 0x10B1A
+#define BGM_CHAR_REF PORT_BT4(0x10B18, 0x83C)
+#define BGM_TRAIN PORT_BT4(0x10B1A, 0x81A)
 
 /* Mode 60: loads archive 9 (file baseFile + 15) and runs the character reference; back to the main menu. */
 s32 CharRefMode_Main(void) {

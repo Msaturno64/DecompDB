@@ -9,7 +9,7 @@
 #define MODE_MAIN_MENU 4
 #define MODE_OPTION 62
 
-#define BGM_OPTION 0x10B18
+#define BGM_OPTION PORT_BT4(0x10B18, 0x83E)
 
 /* Mode 62: loads archive 10 (file baseFile + 5) and runs the options screen; back to the main menu. */
 s32 OptMode_Main(void) {

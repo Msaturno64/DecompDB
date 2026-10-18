@@ -1088,7 +1088,7 @@ s32 Tour_Main(void) {
                     gMenuArc4 = File_LoadSync(gProgress->baseFile + 2, NULL, 0);
                 }
             }
-            Bgm_Play(0x10B19);
+            Bgm_Play(PORT_BT4(0x10B19, 0x83B));
             if (TourMenu_Run(1)) {
                 Adx_StopAll();
                 gProgress->mode = 34;
@@ -1105,7 +1105,7 @@ s32 Tour_Main(void) {
                     gMenuArc4 = File_LoadSync(gProgress->baseFile + 2, NULL, 0);
                 }
             }
-            Bgm_Play(0x10B1B);
+            Bgm_Play(PORT_BT4(0x10B1B, 0x81B));
             if (EntrySel_Run(2)) {
                 Adx_StopAll();
                 gProgress->mode = 35;

@@ -58,7 +58,7 @@ void Battle_ResetWork(void) {
 #ifdef PORT
     Bgm_Play(PORT_BGM_FILE(Battle_GetBgm())); /* (a song added from outside the disc has a file id of its own) */
 #else
-    Bgm_Play(Battle_GetBgm() + 0x10B16);
+    Bgm_Play(Battle_GetBgm() + PORT_BT4(0x10B16, 0x816));
 #endif
     if (Battle_GetMode() == 1) {
         ev = Battle_GetEventWork();

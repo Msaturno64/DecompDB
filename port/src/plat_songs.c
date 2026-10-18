@@ -140,7 +140,7 @@ void PortSongs_Init(void) {
         return;
     }
     sDone = 1;
-    if (!PortExtras_Dir("songs", "BT3_SONGS", sDir, sizeof(sDir))) {
+    if (gPortBt4 || !PortExtras_Dir("songs", "BT3_SONGS", sDir, sizeof(sDir))) { /* (none with BT4: plat_songs.h) */
         return;
     }
     PortSongs_Mp3Start(sDir);

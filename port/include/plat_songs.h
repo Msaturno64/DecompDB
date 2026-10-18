@@ -7,8 +7,11 @@
 /* The music list holds offsets into the BGM file range: entry value `n` plays file 0x10B16 + n. Offsets 0x00..0x13
    are the disc's 20 tracks, 0x18 is the game's "random" and 0x19 its "locked" marker; the disc's own raw list also
    carries 0x14..0x17, which the menu drops. Added tracks take 0x1A onward, so they never touch a disc entry. */
-#define PORT_SONG_FIRST_OFFSET 0x1A
-#define PORT_SONG_BGM_FIRST 0x10B16 /* Bgm_Play id of music-list offset 0 */
+extern int gPortBt4; /* (the BT4 disc, sys/file.h: its music starts at file 0x816, read with REA) */
+/* shortcut: no added songs with BT4's data (its music list is longer than BT3's); give them a place past BT4's
+   entries when the songs folder is wanted with BT4. */
+#define PORT_SONG_FIRST_OFFSET (gPortBt4 ? 0x7FFF : 0x1A)
+#define PORT_SONG_BGM_FIRST (gPortBt4 ? 0x816 : 0x10B16) /* Bgm_Play id of music-list offset 0 */
 #define PORT_SONG_MAX 40            /* the menu's list (64 places of ours) less the disc's songs and "random" */
 /* An added song's file. NOT 0x10B16 + its entry: those ids are disc files (0x10B30..0x10B33 are silent, 0x10B34
    and 0x10B35 are the first two lines of the announcer), and the fifth and sixth added song stood in their place

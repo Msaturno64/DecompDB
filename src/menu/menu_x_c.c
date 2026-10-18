@@ -720,7 +720,7 @@ s32 Option_Input(void) {
         } else if (gPad[0].gamePressed & PADG_CROSS) {
             OPT_PLATE(OPT_CLIP_BGM, "fl_ok");
             if (gOption->bgmIds[gOption->bgmCursor] != 0x19) {
-                Bgm_Play(gOption->bgmIds[gOption->bgmCursor] + 0x10B16);
+                Bgm_Play(gOption->bgmIds[gOption->bgmCursor] + PORT_BT4(0x10B16, 0x816));
                 Snd_PlaySe(1, 1);
             } else {
                 Snd_PlaySe(1, 7);
@@ -731,7 +731,7 @@ s32 Option_Input(void) {
             gOption->cursor = OPT_ITEM_BGM;
             Flash_GotoLabel(&gOption->flash[0], "fl_bgm_cansel", 1);
             OPT_PLATE(OPT_CLIP_ROW_SOUND, "fl_on_start");
-            Bgm_Play(0x10B18);
+            Bgm_Play(PORT_BT4(0x10B18, 0x83E));
             Snd_PlaySe(1, 2);
             OPT_VOICE(17);
         }

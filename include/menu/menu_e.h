@@ -38,8 +38,8 @@ typedef struct TsCell {
 #define TS_STAGE_RANDOM 0x23
 #define TS_BGM_RANDOM 0x18
 
-#define TS_FACE_FILE 0x2F9   /* + character id: compressed portrait */
-#define TS_STAGE_FILE 0x39D  /* + stage id: compressed stage picture */
+#define TS_FACE_FILE PORT_BT4(0x2F9, 0x71C) /* + character id: compressed portrait */
+#define TS_STAGE_FILE PORT_BT4(0x39D, 0x6B9) /* + stage id: compressed stage picture */
 
 /* An item set: eight item ids, one object (it is copied whole with a structure assignment; TeamSel_Input only
    compiles to the original's code that way). */
@@ -173,7 +173,11 @@ typedef struct TeamSel {
     /* 0x3C70 */ MTextBox nameBox[TEAMSEL_SIDES];
     /* 0x3D88 */ MTextBox formBox[TEAMSEL_SIDES];
     /* 0x3EA0 */ void *unk3EA0;             /* common file 4, section 2 */
-} TeamSel; /* 0x3EA4 */
+#ifdef PORT /* (the BT4 disc's own, read with REA at 0x345058: allocated with BT4's data only) */
+    /* 0x3EA4 */ void *bt4Text;             /* section 57 (BT4's screen pack has one more) */
+    /* 0x3EA8 */ MTextBox bt4Box[TEAMSEL_SIDES]; /* its line 7 */
+#endif
+} TeamSel; /* 0x3EA4; BT4's 0x3FC0 */
 
 #define TEAMSEL_STAGE_CHANGE 0x20  /* the stage under the cursor changed: load its picture */
 #define TEAMSEL_STAGE_READY 0x40   /* the picture is loaded and fades in */

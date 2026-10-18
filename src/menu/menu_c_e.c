@@ -23,6 +23,16 @@ extern volatile int gUiNameX, gUiNameY, gUiNameW, gUiNameH;
 extern volatile int gUiNameIdx, gUiNameReady;
 extern volatile int gUiSongX, gUiSongY, gUiSongW, gUiSongH;
 extern volatile int gUiSongIdx, gUiSongReady, gUiSongLit;
+
+/* BT4's "random" music (its code at 0x347A60, read with REA): any entry of the screen's list but "random" itself. */
+s32 MenuBgm_PortBt4Random(s32 count, s32 *ids) {
+    s32 id;
+
+    do {
+        id = ids[Rand_Range(count)];
+    } while (id == CHARSEL_BGM_RANDOM);
+    return id;
+}
 #endif
 
 /*
@@ -382,8 +392,8 @@ void CharSel_Init(s32 section) {
     s32 stageRows;
     void *data;
 
-    gCharSel = Heap_Alloc(0x3A4C, 0x20, 0, 2);
-    memset(gCharSel, 0, 0x3A4C);
+    gCharSel = Heap_Alloc(PORT_BT4(0x3A4C, 0x3B68), 0x20, 0, 2);
+    memset(gCharSel, 0, PORT_BT4(0x3A4C, 0x3B68));
     if (gProgress->mode == 0x2D) {
         gCharSel->pack = (u32 *)MPACK_AT(gMenuArc6, section);
         gCharSel->res = Sprite_Unpack(gCharSel->pack, NULL, NULL);
@@ -526,11 +536,11 @@ void CharSel_Init(s32 section) {
     gCharSel->nameText = MPACK_AT(gCharSel->res, 43);
     gCharSel->formText = MPACK_AT(gCharSel->res, 44);
     gCharSel->chipPack = (u32 *)MPACK_AT(gCharSel->res, 45);
-    for (i = 0; i < MCHR_CELL_MAX; i++) {
+    for (i = 0; i < PORT_BT4(MCHR_CELL_MAX, 250); i++) {
         CS_RES(gCharSel->chipPack, i + 1);
     }
     gCharSel->stagePack = (u32 *)MPACK_AT(gCharSel->res, 46);
-    for (i = 0; i < 38; i++) {
+    for (i = 0; i < PORT_BT4(38, 99); i++) {
         CS_RES(gCharSel->stagePack, i + 1);
     }
 
@@ -596,7 +606,7 @@ void CharSel_Init(s32 section) {
         fprintf(stderr, "\n");
     }
 #endif
-    gCharSel->stageRows = 6;
+    gCharSel->stageRows = PORT_BT4(6, 11);
 #ifdef PORT
     if (sPortStagesAdded) { /* (with nothing added the grid is the game's own, 6 rows) */
         gCharSel->stageRows = (gCharSel->stageCount + STGGRID_COLS - 1) / STGGRID_COLS;
@@ -743,6 +753,11 @@ void CharSel_Init(s32 section) {
     gCharSel->stageBuf = 1;
 
     if (gCharSel->bgmIds[gCharSel->stage->bgmPlaying] == CHARSEL_BGM_RANDOM) {
+#ifdef PORT
+        if (gPortBt4) {
+            Bgm_Play(CHARSEL_BGM_FIRST + MenuBgm_PortBt4Random(gCharSel->bgmCount, gCharSel->bgmIds));
+        } else
+#endif
         Bgm_Play(CHARSEL_BGM_RANDOM_FIRST + Rand_Range(9));
     } else {
         Bgm_Play(CHARSEL_BGM_FILE(gCharSel->bgmIds[gCharSel->stage->bgmPlaying]));
@@ -753,6 +768,15 @@ void CharSel_Init(s32 section) {
         TextBox_Init(&gCharSel->formBox[i], gCharSel->formText, i + 3);
         TextBox_SetUnk80(&gCharSel->formBox[i], 1);
     }
+#ifdef PORT
+    if (gPortBt4) {
+        gCharSel->bt4Text = MPACK_AT(gCharSel->res, 57);
+        for (i = 0; i < CHARSEL_SIDES; i++) {
+            TextBox_Init(&gCharSel->bt4Box[i], MPACK_AT(gCharSel->bt4Text, 1), 7);
+            TextBox_SetUnk80(&gCharSel->bt4Box[i], 1);
+        }
+    }
+#endif
 }
 
 /* Frees the screen: the windows, the movies, the picture buffers and the work area. */

@@ -20,7 +20,7 @@ static s32 sPortSongsAdded;  /* ... and its music list songs from outside the di
 static s32 sPortStageRows = TS_STAGE_COLS; /* rows of the stage reel: the game's 6, more with stages added */
 /* The picture behind the reel: a disc stage's own (0x39D + id); an added stage borrows one (its id past 0x23
    would fall on the loading screens' files), as in the duel's select. */
-#define TS_STAGE_PICTURE(id) (TS_STAGE_FILE + ((id) < 0x24 ? (id) : (id) - 0x24))
+#define TS_STAGE_PICTURE(id) (TS_STAGE_FILE + ((id) < 0x24 || gPortBt4 ? (id) : (id) - 0x24))
 /* include/battle/view_a.h holds these; repeated here (pulling it in clashes with the menu headers). The PC build
    moves the locked / empty markers up so added stages keep their own ids. */
 #define STGGRID_ID_LOCKED 0x3E
@@ -467,8 +467,8 @@ void TeamSel_Init(s32 section) {
     s32 i;
     s32 j;
 
-    gTeamSel = Heap_Alloc(sizeof(TeamSel), 0x20, 0, 2);
-    memset(gTeamSel, 0, sizeof(TeamSel));
+    gTeamSel = Heap_Alloc(PORT_BT4(0x3EA4, sizeof(TeamSel)), 0x20, 0, 2);
+    memset(gTeamSel, 0, PORT_BT4(0x3EA4, sizeof(TeamSel)));
     gTeamSel->pack = (u32 *)MPACK_AT(gMenuArc5, section);
     gTeamSel->res = Sprite_Unpack(gTeamSel->pack, NULL, NULL);
     TS_RES(47);
@@ -628,12 +628,12 @@ void TeamSel_Init(s32 section) {
     gTeamSel->nameText = MPACK_AT(gTeamSel->res, 43);
     gTeamSel->formText = MPACK_AT(gTeamSel->res, 44);
     gTeamSel->chipPack = (u32 *)MPACK_AT(gTeamSel->res, 45);
-    for (i = 0; i < TS_CELL_MAX; i++) {
+    for (i = 0; i < PORT_BT4(TS_CELL_MAX, 250); i++) {
         res = (MTexRes *)MPACK_AT(gTeamSel->chipPack, i + 1);
         Res_RelocateOffsets(&res, res, res);
     }
     gTeamSel->stagePack = (u32 *)MPACK_AT(gTeamSel->res, 46);
-    for (i = 0; i < 38; i++) {
+    for (i = 0; i < PORT_BT4(38, 99); i++) {
         res = (MTexRes *)MPACK_AT(gTeamSel->stagePack, i + 1);
         Res_RelocateOffsets(&res, res, res);
     }
@@ -652,7 +652,7 @@ void TeamSel_Init(s32 section) {
         s32 extra = Port_NetSession() ? 0 : gPortExtraStageCount;
         s32 swaps = Port_NetSession() ? 0 : gPortStageReplaceCount;
         s32 n = gTeamSel->stageCount, k, r;
-        sPortStageRows = TS_STAGE_COLS;
+        sPortStageRows = PORT_BT4(TS_STAGE_COLS, 11); /* (BT4's 11: REA, TeamSel_Input) */
         sPortStagesAdded = extra > 0 || swaps > 0;
         if (extra > 0 || swaps > 0) {
             if (n > 64) {
@@ -833,12 +833,18 @@ void TeamSel_Init(s32 section) {
     gTeamSel->bgAlpha[1] = 0;
     gTeamSel->stageBuf = 1;
     if (gTeamSel->bgmIds[gTeamSel->stage->bgm] == TS_BGM_RANDOM) {
+#ifdef PORT
+        if (gPortBt4) {
+            extern s32 MenuBgm_PortBt4Random(s32 count, s32 *ids); /* menu_c_e.c */
+            Bgm_Play(TS_BGM_FILE + MenuBgm_PortBt4Random(gTeamSel->bgmCount, gTeamSel->bgmIds));
+        } else
+#endif
         Bgm_Play(Rand_Range(9) + 0x10B1E);
     } else {
 #ifdef PORT /* (a song added from outside the disc has a file id of its own) */
         Bgm_Play(PORT_BGM_FILE(gTeamSel->bgmIds[gTeamSel->stage->bgm]));
 #else
-        Bgm_Play(gTeamSel->bgmIds[gTeamSel->stage->bgm] + 0x10B16);
+        Bgm_Play(gTeamSel->bgmIds[gTeamSel->stage->bgm] + TS_BGM_FILE);
 #endif
     }
     for (i = 0; i < TEAMSEL_SIDES; i++) {
@@ -847,6 +853,15 @@ void TeamSel_Init(s32 section) {
         TextBox_Init(&gTeamSel->formBox[i], gTeamSel->formText, i + 3);
         TextBox_SetUnk80(&gTeamSel->formBox[i], 1);
     }
+#ifdef PORT
+    if (gPortBt4) {
+        gTeamSel->bt4Text = MPACK_AT(gTeamSel->res, 57);
+        for (i = 0; i < TEAMSEL_SIDES; i++) {
+            TextBox_Init(&gTeamSel->bt4Box[i], MPACK_AT(gTeamSel->bt4Text, 1), 7);
+            TextBox_SetUnk80(&gTeamSel->bt4Box[i], 1);
+        }
+    }
+#endif
 }
 
 /* Frees the screen: the windows, the movies, the picture buffers and the work area. */

@@ -65,7 +65,7 @@ void HistOutro_GuideGoto(s32 movie, s32 side, s32 out) {
         gSaveData->unk1008 |= 1; \
     }
 
-#define OUTRO_BGM 0x10B1C
+#define OUTRO_BGM PORT_BT4(0x10B1C, 0x81C)
 
 /* Loads the screen (section `section` of archive 2 and the saga's own file) and starts the music. */
 void HistOutro_Init(s32 section) {
@@ -191,16 +191,16 @@ void HistOutro_Init(s32 section) {
     switch (gProgress->subMenu) {
     case 0:
         Bgm_Play(OUTRO_BGM);
-        StreamSe_PlayDefault(0, 0x10BDC);
+        StreamSe_PlayDefault(0, PORT_BT4(0x10BDC, 0x159));
         break;
     case 1:
         Bgm_Play(OUTRO_BGM);
-        StreamSe_PlayDefault(0, 0x10BDD);
+        StreamSe_PlayDefault(0, PORT_BT4(0x10BDD, 0x15A));
         OUTRO_COUNT(1);
         break;
     case 2:
         Bgm_Play(OUTRO_BGM);
-        StreamSe_PlayDefault(0, 0x10BDE);
+        StreamSe_PlayDefault(0, PORT_BT4(0x10BDE, 0x15B));
         break;
     case 3:
         Bgm_Play(OUTRO_BGM);
@@ -210,11 +210,11 @@ void HistOutro_Init(s32 section) {
         OUTRO_COUNT(4);
         break;
     case 5:
-        Bgm_Play(0x10B1E);
+        Bgm_Play(PORT_BT4(0x10B1E, 0x81E));
         OUTRO_COUNT(5);
         break;
     case 6:
-        Bgm_Play(0x10B28);
+        Bgm_Play(PORT_BT4(0x10B28, 0x828));
         break;
     case 7:
         Bgm_Play(OUTRO_BGM);
@@ -839,7 +839,7 @@ s32 Hist_Main(void) {
     do {
         switch (gProgress->mode) {
         case 6:
-            Bgm_Play(0x10B18);
+            Bgm_Play(PORT_BT4(0x10B18, 0x86C));
             r = HistSel_Run(1);
             Adx_StopAll();
             gProgress->prevMode = gProgress->mode;

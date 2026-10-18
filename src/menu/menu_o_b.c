@@ -412,7 +412,7 @@ void DiscFusion_UpdateDisc(void) {
     case DISCFUSION_DLG_CLOSE:
         if (Dialog_IsClosed()) {
             Adx_StopAll();
-            Bgm_Play(UB_BGM);
+            Bgm_Play(PORT_BT4(UB_BGM, 0x81B));
             gDiscFusion->dlgStep = 0;
             if (gDiscFusion->chosen == 0) {
                 if (UO_PROG->discFlags & UB_DISC_0) {

@@ -68,10 +68,10 @@ void Bracket_Init(void) {
             break;
         case TOUR_BIG:
         case TOUR_OTHERWORLD:
-            Bgm_Play(BRK_BGM_OTHER);
+            Bgm_Play(PORT_BT4(BRK_BGM_OTHER, 0x86A));
             break;
         case TOUR_YAMCHA:
-            Bgm_Play(BRK_BGM_OTHER);
+            Bgm_Play(PORT_BT4(BRK_BGM_OTHER, 0x8CF));
             break;
         }
     }
@@ -175,10 +175,10 @@ void Bracket_Update(void) {
                 break;
             case TOUR_BIG:
             case TOUR_OTHERWORLD:
-                Bgm_Play(BRK_BGM_OTHER);
+                Bgm_Play(PORT_BT4(BRK_BGM_OTHER, 0x86A));
                 break;
             case TOUR_YAMCHA:
-                Bgm_Play(BRK_BGM_OTHER);
+                Bgm_Play(PORT_BT4(BRK_BGM_OTHER, 0x8CF));
                 break;
             }
             gBracket->flags &= ~BRK_FANFARE;
