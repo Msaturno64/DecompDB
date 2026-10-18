@@ -1634,6 +1634,11 @@ void BtlObjFace_Init(BobjObj *obj, BobjFace *face) {
     BobjMdl *mdl = &obj->mdl;
 
     BtlObjMdl_CopyTexAlpha(mdl, mdl->faceTex, mdl->eyeTex);
+#ifdef PORT
+    if (gPortBt4 && ((BobjTexTable **)mdl->unk00)[2] != NULL) { /* (the second texture set too: REA, 0x3BEF90) */
+        BtlObjMdl_CopyTexAlpha(mdl, ((BobjTexTable **)mdl->unk00)[2], ((BobjTexTable **)mdl->unk00)[3]);
+    }
+#endif
     BtlObjFace_Nop(face);
 }
 
