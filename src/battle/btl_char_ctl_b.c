@@ -76,6 +76,26 @@ void BtlChange_Update(void) {
     }
 }
 
+#ifdef PORT
+/* Whether a player has a character change (transformation, fusion, member switch) active or queued. From its
+   request until it is done the fighter's animation files are being read over the old ones while its object still
+   uses the old tables (BtlRes_Reload, BtlObj_Rebind): the change must not be cut short. */
+s32 BtlChange_PortHasChara(s32 player) {
+    BtlChangeQueue *q = &gBtlChars->change;
+    s32 r;
+
+    if (q->cur != NULL && q->cur->player == player && q->cur->kind == BTL_CHANGE_KIND_CHARA && q->state != BTL_CHANGE_DONE) {
+        return 1;
+    }
+    for (r = q->read; r != q->write; r = (r + 1) % BTL_CHANGE_RING) {
+        if (q->req[r].player == player && q->req[r].kind == BTL_CHANGE_KIND_CHARA) {
+            return 1;
+        }
+    }
+    return 0;
+}
+#endif
+
 /* Queues a character model change (transformation, fusion, member switch) for a player. */
 void BtlChange_RequestChara(s32 player, s32 chara, s32 costume, s32 variant, s32 animChara, s32 unk18, s32 voiceChara) {
     BtlChangeReq *req;
@@ -88,19 +108,9 @@ void BtlChange_RequestChara(s32 player, s32 chara, s32 costume, s32 variant, s32
        stopped for good. */
     {
         extern s32 BattleSide_GetCount(void); /* battle/battle_load.c */
-        BtlChangeQueue *q = &gBtlChars->change;
-        s32 r;
 
-        if (BattleSide_GetCount() > 2) {
-            if (q->cur != NULL && q->cur->player == player && q->cur->kind == BTL_CHANGE_KIND_CHARA &&
-                q->state != BTL_CHANGE_DONE) {
-                return;
-            }
-            for (r = q->read; r != q->write; r = (r + 1) % BTL_CHANGE_RING) {
-                if (q->req[r].player == player && q->req[r].kind == BTL_CHANGE_KIND_CHARA) {
-                    return;
-                }
-            }
+        if (BattleSide_GetCount() > 2 && BtlChange_PortHasChara(player)) {
+            return;
         }
     }
 #endif

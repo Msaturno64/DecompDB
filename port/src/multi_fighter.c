@@ -200,9 +200,13 @@ int PortMulti_TargetOf(int i);
    contacts, clashes, rushes, hits (btl_char_hit.c, eft_det_a.c), as the console skips the whole step while anyone is
    frozen. Shots still reach it (an ultimate's beam its victim). */
 int PortMulti_Frozen(int i) {
-    extern int BtlChar_IsFrozen(void *chr); /* src/battle/btl_char_get.c */
+    extern int BtlChar_IsFrozen(void *chr);     /* src/battle/btl_char_get.c */
+    extern int BtlChange_PortHasChara(int player); /* src/battle/btl_char_ctl_b.c */
 
-    return BattleSide_GetCount() > 2 && i >= 0 && i < BattleSide_GetCount() && BtlChar_IsFrozen((void *)BtlChar_Get(i));
+    /* (so is one in the middle of a character change: the console's freeze of the field kept everyone off it, and a
+       hit that cut a transformation short left its animation tables on the new files: Bardock 2v2, a crash later) */
+    return BattleSide_GetCount() > 2 && i >= 0 && i < BattleSide_GetCount() &&
+           (BtlChar_IsFrozen((void *)BtlChar_Get(i)) || BtlChange_PortHasChara(i));
 }
 
 /* btl_char_mgr.c, BtlChars_UpdateFreeze, with more than two fighters: the one fighter i's freeze (flag 0x125 of a
@@ -315,10 +319,14 @@ static int pair_partner(int f) {
 }
 
 int PortMulti_CanContact(int attacker, int victim) {
+    extern int BtlChange_PortHasChara(int player); /* src/battle/btl_char_ctl_b.c */
     int on, owner, p, q;
 
     if (BattleSide_GetCount() <= 2) {
         return 1;
+    }
+    if (BtlChange_PortHasChara(attacker) || BtlChange_PortHasChara(victim)) { /* (a character change: PortMulti_Frozen) */
+        return 0;
     }
     /* a cinematic's two (its owner and the owner's opponent) touch only each other while it plays, as a rush's pair
        (the Tag Team Mod's cinematic_contact_guard; SPEC-cinematicas.md, C4) */

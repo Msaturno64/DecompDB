@@ -1469,6 +1469,21 @@ s32 BtlChars_CheckStart(void) {
     s32 ret = 0;
 
     if (BtlSeq_GetState() == 2 || BtlSeq_GetState() == 3) {
+#ifdef PORT
+        if (!(gBtlChars->flags & BTL_CHARS_STARTED) && BtlChar_GetCount() > 2) {
+            /* (several fighters: not while one's character change is half done, its files read over the old ones and
+               its object still on the old tables: the reset drops the change, and the fighter's animations are
+               garbage from then on (Bardock 2v2, a transformation from the intro). The start waits for it.) */
+            extern s32 BtlChange_PortHasChara(s32 player); /* btl_char_ctl_b.c */
+            s32 k;
+
+            for (k = 0; k < BtlChar_GetCount(); k++) {
+                if (BtlChange_PortHasChara(k)) {
+                    return 0;
+                }
+            }
+        }
+#endif
         if (!(gBtlChars->flags & BTL_CHARS_STARTED)) {
             if (Battle_GetMode() != 1) {
                 BtlChar_ResetAll();
