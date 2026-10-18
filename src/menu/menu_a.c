@@ -101,6 +101,16 @@ void MainMenu_StartBallLoops(void) {
     res = (MTexRes *)MPACK_AT(gMainMenu->res, n); \
     Res_RelocateOffsets(&res, res, res)
 
+#ifdef PORT
+/* The BT4 disc (TeamBT4, PRIVATE; sys/file.h): two of the screen's pictures come in three variants, one picked at
+   random each time (TeamBT4's 0x26BD28, read with REA): entry 29 + 2 * Rand_Range(3) + k instead of 26 (k = 1) and
+   14 (k = 0); BT3's entries there are other pictures, and the menu drew garbage (the VU1 program never ended). */
+extern int gPortBt4;
+static s32 MainMenu_PortEntry(s32 n, s32 k) {
+    return gPortBt4 ? 29 + 2 * (s32)Rand_Range(3) + k : n;
+}
+#endif
+
 /* Loads and unpacks the screen (section `section` of archive 1), builds the item list and the windows. */
 void MainMenu_Init(s32 section) {
     MTexRes *res = NULL;
@@ -155,7 +165,11 @@ void MainMenu_Init(s32 section) {
     gMainMenu->tex[49] = MTEX(res, 5);
     MM_RES(13);
     gMainMenu->tex[22] = MTEX(res, 0);
+#ifdef PORT
+    MM_RES(MainMenu_PortEntry(26, 1));
+#else
     MM_RES(26);
+#endif
     gMainMenu->tex[27] = MTEX(res, 0);
     gMainMenu->tex[28] = MTEX(res, 1);
     gMainMenu->tex[29] = MTEX(res, 2);
@@ -164,7 +178,11 @@ void MainMenu_Init(s32 section) {
     gMainMenu->tex[13] = MTEX(res, 1);
     gMainMenu->tex[14] = MTEX(res, 2);
     gMainMenu->tex[15] = MTEX(res, 3);
+#ifdef PORT
+    MM_RES(MainMenu_PortEntry(14, 0));
+#else
     MM_RES(14);
+#endif
     gMainMenu->tex[31] = MTEX(res, 0);
     gMainMenu->tex[32] = MTEX(res, 1);
     gMainMenu->tex[33] = MTEX(res, 2);
