@@ -296,9 +296,26 @@ int PortMulti_TargetOf(int i);
 
 static int cinema_owner(int *on);
 
-int PortMulti_CanContact(int attacker, int victim) {
+/* The fighter f is in a pair with: its own opponent while it is in a pair action, else one in a pair action with f
+   as its opponent (the frame or two between the victim's sequence and the attacker's: an outsider's freeze held the
+   attacker there and the pair ran out of step, Goku GT SSJ4 2v5), else -1. */
+static int pair_partner(int f) {
     extern int BtlCharApi_GetAction(int objId); /* src/battle/btl_capi_b.c */
-    int on, owner;
+    int n = BattleSide_GetCount(), k;
+
+    if (PAIR_ACTION(BtlCharApi_GetAction(BattleSide_GetObjId(f)))) {
+        return PortMulti_TargetOf(f);
+    }
+    for (k = 0; k < n; k++) {
+        if (k != f && PAIR_ACTION(BtlCharApi_GetAction(BattleSide_GetObjId(k))) && PortMulti_TargetOf(k) == f) {
+            return k;
+        }
+    }
+    return -1;
+}
+
+int PortMulti_CanContact(int attacker, int victim) {
+    int on, owner, p, q;
 
     if (BattleSide_GetCount() <= 2) {
         return 1;
@@ -313,8 +330,9 @@ int PortMulti_CanContact(int attacker, int victim) {
             return 0;
         }
     }
-    return (!PAIR_ACTION(BtlCharApi_GetAction(BattleSide_GetObjId(attacker))) || PortMulti_TargetOf(attacker) == victim) &&
-           (!PAIR_ACTION(BtlCharApi_GetAction(BattleSide_GetObjId(victim))) || PortMulti_TargetOf(victim) == attacker);
+    p = pair_partner(attacker);
+    q = pair_partner(victim);
+    return (p < 0 || p == victim) && (q < 0 || q == attacker);
 }
 
 /* Whether the fighter is in a rush sequence or a throw (PAIR_ACTION): btl_char_flag_clash.c pairs no clash with it
