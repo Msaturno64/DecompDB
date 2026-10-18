@@ -761,6 +761,11 @@ s32 EftObj_Create(EftObjRes *res, void *model) {
     s32 id;
 
     memset(res, 0, sizeof(EftObjRes));
+#ifdef PORT
+    if (model == NULL) { /* (no model in the effect's pack, eft_j.c: the effect goes on without an object) */
+        return -1;
+    }
+#endif
     res->model = model;
     res->size = 0x20;
     id = BtlObj_Create(1, res, 1);

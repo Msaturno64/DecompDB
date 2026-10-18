@@ -80,6 +80,9 @@ extern f32 EftMath_WrapAngle(f32 angle);
 extern s32 BtlScene_IsCharStopped(s32 objId);
 extern s32 BtlScene_IsEffectHidden(s32 objId, s32 kind);
 extern s32 *BtlScene_GetPackEntry(s32 *base, s32 idx);
+#ifdef PORT
+extern s32 BtlScene_GetPackEntrySize(s32 *base, s32 idx);
+#endif
 extern f32 BtlScene_RandF(void);
 extern void BtlTask_CreateChildList(EftJTask *task, s32 count, s32 workSize);
 
@@ -1106,8 +1109,20 @@ void EftPropShotMgr_Init(EftJTask *task, EftJSrc *src) {
         u8 costume = BtlCharApi_GetCostume(src->objId20);
 
         m->model = BtlScene_GetPackEntry(BtlScene_GetPackEntry(src->pack, 1), costume + 1);
+#ifdef PORT
+        if (BtlScene_GetPackEntrySize(BtlScene_GetPackEntry(src->pack, 1), costume + 1) == 0) {
+            m->model = NULL; /* (an empty entry: see below) */
+        }
+#endif
     } else {
         m->model = BtlScene_GetPackEntry(src->pack, 1);
+#ifdef PORT
+        if (BtlScene_GetPackEntrySize(src->pack, 1) == 0) {
+            /* an empty entry: this pack has no prop model (Great Ape Raditz's shot 0x166). The console bound whatever
+               followed as a model; here that read far outside memory. The shot goes on without its prop. */
+            m->model = NULL;
+        }
+#endif
     }
     EftEmit_LoadSet(src, &m->set, 0, src->pack, 0, 4);
     BtlTask_CreateChildList(task, 2, 0x630);
