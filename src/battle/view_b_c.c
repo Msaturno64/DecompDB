@@ -119,19 +119,19 @@ s32 CpuLevel_FromSetting(u32 setting) {
 
     switch (setting) {
     case 0:
-        level = 0;
+        level = PORT_BT4(0, 6); /* (BT4: REA, 0x261764) */
         break;
     case 1:
-        level = 6;
+        level = PORT_BT4(6, 13);
         break;
     case 2:
-        level = 13;
+        level = PORT_BT4(13, 21);
         break;
     case 3:
-        level = 21;
+        level = PORT_BT4(21, 29);
         break;
     case 4:
-        level = 29;
+        level = PORT_BT4(29, 99);
         break;
     }
     return level;

@@ -2,6 +2,8 @@
 #ifdef PORT
 /* (BT4: the gauge word, or ability 0x7A: REA, 0x1E118C) */
 #define BT4_DAMAGED(chr, v) (gPortBt4 ? ((v) != 0 || BtlMember_HasAbility(chr, 0x7A)) : (v))
+#else
+#define BT4_DAMAGED(chr, v) (v)
 #endif
 #include "battle/btl_act_f.h"
 

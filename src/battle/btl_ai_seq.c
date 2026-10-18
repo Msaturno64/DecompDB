@@ -1189,6 +1189,11 @@ s32 BtlAiStep_Unk14(BtlAiWork *ai) {
     if (!(val[0] > val[1])) {
         a = b;
     }
+#ifdef PORT
+    if (gPortBt4) { /* (BT4: REA, 0x1B613C) */
+        seq->step = roll < a ? seq->timer : 0;
+    } else
+#endif
     if (roll < a) {
         seq->step = (seq->step + 1) % 4;
     }

@@ -1,5 +1,11 @@
 #include "common.h"
 #ifdef PORT
+extern s32 Bt4_HasAbility(void *chr, s32 id) __asm__("BtlMember_HasAbility");
+#define BT4_DAMAGED(chr, v) (gPortBt4 ? ((v) != 0 || Bt4_HasAbility(chr, 0x7A)) : (v))
+#else
+#define BT4_DAMAGED(chr, v) (v)
+#endif
+#ifdef PORT
 extern void Bt4Act_TransformCost(void *chr, s32 cost);
 extern void Bt4Act_CpuTransform(void *chr);
 extern void Bt4Act_ForcedEvasion(void *chr);
@@ -204,13 +210,13 @@ s32 BtlColl_StartThrow(BtlCollChr *atk, BtlCollChr *def, s32 slot, u32 techFlags
     atk->thr.unk44 = 0;
     atk->thr.unk48 = 0;
     if (techFlags & 0x2000) {
-        if (BtlMember_GetActiveGauge(atk)->unk20 == 0) {
+        if (BT4_DAMAGED(atk, BtlMember_GetActiveGauge(atk)->unk20) == 0) { /* (BT4: REA, 0x1E118C) */
             atk->thr.unk48 = 1;
         }
     }
     atk->thr.unk4C = 0;
     if (techFlags & 0x80000) {
-        if (BtlMember_GetActiveGauge(def)->unk20 == 0) {
+        if (BT4_DAMAGED(def, BtlMember_GetActiveGauge(def)->unk20) == 0) { /* (BT4: REA, 0x1E118C) */
             atk->thr.unk4C = 1;
         }
     }

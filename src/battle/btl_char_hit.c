@@ -1290,7 +1290,7 @@ void BtlHit_ApplyHit(HitChr *atk) {
         }
     } else {
         def->react.unk38 = 3;
-        if (drain) {
+        if (drain && !(gPortBt4 && BtlChar_TestFlag(def, 0xBE))) { /* (BT4: REA, 0x282018) */
             BtlMember_SpendKi(def, 2000, 0);
         }
     }
@@ -1401,7 +1401,7 @@ void BtlHit_ApplyHit(HitChr *atk) {
         case 0x76:
         case 0x77:
         case 0x78:
-            dmg += dmg * BtlUtil_Clamp(atk->unkD88 + def->unkD88 - 1, 0, 5) / 5;
+            dmg += dmg * BtlUtil_Clamp(atk->unkD88 + def->unkD88 - 1, 0, PORT_BT4(5, 16)) / PORT_BT4(5, 2); /* (BT4: REA, 0x1CA380) */
             break;
         default:
             if (def->react.back) {

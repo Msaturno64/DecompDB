@@ -1591,7 +1591,8 @@ s32 BtlAct_ClashExchangeHandler(BtlActEChr *chr, s32 phase) {
                     BtlChar_SetFlag(chr, c->pick + 0xE9);
                     if (chr->unkE58 == -1) {
                         if (BtlInput_IsPressed(chr, 0x78000000)) {
-                            if (BtlInput_IsPressed(chr, 0x8000000 << c->pick)) {
+                            if (BtlInput_IsPressed(chr, 0x8000000 << c->pick) &&
+                                !(gPortBt4 && BtlInput_IsPressed(chr, 0x78000000 ^ (0x8000000 << c->pick)))) { /* (BT4: REA, 0x3BEA44) */
                                 chr->unkE58 = chr->actionFrame;
                                 if (!chr->injected) {
                                     BtlCharSnd_PlayCommonFar(chr, 0x14);
@@ -1615,7 +1616,7 @@ s32 BtlAct_ClashExchangeHandler(BtlActEChr *chr, s32 phase) {
                     BtlAct_Request(chr, 0xD5);
                 }
                 if (BtlAnim_PassedRatio(chr, 0.5f)) {
-                    BtlMember_Damage(chr, BtlOpp_GetClashCountB(chr) * 600, 8);
+                    BtlMember_Damage(chr, BtlOpp_GetClashCountB(chr) * PORT_BT4(600, 792), 8); /* (BT4: REA, 0x1F52B0) */
                     BtlChar_PlayVoice(chr, 0x1A);
                 }
                 BtlChar_SetFlag(chr, 0x95);

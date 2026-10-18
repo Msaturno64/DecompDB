@@ -1390,6 +1390,11 @@ s32 BtlParam_GetSlotA4(BtlTechChr *chr, s32 slot) {
 
 /* Parameter +0xA8 + slot. */
 s32 BtlParam_GetSlotA8(BtlTechChr *chr, s32 slot) {
+#ifdef PORT
+    if (gPortBt4) { /* (REA: 0x20E270) */
+        return *(s16 *)((u8 *)BtlChar_GetObj(chr)->param + 0xCC + slot * 2);
+    }
+#endif
     return BtlChar_GetObj(chr)->param->transA8[slot];
 }
 

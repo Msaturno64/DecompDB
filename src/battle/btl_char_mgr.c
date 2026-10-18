@@ -1308,7 +1308,12 @@ void BtlChar_PostScene(BtlMgrChr *chr) {
     ChrCam_Update(chr);
 #endif
     BtlFx_UpdatePostScene(chr);
-    if (BtlMember_GetActiveGauge(chr)->health < 10000) {
+    if (BtlMember_GetActiveGauge(chr)->health < PORT_BT4(10000, 20000)) { /* (BT4: REA, 0x1C235C) */
+#ifdef PORT
+        if (gPortBt4) {
+            BtlMember_GetActiveGauge(chr)->lowHealth |= 1;
+        } else
+#endif
         BtlMember_GetActiveGauge(chr)->lowHealth = 1;
         if (!(BtlParam_GetUnk0(chr) & 0x80) && chr->unkE14 <= 0 && chr->unkE18 <= 0 && !BtlChar_TestFlag(chr, 6)) {
             BtlMember_GetActiveGauge(chr)->lowHealthIdle = 1;
@@ -1317,6 +1322,11 @@ void BtlChar_PostScene(BtlMgrChr *chr) {
         }
     } else {
         BtlMember_GetActiveGauge(chr)->lowHealthIdle = 0;
+#ifdef PORT
+        if (gPortBt4) { /* (REA: 0x1C23E0) */
+            BtlMember_GetActiveGauge(chr)->lowHealth &= 2;
+        } else
+#endif
         BtlMember_GetActiveGauge(chr)->lowHealth = 0;
     }
     opp = BtlChar_Get(BtlOpp_GetPlayer(chr));

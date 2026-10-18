@@ -493,7 +493,7 @@ s32 BtlClash_UpdateC(s32 state) {
         if (Battle_GetMode() == 1) {
             c->level = gProgress->unk3C;
         } else {
-            c->level = 1;
+            c->level = PORT_BT4(1, 2); /* (BT4: REA, 0x3BEA28) */
         }
         state++;
         break;
@@ -502,12 +502,33 @@ s32 BtlClash_UpdateC(s32 state) {
             BtlClash_SetPathCut(c->path);
         }
         if (BtlChar_TestFlag(chr0, 0xC4) && BtlChar_TestFlag(chr1, 0xC4)) {
+#ifdef PORT
+            if (gPortBt4) { /* (BT4: whoever pressed in time, REA 0x26BCC0) */
+                if (!*(s32 *)((u8 *)chr0 + 0x1278)) { /* (injected) */
+                    if (chr0->unkE58 >= 0) {
+                        BtlAct_CountAndMarkOpponent(chr0);
+                        if (chr1->unkE58 >= 0) {
+                            BtlAct_CountAndMarkOpponent(chr1);
+                        }
+                    } else if (*(s32 *)((u8 *)chr1 + 0x1278) || chr1->unkE58 >= 0) {
+                        BtlAct_CountAndMarkOpponent(chr1);
+                    }
+                }
+            } else
+#endif
             if (chr0->unkE58 >= 0) {
                 BtlAct_CountAndMarkOpponent(chr0);
             } else {
                 BtlAct_CountAndMarkOpponent(chr1);
             }
             c->count++;
+#ifdef PORT
+            if (gPortBt4 && c->count >= 7 && chr0->clashCountB == chr1->clashCountB) { /* (REA: 0x3BE8E8) */
+                BtlChar_SetFlag(chr1, 0xC7);
+                state++;
+                BtlChar_SetFlag(chr0, 0xC7);
+            } else
+#endif
             if (c->count >= 7 && chr0->clashCountB != chr1->clashCountB) {
                 if (chr1->clashCountB < chr0->clashCountB) {
                     winner = chr0;

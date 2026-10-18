@@ -329,6 +329,16 @@ void ObjDraw_UploadTextures(ObjDrawObj *obj) {
         }
     } else if (obj->state.flags & 0x40000) {
         for (j = 0; j < obj->mdl.model->clutCount; j++) {
+#ifdef PORT
+            if (gPortBt4) { /* (REA: 0x110B88 -> 0x2996AC) */
+                extern u8 *Bt4_LightGet(s32 tbp) __asm__("BtlObjLight_Get");
+                extern void Bt4_UploadOne(void *tex, s32 a, s32 tbp, s32 b) __asm__("TexFile_UploadOne");
+                s32 tbp = mdl->model->clutTbp + j * 4;
+
+                Bt4_UploadOne(*(void **)(Bt4_LightGet(tbp) + 48), 2, tbp, -1);
+                continue;
+            }
+#endif
             TexFile_UploadRange(obj->mdl.tex, mdl->model->clutFirst, mdl->model->clutCount, mdl->model->clutTbp, -1);
         }
     } else if (obj->state.flags & 0x400000) {
