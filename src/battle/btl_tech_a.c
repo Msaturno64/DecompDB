@@ -1328,6 +1328,18 @@ s32 BtlParam_ScaleKiCharge(BtlTechChr *chr, s32 val) {
 
 /* Parameter +0x10: flag word. */
 u32 BtlParam_GetFlags(BtlTechChr *chr) {
+#ifdef PORT
+    if (gPortBt4) { /* (BT4: word 1 of the character's row in common file 3's entry 12, REA 0x207210) */
+        extern u8 *gCommonRes;
+        u32 *f3 = *(u32 **)(gCommonRes + 4);
+        s32 chara = *(s32 *)((u8 *)BtlChar_GetObj(chr) + 0xC);
+
+        if (f3[12] == f3[13]) {
+            return 0;
+        }
+        return *(u32 *)((u8 *)f3 + (f3[12] & ~3) + chara * 16 + 4);
+    }
+#endif
     return BtlChar_GetObj(chr)->param->flags;
 }
 

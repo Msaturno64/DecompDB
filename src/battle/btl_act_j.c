@@ -301,6 +301,17 @@ s32 BtlAct_QueueTransform(BtlActJChr *chr, s32 index) {
     chr->form.animChara = chara;
     chr->form.unk1C = chara;
     chr->form.voiceChara = chara;
+#ifdef PORT
+    if (gPortBt4) { /* (BT4: the costume's own form, a byte of the parameter block: REA 0x3BF0B4) */
+        extern u8 *Bt4_GetObj(void *chr) __asm__("BtlChar_GetObj");
+        u8 *param = *(u8 **)(Bt4_GetObj(chr) + 0x91C);
+
+        chr->form.unk28 = param[0xD4 + index * 4 + BtlMember_GetActive(chr)->costume];
+        if (chr->form.chara >= 0x100) {
+            chr->form.chara += chr->form.unk28;
+        }
+    } else
+#endif
     if (BtlMember_GetActive(chr)->chara == 0x6A) {
         chr->form.unk28 = 2;
     }
@@ -453,6 +464,13 @@ s32 BtlAct_QueueFusion(BtlActJChr *chr, s32 index, s32 partner) {
     chr->form.costume = 0;
     chr->form.partner = partner;
     chr->form.unk28 = BtlMember_Get(chr, partner)->costume;
+#ifdef PORT
+    if (gPortBt4) { /* (REA: 0x3BF194, 0x203AA8) */
+        *(s32 *)((u8 *)chr + 0x12FC) = *(s32 *)((u8 *)BtlMember_Get(chr, partner) + 0x60);
+        *(s32 *)((u8 *)BtlMember_GetActiveGauge(chr) + 0x24) = 0;
+        chr->form.variant = 0;
+    } else
+#endif
     chr->form.variant = BtlMember_GetActiveGauge(chr)->variant;
     chr->form.animChara = chara;
     chr->form.unk1C = chara;

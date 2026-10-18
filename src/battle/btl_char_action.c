@@ -638,7 +638,18 @@ void BtlAct_SetFormCurrent(BtlActChr *chr) {
 /* Fills the form-change request with one of six fixed {chara, costume} pairs, picked by the frame counter. */
 void BtlAct_SetFormRandom(BtlActChr *chr) {
     s32 forms[6][2] = { { 1, 0 }, { 0xD, 2 }, { 0x19, 1 }, { 0x1D, 1 }, { 0x18, 0 }, { 0x59, 0 } };
-    s32 i = BtlChar_FrameMod(6);
+    s32 i;
+
+#ifdef PORT
+    if (gPortBt4) { /* (BT4: its table at 0x2EF340 and the gauge word 0x24 cleared, REA 0x1E1110) */
+        forms[0][0] = 0x56;
+        forms[0][1] = 3;
+        forms[5][0] = 0x56;
+        forms[5][1] = 2;
+        *(s32 *)((u8 *)BtlMember_GetActiveGauge(chr) + 0x24) = 0;
+    }
+#endif
+    i = BtlChar_FrameMod(6);
 
     chr->form.chara = forms[i][0];
     chr->form.costume = forms[i][1];

@@ -1219,8 +1219,24 @@ f32 BtlSuper_GetRushSpeed(BtlTechBChr *chr, s32 slot) {
 }
 
 /* Character the technique's throw brings in: the table entry, or the alternate when the user is that character or (ids of 0x100 and above, flag 0x40000000) the user wears costume 1. */
+#ifdef PORT
+/* BT4: who and in which costume a technique's throw turns into, by the member's costume (its code at 0x211718 /
+   0x2117C0, read with REA): halfwords at +0x244 of the technique block, three slots per costume; the costume byte
+   at +0x208 (costume + slot), or the member's own costume with the slot's bit 30. */
+static s16 *Bt4Super_ThrowEntry(BtlTechBChr *chr, BtlSuperData *tbl, s32 i) {
+    s32 costume = *(s32 *)((u8 *)BtlMember_GetActive(chr) + 4) & 3;
+
+    return (s16 *)((u8 *)tbl + 0x244) + costume * 3 + i;
+}
+#endif
+
 s32 BtlSuper_GetThrowChara(BtlTechBChr *chr, s32 slot) {
     BtlTechBObj *obj = BtlChar_GetObj(chr);
+#ifdef PORT
+    if (gPortBt4) {
+        return *Bt4Super_ThrowEntry(chr, obj->super, slot - 2);
+    }
+#endif
     s32 i = slot - 2;
     BtlSuperData *tbl = obj->super;
     s32 chara = tbl->throwChara[i];
@@ -1240,6 +1256,19 @@ s32 BtlSuper_GetThrowChara(BtlTechBChr *chr, s32 slot) {
 /* Costume for that character: the user's with flag 0x40000000, else 1 for technique 0x27F, else 0; 0 for ids of 0x100 and above. */
 s32 BtlSuper_GetThrowCostume(BtlTechBChr *chr, s32 slot) {
     BtlSuperData *tbl = BtlChar_GetObj(chr)->super;
+#ifdef PORT
+    if (gPortBt4) {
+        s32 costume = *(s32 *)((u8 *)BtlMember_GetActive(chr) + 4);
+
+        if (*Bt4Super_ThrowEntry(chr, tbl, slot - 2) >= 0x100) {
+            return 0;
+        }
+        if (*(u32 *)((u8 *)tbl + (slot - 2) * 4 + 0xC) & 0x40000000) {
+            return costume;
+        }
+        return *((u8 *)tbl + 0x208 + (costume & 3) + (slot - 2));
+    }
+#endif
 
     slot -= 2;
     if (tbl->throwChara[slot] < 0x100) {

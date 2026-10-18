@@ -1016,6 +1016,16 @@ void EftBlade_Update(EftAaTask *task) {
         }
     }
     if (BtlCharApi_HasWeaponOut(t->objId)) {
+#ifdef PORT
+        if (gPortBt4) { /* (REA: 0x19C8E4) */
+            u8 *def = (u8 *)EftBlade_FindDef(t->objId);
+
+            if (def != NULL) {
+                Vec4_Copy((Vec4 *)&blade[0], (Vec4 *)def);
+                Vec4_Copy((Vec4 *)&blade[1], (Vec4 *)(def + 16));
+            }
+        } else
+#endif
         for (j = 0; j < 8; j++) {
             if (gEftBladeDef[j].chara == BtlCharApi_GetChara(t->objId)) {
                 Vec4_Copy((Vec4 *)&blade[0], &gEftBladeDef[j].base);
@@ -1245,6 +1255,19 @@ f32 EftBlade_GetColor(EftAaIVec *out) {
 /* The trail definition of a fighter's character, or NULL when it has none. */
 EftBladeDef *EftBlade_FindDef(s32 objId) {
     s32 i;
+
+#ifdef PORT
+    if (gPortBt4) { /* (BT4: entry 10 of the fighter's animation file 2 entry 6, two Vec4: REA 0x19D200) */
+        extern void *BObjFile_GetEntry(void *file, s32 n);
+        extern u8 *Bt4_ObjGet(s32 id) __asm__("BtlObj_Get");
+        u8 *obj = Bt4_ObjGet(objId);
+
+        if (obj == NULL || *(void **)(obj + 0x58) == NULL) {
+            return NULL;
+        }
+        return BObjFile_GetEntry(obj + 0x58, 10);
+    }
+#endif
 
     for (i = 0; i < 8; i++) {
         if (gEftBladeDef[i].chara == BtlCharApi_GetChara(objId)) {

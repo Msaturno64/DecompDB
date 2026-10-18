@@ -82,6 +82,17 @@ s32 ChrTbl_IsRelated(s32 a, s32 b) {
     ChrTblEntry *table;
     s32 i;
 
+#ifdef PORT
+    if (gPortBt4) { /* (BT4: its list of five at 0x3BFB2C, read with REA from 0x3BFB34) */
+        static const u8 kBt4Unrelated[5] = { 184, 128, 109, 223, 222 };
+
+        for (i = 0; i < 5; i++) {
+            if (kBt4Unrelated[i] == a || kBt4Unrelated[i] == b) {
+                return 0;
+            }
+        }
+    } else
+#endif
     if (a == CHRTBL_ID_4F || a == CHRTBL_ID_6D || a == CHRTBL_ID_80 || b == CHRTBL_ID_4F || b == CHRTBL_ID_6D ||
         b == CHRTBL_ID_80) {
         return 0;
