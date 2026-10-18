@@ -84,8 +84,20 @@ ChrView *gChrView = NULL;
 
 #define BTL_OBJ_FLAGS(obj) (*(u32 *)((obj) + 0xA40))
 
+#ifdef PORT
+extern s32 Bt4Chr_ModelFile(s32 chara, s32 costume, s32 damaged);
+/* BT4: the menu's motion of the model, file 0xF3C + chara, read into this buffer (ChrView_Init, REA 0x282230:
+   the game keeps it in the CharRef work, + 400) */
+static void *sBt4ChrViewAnim;
+#endif
+
 /* File id of a character's model: costume n, or its damaged version. */
 s32 ChrView_GetModelFile(s32 chara, s32 costume, s32 damaged) {
+#ifdef PORT
+    if (gPortBt4) { /* (REA: 0x25D6E4 -> 0x11FE78; the other bits of `damaged` are parts shown, ChrView_StepLoad) */
+        return Bt4Chr_ModelFile(chara, costume, damaged & 1);
+    }
+#endif
     if (damaged != 0) {
         return chara * 10 + costume + (CHRVIEW_FILE_FIRST + 4);
     }
@@ -95,7 +107,7 @@ s32 ChrView_GetModelFile(s32 chara, s32 costume, s32 damaged) {
 /* The character's entry in the table of common file 4, NULL for an id that is not a character. */
 ChrViewInfo *ChrView_GetCharaInfo(u32 chara) {
     ChrViewInfo *table = PACK_AT(gCommonRes->data[2], 1);
-    if (chara >= CHRVIEW_CHARA_COUNT) {
+    if (!PORT_BT4(0, 1) && chara >= CHRVIEW_CHARA_COUNT) { /* (BT4: no bound, REA 0x25D4A4) */
         return NULL;
     }
     return &table[chara];
@@ -156,7 +168,7 @@ void ChrView_SetupCamera(s32 chara) {
         if (gChrView->zoom != 0) {
             OrbitCam_SetDistRange(3.0f, 100.0f);
         } else {
-            OrbitCam_SetDistRange(info->dist, info->dist);
+            OrbitCam_SetDistRange(PORT_BT4(info->dist, *(f32 *)info->unk38), info->dist); /* (BT4: REA, 0x25D5F0) */
         }
         OrbitCam_SetPitchLimit(0.78539816f);
     }
@@ -192,6 +204,11 @@ s32 ChrView_StepLoad(ChrViewJob *job) {
         }
         job->slot->obj = BtlObj_Create(3, &job->slot->file, 1);
         job->obj = BtlObj_Get(job->slot->obj);
+#ifdef PORT
+        if (gPortBt4) { /* (REA: 0x25D76C -> 0x26BF0C) the model's motion 7 is the menu's own */
+            *(void **)(job->obj + 0x754) = File_LoadSync(0xF3C + job->chara, sBt4ChrViewAnim, 0x4800);
+        }
+#endif
         BtlObjAnim_PlayModel(job->obj, gChrView->anim, 2);
         BTL_OBJ_FLAGS(job->obj) &= ~0x02000000;
         BtlObj_SetPartVisible(job->obj, 0, 0);
@@ -202,6 +219,17 @@ s32 ChrView_StepLoad(ChrViewJob *job) {
         if (job->count++ >= 3) {
             ChrView_SetupCamera(job->chara);
             BtlObj_SetPartVisible(job->obj, 0, 1);
+#ifdef PORT
+            if (gPortBt4) { /* bits 1..4 of `damaged`: parts 1..4 shown too (REA: 0x25D7D8 -> 0x26BF64) */
+                s32 part;
+
+                for (part = 4; part >= 1; part--) {
+                    if ((job->damaged >> part) & 1) {
+                        BtlObj_SetPartVisible(job->obj, part, 1);
+                    }
+                }
+            }
+#endif
             old = ChrView_GetCur();
             if (old != NULL) {
                 BtlObj_Destroy(old->obj);
@@ -349,6 +377,11 @@ void ChrView_Init(void) {
     Battle_GetWork()->flags &= ~0x100;
     gChrView = Heap_Alloc(sizeof(ChrView), 0x20, 0, HEAP_ANY);
     memset(gChrView, 0, sizeof(ChrView));
+#ifdef PORT
+    if (gPortBt4) { /* (REA: 0x25DC84 -> 0x282230) */
+        sBt4ChrViewAnim = Heap_Alloc(0x4800, 0x40, 0, HEAP_ANY);
+    }
+#endif
     gChrView->anim = 7;
     for (i = 0; i < CHRVIEW_SLOT_COUNT; i++) {
         gChrView->slot[i].file[0].buf = Heap_Alloc(CHRVIEW_MODEL_SIZE, 0x40, 0, HEAP_ANY);
@@ -382,6 +415,12 @@ void ChrView_Term(void) {
         Heap_Free(gChrView->slot[i].file[0].buf);
     }
     Heap_Free(gChrView);
+#ifdef PORT
+    if (sBt4ChrViewAnim != NULL) { /* (BT4: the game frees it with the CharRef work) */
+        Heap_Free(sBt4ChrViewAnim);
+        sBt4ChrViewAnim = NULL;
+    }
+#endif
     File_CancelRequests();
     Job_Clear();
     BtlObj_Term();

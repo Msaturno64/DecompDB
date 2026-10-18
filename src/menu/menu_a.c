@@ -486,6 +486,60 @@ void MainMenu_Update(void) {
         gSaveData->unkA0C = 0; \
     }
 
+#ifdef PORT
+/*
+ * BT4 only (REA: 0x299734, called by MainMenu_Run before MainMenu_Input): while L1 and R1 are held, the
+ * sequence of 0x29962C (down, right, triangle, down, left, triangle, up) unlocks everything (0x2996E0: Snd_PlaySe(2, 7) then Save_UnlockAll). Codes 1..3
+ * are unused rows.
+ */
+static const s16 sBt4Cheat[4][8] = {
+    { PADG_DOWN, PADG_RIGHT, PADG_TRIANGLE, PADG_DOWN, PADG_LEFT, PADG_TRIANGLE, PADG_UP, -1 },
+    { -0x7FC0, -0x7FC0, -0x7FC0, -0x7FC0, -0x7FC0, -0x7FC0, -0x7FC0, -1 },
+    { -0x7FC0, -0x7FC0, -0x7FC0, -0x7FC0, -0x7FC0, -0x7FC0, -0x7FC0, -1 },
+    { -0x7FC0, -0x7FC0, -0x7FC0, -0x7FC0, -0x7FC0, -0x7FC0, -0x7FC0, -1 },
+};
+
+static s32 MainMenu_Bt4CheatMatch(void) {
+    return ((s16)gPad[0].gamePressed & 0xFFF) == sBt4Cheat[gSaveData->cheatCode][gSaveData->cheatPos];
+}
+
+static void MainMenu_Bt4Cheat(void) {
+    SaveData *s = gSaveData;
+    s32 code;
+
+    if ((gPad[0].gameHeld & (PADG_L1 | PADG_R1)) != (PADG_L1 | PADG_R1)) {
+        return;
+    }
+    if (s->cheatPos == 0) {
+        for (code = 3; code >= 0; code--) {
+            s->cheatCode = code;
+            if (MainMenu_Bt4CheatMatch()) {
+                break;
+            }
+        }
+        if (code < 0) {
+            s->cheatCode = 0;
+        } else {
+            s->cheatPos++;
+        }
+    } else if (sBt4Cheat[s->cheatCode][s->cheatPos] < 0) {
+        Snd_PlaySe(2, 7);
+        Save_UnlockAll(s);
+        s->cheatPos = 0;
+        s->cheatCode = 0;
+    } else if (gPad[0].gamePressed & 0xF0F) {
+        if (MainMenu_Bt4CheatMatch()) {
+            s->cheatPos++;
+        } else {
+            s->cheatPos = 0;
+            s->cheatCode = 0;
+        }
+    }
+    gPad[0].gamePressed = 0;
+    gPad[0].gameRepeat = 0;
+}
+#endif
+
 /* Pad 0: up / down move the cursor (the ring scrolls at the ends), confirm enters a mode, cancel leaves. */
 void MainMenu_Input(s32 *result) {
     if (!(gMainMenu->flash[0].flags & MFLASH_PAD)) {
@@ -657,6 +711,11 @@ s32 MainMenu_Run(s32 section) {
                 gProgress->mainMenuItem = MAINMENU_CUR(gMainMenu);
             }
         } else {
+#ifdef PORT
+            if (gPortBt4) {
+                MainMenu_Bt4Cheat();
+            }
+#endif
             MainMenu_Input(&result);
         }
     }

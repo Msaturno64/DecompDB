@@ -67,6 +67,15 @@ void Save_SetDefaults(SaveData *opt) {
     opt->slot[0].val[2] |= 1;
     opt->unkC = 1;
     Save_ResetRules();
+#ifdef PORT
+    if (gPortBt4) { /* BT4: the starting characters are a bit table (REA: 0x266340, the table at 0x200628) */
+        static const u64 bt4Start[SAVE_CHARA_WORDS] = { 0xD6095280BEF2780BULL, 0x5B65BEF47FFDA200ULL, 0x000000000A00724EULL };
+
+        for (i = 0; i < SAVE_CHARA_WORDS; i++) {
+            opt->charaBits[i] = bt4Start[i];
+        }
+    } else
+#endif
     for (i = 0; i < SAVE_CHARA_COUNT; i++) {
         switch (i) {
         case 7:

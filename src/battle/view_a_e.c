@@ -66,6 +66,11 @@ void Progress_ClearSession(void) {
         memset(gProgress->unk68C, 0, sizeof(gProgress->unk68C));
         gProgress->unk7D0 = 0;
         memset(gProgress->unk7D4, 0, sizeof(gProgress->unk7D4));
+#ifdef PORT
+        if (gPortBt4) { /* (REA: 0x25DFC0 -> 0x272134) */
+            gProgress->unk628[1] = 24;
+        }
+#endif
         for (i = 0; i < 5; i++) {
             gProgress->unk440[i].unk0 = 0;
             gProgress->unk530[i].unk0 = 1;

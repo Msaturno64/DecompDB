@@ -14,9 +14,9 @@
 
 #define SAVE_CHARA_COUNT 161  /* bits in charaBits (ids 0..160; 161..164 are list markers in ChrGrid_Build) */
 #define SAVE_CHARA_WORDS 3
-#define SAVE_STAGE_COUNT 35   /* bits in stageBits */
-#define SAVE_BGM_LIST_COUNT 25 /* entries of the list bgmBits belongs to (loop bound) */
-#define SAVE_BGM_COUNT 20     /* entries of that list that have a bit */
+#define SAVE_STAGE_COUNT PORT_BT4(35, 64)   /* (BT4: REA 0x266148, 0x2664AC) */ /* bits in stageBits */
+#define SAVE_BGM_LIST_COUNT PORT_BT4(25, 32) /* entries of the list bgmBits belongs to (loop bound) */
+#define SAVE_BGM_COUNT PORT_BT4(20, 32)     /* entries of that list that have a bit */
 #define SAVE_FLAG8_COUNT 7    /* bits of unlockFlags set by Save_UnlockAll */
 #define SAVE_ITEM_COUNT 350   /* entries of item[] and of the item table in common file 4 */
 #define SAVE_SLOT_COUNT 9
@@ -82,7 +82,9 @@ typedef struct SaveData {
     /* 0x0A08 */ s32 unkA08;        /* flag bits (0x20, 0x40, 1 << n), menu 0x362160..0x364B18 */
     /* 0x0A0C */ s32 unkA0C;        /* counter kept in 0..23 by menu Tour_Main */
     /* 0x0A10 */ s32 unkA10;
-    /* 0x0A14 */ u8 unkA14[0xC10 - 0xA14];
+    /* 0x0A14 */ s32 cheatPos;      /* BT4: buttons of the main-menu code entered so far (REA 0x299734) */
+    /* 0x0A18 */ s32 cheatCode;     /* BT4: which code (0..3) is being entered */
+    /* 0x0A1C */ u8 unkA1C[0xC10 - 0xA1C];
     /* 0x0C10 */ u64 charaBits[SAVE_CHARA_WORDS]; /* bit id: character unlocked (ChrGrid_Build, BattleSetup_InitCharaBits) */
     /* 0x0C28 */ u64 stageBits;     /* bit id: stage unlocked (StgGrid_ApplyUnlocks turns locked ids into 0x24) */
     /* 0x0C30 */ u32 bgmBits;       /* bit id: entry of a 25-entry list unlocked (BgmList_ApplyUnlocks turns locked ids into 0x19); BGM is a guess */
