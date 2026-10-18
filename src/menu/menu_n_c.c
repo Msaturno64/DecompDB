@@ -209,7 +209,7 @@ void UbRank_Init(void) {
     gUbRank->texC[9] = MTEX(res, 9);
     gUbRank->texC[12] = MTEX(res, 10);
     gUbRank->chips = (u32 *)MPACK_AT(gUbRank->res, 6);
-    for (i = 0; i < N_CHIP_NUM; i++) {
+    for (i = 0; i < PORT_BT4(N_CHIP_NUM, 250); i++) {
         res = (MTexRes *)MPACK_AT(gUbRank->chips, i + 1);
         Res_RelocateOffsets(&res, res, res);
     }

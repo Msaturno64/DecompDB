@@ -918,6 +918,17 @@ void TeamSel_Term(void) {
 }
 
 /* Draws the two stage pictures (cross fade), sets up every clip of the seven movies and draws them and the windows. */
+#ifdef PORT
+/* menu_c_e.c: BT4's own (read with REA) */
+extern s32 MChr_PortBt4Valid(s32 id);
+extern void MenuColor_PortBt4Plates(MFlash *f, s32 cur, s32 count);
+extern void MenuColor_PortBt4Name(MFlash *f, MTextBox *box, void *text, s32 chara, s32 costume);
+extern s32 MenuBgm_PortBt4Random(s32 count, s32 *ids);
+#define TS_IS_CHARA(c) MChr_PortBt4Valid(c) /* (with BT3's data: below TS_RANDOM) */
+#else
+#define TS_IS_CHARA(c) ((c) < TS_RANDOM)
+#endif
+
 void TeamSel_Draw(void) {
     MFlashRef ref;
     MFlashUv uv;
@@ -1180,6 +1191,17 @@ void TeamSel_Draw(void) {
                                        TS_RANDOM);
             }
         }
+#ifdef PORT
+        if (gPortBt4) { /* (BT4: one plate and the costume's name, REA at 0x34C8D4) */
+            TeamSelSide *s = gTeamSel->side[i];
+
+            MenuColor_PortBt4Plates(flash, s->cur != TS_CUR_MENU ? s->member[s->cur].color : -1, gTeamSel->colorCount[i]);
+            if (s->cur != TS_CUR_MENU) {
+                MenuColor_PortBt4Name(flash, &gTeamSel->bt4Box[i], gTeamSel->bt4Text, s->chara, s->member[s->cur].color);
+            }
+            continue;
+        }
+#endif
         for (j = 0; j < 4; j++) {
             uv.x0 = (j % 2) * 0x40;
             uv.x1 = uv.x0 + 0x40;
@@ -1271,7 +1293,7 @@ void TeamSel_Draw(void) {
             Flash_ClipSetFlags(flash, &ref, 0x80, (u8)gTeamSel->side[i]->mask);
             chara = gTeamSel->side[i]->chip[j / cols][j % cols];
             if (gTeamSel->battleType == 2) {
-                if (chara < TS_RANDOM) {
+                if (TS_IS_CHARA(chara)) {
                     cost = ChrTbl_GetCost(chara);
                 } else {
                     cost = 0;
@@ -1280,14 +1302,14 @@ void TeamSel_Draw(void) {
                 Flash_FindLabel(flash, name, name2, &ref);
                 if (gTeamSel->side[i]->cost + cost > gTeamSel->dpMax) {
                     Flash_ClipSetColor(flash, &ref, 0.4f);
-                } else if (chara < TS_RANDOM) {
+                } else if (TS_IS_CHARA(chara)) {
                     Flash_ClipSetColor(flash, &ref, TeamSel_IsCharaFree(i, chara) ? 1.0f : 0.4f);
                 } else {
                     Flash_ClipSetColor(flash, &ref, 1.0f);
                 }
                 sprintf(name2, "mc_dp_num_%03d", j);
                 Flash_FindLabel(flash, name, name2, &ref);
-                if (chara < TS_RANDOM) {
+                if (TS_IS_CHARA(chara)) {
                     uv.x0 = (cost % 4) * 0x20;
                     uv.x1 = uv.x0 + 0x20;
                     uv.y0 = (cost / 4) * 0x20;
@@ -1300,7 +1322,7 @@ void TeamSel_Draw(void) {
             } else {
                 sprintf(name2, "mc_chara_%03d", j);
                 Flash_FindLabel(flash, name, name2, &ref);
-                if (chara < TS_RANDOM) {
+                if (TS_IS_CHARA(chara)) {
                     Flash_ClipSetColor(flash, &ref, TeamSel_IsCharaFree(i, chara) ? 1.0f : 0.4f);
                 } else {
                     Flash_ClipSetColor(flash, &ref, 1.0f);
@@ -1688,7 +1710,12 @@ f32 TeamSel_Input(s32 *result) {
                     } else if (TeamSel_FitsDp(CUR_N, CUR_SIDE->chara)) {
                         if (CUR_CELL.formCount != 0) {
                             CUR_SIDE->flags |= TEAMSEL_SIDE_FORM;
+#ifdef PORT
+                            if (!(CUR_MEMBER.form < CUR_CELL.formCount) ||
+                                (gPortBt4 && !MChr_PortBt4Valid(CUR_CELL.form[CUR_MEMBER.form]))) { /* (REA, 0x34E5B4) */
+#else
                             if (!(CUR_MEMBER.form < CUR_CELL.formCount)) {
+#endif
                                 CUR_MEMBER.form = 0;
                             }
                             Flash_GotoLabel(&gTeamSel->flash[CUR_N + 3], "fl_form", 1);
@@ -1952,11 +1979,19 @@ f32 TeamSel_Input(s32 *result) {
                             do {
                                 for (;;) {
                                     idx = Rand_Range(gTeamSel->masterCount[CUR_N]);
-                                    if (gTeamSel->cells[CUR_N][idx].id < TS_RANDOM) {
+                                    if (TS_IS_CHARA(gTeamSel->cells[CUR_N][idx].id)) { /* (BT4: REA, 0x34FD50) */
                                         chara = gTeamSel->cells[CUR_N][idx].id;
                                         break;
                                     }
                                 }
+#ifdef PORT
+                                if (gPortBt4) { /* (BT4, REA at 0x3BF074: one of its forms that is a character too) */
+                                    do {
+                                        chara = gTeamSel->cells[CUR_N][idx]
+                                                    .form[Rand_Range(gTeamSel->cells[CUR_N][idx].formCount)];
+                                    } while (!MChr_PortBt4Valid(chara));
+                                } else
+#endif
                                 if (gTeamSel->cells[CUR_N][idx].formCount != 0) {
                                     chara = gTeamSel->cells[CUR_N][idx]
                                                 .form[Rand_Range(gTeamSel->cells[CUR_N][idx].formCount)];
@@ -2205,7 +2240,8 @@ f32 TeamSel_Input(s32 *result) {
 /* The song a chosen "random" stands for: one of the nine battle songs. PC build, with songs added from outside
    the disc: any entry of the music list before "random", the disc's and the added ones alike. */
 #ifdef PORT
-#define TS_RANDOM_BGM() (sPortSongsAdded ? gTeamSel->bgmIds[Rand_Range(gTeamSel->bgmCount - 1)] : Rand_Range(9) + 8)
+#define TS_RANDOM_BGM() (gPortBt4 ? MenuBgm_PortBt4Random(gTeamSel->bgmCount, gTeamSel->bgmIds) \
+                         : sPortSongsAdded ? gTeamSel->bgmIds[Rand_Range(gTeamSel->bgmCount - 1)] : Rand_Range(9) + 8)
 #else
 #define TS_RANDOM_BGM() (Rand_Range(9) + 8)
 #endif
@@ -2282,7 +2318,11 @@ s32 TeamSel_Run(s32 section) {
         if (gTeamSel->stage->stage == TS_STAGE_RANDOM) {
             do {
                 gTeamSel->stage->stage = gTeamSel->stageIds[Rand_Range(gTeamSel->stageCount - 1)];
+#ifdef PORT /* (BT4 draws its stages past the markers too, 39 on: REA, 0x3BF1A4) */
+            } while (gTeamSel->stage->stage >= TS_STAGE_RANDOM && (!gPortBt4 || gTeamSel->stage->stage < 39));
+#else
             } while (gTeamSel->stage->stage >= TS_STAGE_RANDOM);
+#endif
         }
         bgm = gTeamSel->bgmIds[gTeamSel->stage->bgm];
         if (bgm == TS_BGM_RANDOM) {

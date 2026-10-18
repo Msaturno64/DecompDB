@@ -86,7 +86,7 @@ void EntrySel_UpdateImage(void) {
         break;
     case ESEL_LOAD_REQUEST:
         File_CancelRequests();
-        File_Request(gEntrySel->sel->image + 0x2F9, gEntrySel->imageFile, 0x16800);
+        File_Request(gEntrySel->sel->image + PORT_BT4(0x2F9, 0x71C), gEntrySel->imageFile, 0x16800);
         gEntrySel->loadState = ESEL_LOAD_READ;
         break;
     case ESEL_LOAD_READ:
@@ -268,7 +268,7 @@ void EntrySel_Init(s32 section) {
     gEntrySel->nameText = MPACK_AT(gEntrySel->res, 30);
     gEntrySel->formText = MPACK_AT(gEntrySel->res, 31);
     gEntrySel->chips = (u32 *)MPACK_AT(gEntrySel->res, 32);
-    for (i = 0; i < ESEL_CELL_MAX; i++) {
+    for (i = 0; i < PORT_BT4(ESEL_CELL_MAX, 250); i++) {
         res = (MTexRes *)MPACK_AT(gEntrySel->chips, i + 1);
         Res_RelocateOffsets(&res, res, res);
     }
@@ -330,7 +330,7 @@ void EntrySel_Init(s32 section) {
     for (i = 0; i < 2; i++) {
         gEntrySel->blink[i] = Rand_Range(0x20);
     }
-    File_LoadSync(gEntrySel->sel->image + 0x2F9, gEntrySel->imageFile, 0x16800);
+    File_LoadSync(gEntrySel->sel->image + PORT_BT4(0x2F9, 0x71C), gEntrySel->imageFile, 0x16800);
     Sprite_Unpack(gEntrySel->imageFile, gEntrySel->imageRes, NULL);
     res = gEntrySel->imageRes;
     Res_RelocateOffsets(&res, res, res);

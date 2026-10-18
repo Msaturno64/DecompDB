@@ -189,7 +189,7 @@ void MisSel_Init(s32 section) {
     gMisSel->tex[25] = NULL;
     gMisSel->tex[27] = NULL;
     gMisSel->chips = (u32 *)MPACK_AT(gMisSel->res, 15);
-    for (i = 0; i < MISSEL_CHIP_NUM; i++) {
+    for (i = 0; i < PORT_BT4(MISSEL_CHIP_NUM, 250); i++) {
         res = (MTexRes *)MPACK_AT(gMisSel->chips, i + 1);
         Res_RelocateOffsets(&res, res, res);
     }

@@ -540,7 +540,7 @@ void EvoZ_Load(UEvoZ *ez, s32 section) {
 
     ez->pack = (u32 *)MPACK_AT(gMenuArc7, section);
     ez->res = Sprite_Unpack(ez->pack, NULL, NULL);
-    ez->chipFile = File_LoadSync(0x3C0, NULL, 0);
+    ez->chipFile = File_LoadSync(PORT_BT4(0x3C0, 0x6DC), NULL, 0);
     ez->chipRes = Sprite_Unpack(ez->chipFile, NULL, NULL);
     res = ez->chipRes;
     Res_RelocateOffsets(&res, res, res);
@@ -666,7 +666,7 @@ void EvoZ_Load(UEvoZ *ez, s32 section) {
     ez->text[1] = MPACK_AT(ez->res, 35);
     ez->text[2] = MPACK_AT(ez->res, 37);
     ez->chipPack = (u32 *)MPACK_AT(ez->res, 36);
-    for (i = 0; i < 165; i++) {
+    for (i = 0; i < PORT_BT4(165, 250); i++) {
         res = (MTexRes *)MPACK_AT(ez->chipPack, i + 1);
         Res_RelocateOffsets(&res, res, res);
     }

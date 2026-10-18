@@ -141,7 +141,7 @@ void UbzSel_Init(void) {
     gUbzSel->tex[23] = NULL;
     gUbzSel->tex[24] = NULL;
     gUbzSel->chips = (u32 *)MPACK_AT(gUbzSel->res, 6);
-    for (i = 0; i < N_CHIP_NUM; i++) {
+    for (i = 0; i < PORT_BT4(N_CHIP_NUM, 250); i++) {
         res = (MTexRes *)MPACK_AT(gUbzSel->chips, i + 1);
         Res_RelocateOffsets(&res, res, res);
     }

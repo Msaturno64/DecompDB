@@ -210,10 +210,20 @@ void ModeMenu_Init(s32 section) {
     for (i = 0; i < gModeMenu->itemMax; i++) {
         SaveSlot *slot = &gSaveData->slot[gProgress->subMenu];
 
+#ifdef PORT
+        if (gPortBt4 && gProgress->subMenu == 4 && i == 1) {
+            continue; /* (BT4 lists saga 4's episode 1 last: its code at 0x3BE720, read with REA) */
+        }
+#endif
         if (slot->val[0] & (s32)(1U << i)) {
             gModeMenu->items[gModeMenu->itemCount++] = i;
         }
     }
+#ifdef PORT
+    if (gPortBt4 && gProgress->subMenu == 4 && (gSaveData->slot[4].val[0] & 2)) { /* (0x3BE744) */
+        gModeMenu->items[gModeMenu->itemCount++] = 1;
+    }
+#endif
     for (i = gModeMenu->itemCount; i < MODEMENU_ROWS; i++) {
         gModeMenu->items[gModeMenu->itemCount++] = gModeMenu->itemMax;
     }
@@ -353,10 +363,10 @@ void ModeMenu_Draw(void) {
     }
 
     for (i = 0; i < 2; i++) {
-        uv.y0 = 0;
+        uv.y0 = PORT_BT4(0, 0x20); /* (BT4: the up / down arrows, the row below) */
         uv.x0 = i * 0x20;
         uv.x1 = uv.x0 + 0x20;
-        uv.y1 = 0x20;
+        uv.y1 = PORT_BT4(0x20, 0x40);
         switch (i) {
         case 0:
             Flash_FindLabel(flash, "mc_yajirusi_left", "mc_yajirusi_icon_left", &ref);
@@ -489,7 +499,7 @@ void ModeMenu_Input(s32 *result) {
     }
     switch (gModeMenu->focus) {
     case 0:
-        if (gPad[0].gameRepeat & 1) {
+        if (gPad[0].gameRepeat & PORT_BT4(1, 8)) { /* (BT4: up / down instead of left / right) */
             gModeMenu->unk124 = 0;
             if (gModeMenu->cursor[gModeMenu->focus] > 0 &&
                 gModeMenu->items[gModeMenu->cursor[gModeMenu->focus] - 1] != gModeMenu->itemMax) {
@@ -503,7 +513,7 @@ void ModeMenu_Input(s32 *result) {
                 }
                 MODEMENU_MOVED();
             }
-        } else if (gPad[0].gameRepeat & 2) {
+        } else if (gPad[0].gameRepeat & PORT_BT4(2, 4)) {
             gModeMenu->unk124 = 0;
             if (gModeMenu->cursor[gModeMenu->focus] < gModeMenu->itemCount - 1 &&
                 gModeMenu->items[gModeMenu->cursor[gModeMenu->focus] + 1] != gModeMenu->itemMax) {

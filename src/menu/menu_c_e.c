@@ -24,15 +24,6 @@ extern volatile int gUiNameIdx, gUiNameReady;
 extern volatile int gUiSongX, gUiSongY, gUiSongW, gUiSongH;
 extern volatile int gUiSongIdx, gUiSongReady, gUiSongLit;
 
-/* BT4's "random" music (its code at 0x347A60, read with REA): any entry of the screen's list but "random" itself. */
-s32 MenuBgm_PortBt4Random(s32 count, s32 *ids) {
-    s32 id;
-
-    do {
-        id = ids[Rand_Range(count)];
-    } while (id == CHARSEL_BGM_RANDOM);
-    return id;
-}
 #endif
 
 /*
@@ -380,6 +371,77 @@ void CharSel_ClipGoto(s32 flash, s32 side, s32 kind, char *label) {
 #define CS_RES(pack, n) \
     res = (MTexRes *)MPACK_AT(pack, n); \
     Res_RelocateOffsets(&res, res, res)
+
+#ifdef PORT
+/* BT4's "random" music (its code at 0x347A60, read with REA): any entry of the screen's list but "random" itself. */
+s32 MenuBgm_PortBt4Random(s32 count, s32 *ids) {
+    s32 id;
+
+    do {
+        id = ids[Rand_Range(count)];
+    } while (id == CHARSEL_BGM_RANDOM);
+    return id;
+}
+
+/* Whether a grid id is a character: BT4's ids skip the four marker cells, 0..0xA0 and 0xA5 on (its code at
+   0x3BF1C8, read with REA). With BT3's data only the markers are past 0xA0, as the game's own tests expect. */
+s32 MChr_PortBt4Valid(s32 id) {
+    return id < MCHR_RANDOM || (gPortBt4 && id >= 0xA5);
+}
+
+/* BT4's costume plates (its code at 0x269550, read with REA): only the plate of the chosen costume (of eight) is
+   shown, and the two arrows with two costumes or more. */
+void MenuColor_PortBt4Plates(MFlash *f, s32 cur, s32 count) {
+    MFlashRef ref;
+    MFlashUv uv;
+    char name[64];
+    s32 j;
+
+    for (j = 0; cur >= 0 && j < 8; j++) { /* (cur < 0: the team select's menu plate, the plates are left as they are) */
+        uv.x0 = (j & 1) * 0x40;
+        uv.x1 = uv.x0 + 0x40;
+        uv.y0 = (j >> 1) * 0x20;
+        uv.y1 = uv.y0 + 0x20;
+        sprintf(name, "mc_color_plate_%d", j + 1);
+        Flash_FindLabel(f, NULL, name, &ref);
+        if (j == cur) {
+            Flash_ClipSetFlags(f, &ref, 2, 1);
+            Flash_FindLabel(f, name, "mc_color_text_off", &ref);
+            Flash_ClipSetUv(f, &ref, &uv);
+            Flash_FindLabel(f, name, "mc_color_text_on", &ref);
+            Flash_ClipSetUv(f, &ref, &uv);
+        } else {
+            Flash_ClipSetFlags(f, &ref, 2, 0);
+        }
+    }
+    for (j = 0; j < 2; j++) {
+        Flash_FindLabel(f, j == 0 ? "mc_yajirusi_left" : "mc_yajirusi_right",
+                        j == 0 ? "mc_yajirusi_icon_left" : "mc_yajirusi_icon_right", &ref);
+        if (count < 2) {
+            Flash_ClipSetFlags(f, &ref, 2, 0);
+        } else {
+            uv.x0 = j * 0x20;
+            uv.y0 = 0;
+            uv.x1 = uv.x0 + 0x20;
+            uv.y1 = 0x20;
+            Flash_ClipSetUv(f, &ref, &uv);
+            Flash_ClipSetFlags(f, &ref, 2, 1);
+        }
+    }
+}
+
+/* BT4's costume name (0x269778): line `costume` of the character's own list in the screen's section 57. */
+void MenuColor_PortBt4Name(MFlash *f, MTextBox *box, void *text, s32 chara, s32 costume) {
+    MFlashRef ref;
+
+    if (chara < 0) {
+        return;
+    }
+    *(u8 **)((u8 *)box + 4) = MPACK_AT(text, chara + 1); /* (the box's text file, TextBoxFull.text) */
+    Flash_FindLabel(f, NULL, "mc_color_name_text", &ref);
+    TextBox_AttachLine(f, &ref, 0, 0, costume, box);
+}
+#endif
 
 /* Builds the screen: unpacks its section, binds the textures of the five movies, builds each side's character
    grid, the stage grid and the music list from the save's unlock bits, restores the last choice from gProgress,
@@ -1117,6 +1179,14 @@ void CharSel_Draw(void) {
                                    gCharSel->cells[i][gCharSel->side[i]->col + gCharSel->side[i]->row * 7].id != MCHR_RANDOM);
             }
         }
+#ifdef PORT
+        if (gPortBt4) { /* (BT4: one plate and the costume's name, REA at 0x34500C) */
+            MenuColor_PortBt4Plates(f, gCharSel->side[i]->colorPlate, gCharSel->colorCount[i]);
+            MenuColor_PortBt4Name(f, &gCharSel->bt4Box[i], gCharSel->bt4Text, gCharSel->side[i]->chara,
+                                  gCharSel->side[i]->colorPlate);
+            continue;
+        }
+#endif
         for (j = 0; j < 4; j++) {
             uv.x0 = (j % 2) * 0x40;
             uv.y0 = (j / 2) * 0x20;
@@ -1508,7 +1578,12 @@ void CharSel_Input(s32 *running) {
                     }
                 } else if (CS_CELL.formCount != 0) {
                     CS_SIDE->flags |= CHARSEL_SIDE_FORMS;
+#ifdef PORT
+                    if (!(CS_SIDE->form < CS_CELL.formCount) ||
+                        (gPortBt4 && !MChr_PortBt4Valid(CS_CELL.form[CS_SIDE->form]))) { /* (BT4: REA, 0x200660) */
+#else
                     if (!(CS_SIDE->form < CS_CELL.formCount)) {
+#endif
                         CS_SIDE->form = 0;
                     }
                     Flash_GotoLabel(CS_REEL, "fl_form", 1);
@@ -1741,11 +1816,22 @@ void CharSel_Input(s32 *running) {
                         for (;;) {
                             n = Rand_Range(gCharSel->masterCount[CS_N]);
                             id = gCharSel->cells[CS_N][n].id;
+#ifdef PORT
+                            if (gPortBt4 ? MChr_PortBt4Valid(id) : id < MCHR_RANDOM) {
+#else
                             if (id < MCHR_RANDOM) {
+#endif
                                 chara = id;
                                 break;
                             }
                         }
+#ifdef PORT
+                        if (gPortBt4) { /* (BT4, REA at 0x3BF074: one of its forms that is a character too) */
+                            do {
+                                chara = gCharSel->cells[CS_N][n].form[Rand_Range(gCharSel->cells[CS_N][n].formCount)];
+                            } while (!MChr_PortBt4Valid(chara));
+                        } else
+#endif
                         if (gCharSel->cells[CS_N][n].formCount != 0) {
                             chara = gCharSel->cells[CS_N][n].form[Rand_Range(gCharSel->cells[CS_N][n].formCount)];
                         }
@@ -1895,7 +1981,8 @@ extern s32 CpuLevel_FromSetting(u32 setting);
 /* The song a chosen "random" stands for: one of the nine battle songs. PC build, with songs added from outside
    the disc: any entry of the music list before "random", the disc's and the added ones alike. */
 #ifdef PORT
-#define CHARSEL_RANDOM_BGM() (sPortSongsAdded ? gCharSel->bgmIds[Rand_Range(gCharSel->bgmCount - 1)] : Rand_Range(9) + 8)
+#define CHARSEL_RANDOM_BGM() (gPortBt4 ? MenuBgm_PortBt4Random(gCharSel->bgmCount, gCharSel->bgmIds) /* (REA, 0x348A88) */ \
+                              : sPortSongsAdded ? gCharSel->bgmIds[Rand_Range(gCharSel->bgmCount - 1)] : Rand_Range(9) + 8)
 #else
 #define CHARSEL_RANDOM_BGM() (Rand_Range(9) + 8)
 #endif
@@ -1973,7 +2060,11 @@ s32 CharSel_Run(s32 section) {
         if (gCharSel->stage->stage == CHARSEL_STAGE_RANDOM) {
             do {
                 gCharSel->stage->stage = gCharSel->stageIds[Rand_Range(gCharSel->stageCount - 1)];
+#ifdef PORT /* (BT4 draws its stages past the markers too, 39 on: its code at 0x3BEDF8, read with REA) */
+            } while (gCharSel->stage->stage >= CHARSEL_STAGE_RANDOM && (!gPortBt4 || gCharSel->stage->stage < 39));
+#else
             } while (gCharSel->stage->stage >= CHARSEL_STAGE_RANDOM);
+#endif
         }
         if (gProgress->mode == 0x2D) {
             mode = 6;

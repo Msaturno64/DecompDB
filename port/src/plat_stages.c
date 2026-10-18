@@ -143,6 +143,14 @@ void PortStages_Init(void) {
         return;
     }
     sDone = 1;
+    {
+        extern int gPortBt4; /* plat_mem.c */
+        /* shortcut: no added stages with BT4's data (its own stage ids reach 99, past this list's); give them ids
+           past BT4's when the stages folder is wanted with BT4. */
+        if (gPortBt4) {
+            return;
+        }
+    }
     if (!PortExtras_Dir("stages", "BT3_STAGES", sDir, sizeof(sDir))) {
         from_env();
         if (gPortExtraStageCount > 0) {

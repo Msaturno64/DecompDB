@@ -288,7 +288,7 @@ void ReplayMenu_Init(s32 section) {
     RP_RES(2, REPLAY_HOST "dc_replay_tex_plate_PS2_.dbt");
     gReplayMenu->tex[19] = MTEX(res, 0);
     gReplayMenu->chips = (u32 *)ReplayMenu_Section(8, REPLAY_HOST "chara_chip_PS2_.pak");
-    for (i = 0; i < 0xA5; i++) {
+    for (i = 0; i < PORT_BT4(0xA5, 250); i++) {
         res = (MTexRes *)MPACK_AT(gReplayMenu->chips, i + 1);
         Res_RelocateOffsets(&res, res, res);
     }
