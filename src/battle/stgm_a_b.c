@@ -767,50 +767,50 @@ s32 McCard_CheckFiles(s32 port, McCardFile *file) {
 void McCardFile_SetNames(McCardFile *file, char *name, s32 num, s32 unused, s32 replay) {
     if (num >= 0) {
         memset(file->dir, 0, 0x80);
-        sprintf(file->dir, "%s%s%02d", "BASLUS-21678", name, num);
+        sprintf(file->dir, "%s%s%02d", PORT_BT4("BASLUS-21678", "BASLUS-21978"), /* (BT4: its save names, REA 0x2EBC50..) */ name, num);
     } else {
         memset(file->dir, 0, 0x80);
-        sprintf(file->dir, "%s%s", "BASLUS-21678", name);
+        sprintf(file->dir, "%s%s", PORT_BT4("BASLUS-21678", "BASLUS-21978"), name);
     }
     memset(file->sysPath, 0, 0x80);
     sprintf(file->sysPath, "/%s/icon.sys", file->dir);
     memset(file->iconPath[0], 0, 0x80);
     if (replay == 0) {
-        sprintf(file->iconPath[0], "/%s/dbzsm.ico", file->dir);
+        sprintf(file->iconPath[0], PORT_BT4("/%s/dbzsm.ico", "/%s/dbzs4.ico"), file->dir);
     } else {
-        sprintf(file->iconPath[0], "/%s/dbzsmr.ico", file->dir);
+        sprintf(file->iconPath[0], PORT_BT4("/%s/dbzsmr.ico", "/%s/dbzs4r.ico"), file->dir);
     }
     memset(file->iconPath[1], 0, 0x80);
     if (replay == 0) {
-        sprintf(file->iconPath[1], "/%s/dbzsm.ico", file->dir);
+        sprintf(file->iconPath[1], PORT_BT4("/%s/dbzsm.ico", "/%s/dbzs4.ico"), file->dir);
     } else {
-        sprintf(file->iconPath[1], "/%s/dbzsmr.ico", file->dir);
+        sprintf(file->iconPath[1], PORT_BT4("/%s/dbzsmr.ico", "/%s/dbzs4r.ico"), file->dir);
     }
     memset(file->iconPath[2], 0, 0x80);
     if (replay == 0) {
-        sprintf(file->iconPath[2], "/%s/dbzsm.ico", file->dir);
+        sprintf(file->iconPath[2], PORT_BT4("/%s/dbzsm.ico", "/%s/dbzs4.ico"), file->dir);
     } else {
-        sprintf(file->iconPath[2], "/%s/dbzsmr.ico", file->dir);
+        sprintf(file->iconPath[2], PORT_BT4("/%s/dbzsmr.ico", "/%s/dbzs4r.ico"), file->dir);
     }
     memset(file->dataPath, 0, 0x80);
     sprintf(file->dataPath, "/%s/%s", file->dir, file->dir);
     memset(file->iconName[0], 0, 0x40);
     if (replay == 0) {
-        strcpy(file->iconName[0], "dbzsm.ico");
+        strcpy(file->iconName[0], PORT_BT4("dbzsm.ico", "dbzs4.ico"));
     } else {
-        strcpy(file->iconName[0], "dbzsmr.ico");
+        strcpy(file->iconName[0], PORT_BT4("dbzsmr.ico", "dbzs4r.ico"));
     }
     memset(file->iconName[1], 0, 0x40);
     if (replay == 0) {
-        strcpy(file->iconName[1], "dbzsm.ico");
+        strcpy(file->iconName[1], PORT_BT4("dbzsm.ico", "dbzs4.ico"));
     } else {
-        strcpy(file->iconName[1], "dbzsmr.ico");
+        strcpy(file->iconName[1], PORT_BT4("dbzsmr.ico", "dbzs4r.ico"));
     }
     memset(file->iconName[2], 0, 0x40);
     if (replay == 0) {
-        strcpy(file->iconName[2], "dbzsm.ico");
+        strcpy(file->iconName[2], PORT_BT4("dbzsm.ico", "dbzs4.ico"));
     } else {
-        strcpy(file->iconName[2], "dbzsmr.ico");
+        strcpy(file->iconName[2], PORT_BT4("dbzsmr.ico", "dbzs4r.ico"));
     }
 }
 
@@ -874,7 +874,7 @@ s32 McCard_FindSystemSave(s32 port) {
     case 0:
         gMcCardPort[port].result = 0;
         gMcCardCmd = MCCARD_CMD_FIND;
-        ret = sceMcGetDir(port, 0, "BASLUS-21678DBZT3", 0, -1, NULL);
+        ret = sceMcGetDir(port, 0, PORT_BT4("BASLUS-21678DBZT3", "BASLUS-21978DBZT4"), 0, -1, NULL);
         gMcCardPort[port].ret = ret;
         if (ret < 0) {
             if (ret == -200) {

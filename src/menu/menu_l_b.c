@@ -2,6 +2,13 @@
 #include "menu/menu_l.h"
 #include "sys/pad.h"
 
+#ifdef PORT
+extern void MenuColor_PortBt4Plates(MFlash *f, s32 cur, s32 count);
+extern void MenuColor_PortBt4Name(MFlash *f, MTextBox *box, void *text, s32 chara, s32 costume);
+extern s32 MChr_PortBt4Valid(s32 id);
+#endif
+
+
 /*
  * SoloSel, 0x36B3E0..0x36E028: the one-character select of the modes 13..30 group (archive gMenuArc3; run for
  * progress modes 15, 18, 21, 25 and 29 by the handler at 0x379A58). A variant of EntrySel (menu_i_d.c, menu_j.c)
@@ -142,8 +149,8 @@ void SoloSel_Init(s32 section) {
     MTexRes *res = NULL;
     s32 i;
 
-    gSoloSel = Heap_Alloc(0x1AA4, 0x20, 0, 2);
-    memset(gSoloSel, 0, 0x1AA4);
+    gSoloSel = Heap_Alloc(PORT_BT4(0x1AA4, 0x1B34), 0x20, 0, 2); /* (BT4: REA, 0x36B960) */
+    memset(gSoloSel, 0, PORT_BT4(0x1AA4, 0x1B34));
     gSoloSel->pack = (u32 *)MPACK_AT(gMenuArc3, section);
     gSoloSel->res = Sprite_Unpack(gSoloSel->pack, NULL, NULL);
     if (gProgress->mode == 21) {
@@ -238,6 +245,12 @@ void SoloSel_Init(s32 section) {
     gSoloSel->imageRes = Heap_Alloc(0x20800, 0x20, 0, 2);
     gSoloSel->sel = &gSoloSel->state;
     gSoloSel->sel->entry = SOLO_PROG->lastEntry;
+#ifdef PORT
+    if (gPortBt4) { /* (REA: 0x36C220) */
+        gSoloSel->sel->entry.col = 0;
+        gSoloSel->sel->entry.row = 22;
+    }
+#endif
     gSoloSel->loadState = SOLOSEL_LOAD_SHOWN;
     if (!ChrGrid_IsSelectable(gSoloSel->grid, SS_CUR.col + SS_CUR.row * SOLOSEL_COLS)) {
         memset(gSoloSel->sel, 0, sizeof(LSelEntry));
@@ -260,6 +273,13 @@ void SoloSel_Init(s32 section) {
     TextBox_SetUnk80(&gSoloSel->box[0], 1);
     TextBox_Init(&gSoloSel->box[1], gSoloSel->formText, 3);
     TextBox_SetUnk80(&gSoloSel->box[1], 1);
+#ifdef PORT
+    if (gPortBt4) {
+        gSoloSel->bt4Text = MPACK_AT(gSoloSel->res, 35);
+        TextBox_Init(&gSoloSel->bt4Box, MPACK_AT(gSoloSel->bt4Text, 1), 7);
+        TextBox_SetUnk80(&gSoloSel->bt4Box, 1);
+    }
+#endif
 }
 
 /* Frees everything SoloSel_Init made. */
@@ -355,6 +375,12 @@ void SoloSel_Draw(void) {
             Flash_ClipSetFlags(flash, &ref, 2, 0);
         }
     }
+#ifdef PORT
+    if (gPortBt4) { /* one plate and the costume's name (REA: 0x36C908) */
+        MenuColor_PortBt4Plates(flash, gSoloSel->sel->entry.costume, gSoloSel->colorCount);
+        MenuColor_PortBt4Name(flash, &gSoloSel->bt4Box, gSoloSel->bt4Text, gSoloSel->sel->image, gSoloSel->sel->entry.costume);
+    } else
+#endif
     for (i = 0; i < 4; i++) {
         /* costume plates */
         uv.x0 = (i % 2) * 0x40;
@@ -495,7 +521,7 @@ void SoloSel_Input(s32 *result) {
         } else if (gPad[0].gamePressed & 0x200) {
             if (SS_CELL.formCount != 0) {
                 gSoloSel->sel->flags |= SOLOSEL_SEL_FORM;
-                if (SS_CUR.form >= SS_CELL.formCount) {
+                if (SS_CUR.form >= SS_CELL.formCount || (gPortBt4 && !MChr_PortBt4Valid(SS_CELL.form[SS_CUR.form]))) { /* (BT4: REA, 0x36D140 -> 0x200660) */
                     SS_CUR.form = 0;
                 }
                 Flash_GotoLabel(&gSoloSel->flash[1], "fl_form", 1);

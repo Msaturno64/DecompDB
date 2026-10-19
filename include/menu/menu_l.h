@@ -412,7 +412,11 @@ typedef struct SoloSel {
     /* 0x1980 */ s32 talk[2];
     /* 0x1988 */ MTextBox box[2];    /* character name, form name */
     /* 0x1AA0 */ void *items;        /* item table of common file 4 */
-} SoloSel; /* 0x1AA4 */
+#ifdef PORT
+    /* 0x1AA4 */ void *bt4Text;      /* BT4: section 35, the costume names (REA 0x3450A8) */
+    /* 0x1AA8 */ MTextBox bt4Box;
+#endif
+} SoloSel; /* 0x1AA4 (BT4: 0x1B34) */
 
 #define SOLOSEL_STARTED 2        /* the first chip was lit */
 #define SOLOSEL_DONE 8

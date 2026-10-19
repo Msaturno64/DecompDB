@@ -1001,11 +1001,26 @@ void Bracket_SetupBattle(LBracket *b) {
         break;
     case LTOUR_OTHERWORLD:
         announcer = 2;
-        stage = Bracket_PickStage(0);
+        stage = PORT_BT4(Bracket_PickStage(0), 39); /* (BT4: REA, 0x36ADA0) */
         bgm = Rand_Range(9) + 8;
         break;
     case LTOUR_YAMCHA:
         announcer = 3;
+#ifdef PORT
+        if (gPortBt4) { /* a stage and a song for each round (REA: 0x36ADB0 -> 0x2719B0) */
+            if (b->round < 2) {
+                stage = 31;
+                bgm = b->round < 1 ? 186 : 206;
+            } else if (b->round == 4) {
+                stage = 3;
+                bgm = 213;
+            } else {
+                stage = 17;
+                bgm = b->round < 3 ? 29 : 27;
+            }
+            break;
+        }
+#endif
         stage = Bracket_PickStage(1);
         bgm = Rand_Range(9) + 8;
         break;
@@ -1068,6 +1083,16 @@ void Bracket_GivePrizes(LBracket *b, s32 second) {
                 }
                 break;
             case LPRIZE_MONEY_SECOND:
+#ifdef PORT
+                if (gPortBt4 && LTOUR_PROG->tour == LTOUR_YAMCHA) { /* the seven dragon balls (REA: its jump table at
+                                                                      0x3B72B0 -> 0x28214C) */
+                    b->reward[b->rewardCount].kind = 9;
+                    b->reward[b->rewardCount].value = 7;
+                    b->rewardCount++;
+                    LSAVE->unlockFlags |= 0x7F;
+                }
+                break;
+#endif
             case 6:
                 break;
             }

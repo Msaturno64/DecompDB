@@ -43,8 +43,8 @@ void CharRef_Init(s32 section) {
     s32 *table;
     s32 i;
 
-    gCharRef = Heap_Alloc(0x1638, 0x20, 0, 2);
-    memset(gCharRef, 0, 0x1638);
+    gCharRef = Heap_Alloc(PORT_BT4(0x1638, 0x29AC), 0x20, 0, 2); /* (BT4: REA, 0x3562D0) */
+    memset(gCharRef, 0, PORT_BT4(0x1638, 0x29AC));
     gCharRef->pack = (u32 *)MPACK_AT(gMenuArc9, section);
     gCharRef->res = Sprite_Unpack(gCharRef->pack, NULL, NULL);
     CR_RES(15);
@@ -111,7 +111,7 @@ void CharRef_Init(s32 section) {
     table = (s32 *)MPACK_AT(gCharRef->res, 27);
     gCharRef->poseTbl = table;
     table = (s32 *)MPACK_AT(gCharRef->res, 17);
-    gCharRef->total = CHARREF_CHARA_MAX;
+    gCharRef->total = PORT_BT4(CHARREF_CHARA_MAX, 227); /* (BT4: REA, 0x35685C) */
     gCharRef->charaTbl = table;
     gCharRef->imageFile = Heap_Alloc(CHARREF_IMAGE_SIZE, 0x40, 0, 2);
     gCharRef->imageRes = Heap_Alloc(0x20800, 0x20, 0, 2);
@@ -238,7 +238,7 @@ void CharRef_Draw(void) {
     MFlash *flash = &gCharRef->flash[0];
     s32 state = gCharRef->state;
     s32 pose = gCharRef->pose;
-    s32 chara = gCharRef->entry[gCharRef->cursor].chara;
+    s32 chara = CR_ENTRY[gCharRef->cursor].chara;
     s32 line;
     s32 next;
     s32 c;
@@ -293,10 +293,10 @@ void CharRef_Draw(void) {
         }
         CR_PLATE2(i + 1);
         Flash_FindLabel(flash, name, "mc_name_text", &ref);
-        TextBox_AttachLine(flash, &ref, 0, 0, gCharRef->entry[n].chara, &gCharRef->box[CHARREF_BOX_LIST_NAME + i]);
+        TextBox_AttachLine(flash, &ref, 0, 0, CR_ENTRY[n].chara, &gCharRef->box[CHARREF_BOX_LIST_NAME + i]);
         CR_PLATE2(i + 1);
         Flash_FindLabel(flash, name, "mc_form_text", &ref);
-        TextBox_AttachLine(flash, &ref, 0, 0, gCharRef->entry[n].chara, &gCharRef->box[CHARREF_BOX_LIST_FORM + i]);
+        TextBox_AttachLine(flash, &ref, 0, 0, CR_ENTRY[n].chara, &gCharRef->box[CHARREF_BOX_LIST_FORM + i]);
     }
     if (gCharRef->scrollDir == 4) {
         n = gCharRef->cursor - gCharRef->row - 1;
@@ -305,10 +305,10 @@ void CharRef_Draw(void) {
         }
         CR_PLATE2(i);
         Flash_FindLabel(flash, name, "mc_name_text", &ref);
-        TextBox_AttachLine(flash, &ref, 0, 0, gCharRef->entry[n].chara, &gCharRef->box[CHARREF_BOX_LIST_NAME + 4]);
+        TextBox_AttachLine(flash, &ref, 0, 0, CR_ENTRY[n].chara, &gCharRef->box[CHARREF_BOX_LIST_NAME + 4]);
         CR_PLATE2(i);
         Flash_FindLabel(flash, name, "mc_form_text", &ref);
-        TextBox_AttachLine(flash, &ref, 0, 0, gCharRef->entry[n].chara, &gCharRef->box[CHARREF_BOX_LIST_FORM + 4]);
+        TextBox_AttachLine(flash, &ref, 0, 0, CR_ENTRY[n].chara, &gCharRef->box[CHARREF_BOX_LIST_FORM + 4]);
     }
     uv.x0 = 0;
     uv.x1 = 0x100;
@@ -356,6 +356,14 @@ void CharRef_Draw(void) {
     Flash_ClipSetScale(flash, &ref, 1.0f, scale);
     Flash_ClipSetOffset(flash, &ref, 0, y);
     c = gCharRef->costume + 1;
+#ifdef PORT
+    if (gPortBt4 && c >= 1) { /* up to eight costumes: icons four to a row (REA: 0x35776C) */
+        uv.x0 = (c & 3) * 0x20;
+        uv.y0 = (c >> 2) * 0x20;
+        uv.x1 = uv.x0 + 0x20;
+        uv.y1 = uv.y0 + 0x20;
+    } else
+#endif
     switch (c) {
     case 0:
         uv.y0 = 0;
@@ -386,7 +394,7 @@ void CharRef_Draw(void) {
     Flash_FindLabel(flash, name, "mc_num", &ref);
     Flash_ClipSetUv(flash, &ref, &uv);
     tbl = (MChrTblEntry *)MPACK_AT(gCommonRes->data[2], 1);
-    tex = (tbl[gCharRef->entry[gCharRef->cursor].chara].flags ^ 1) & 1;
+    tex = (tbl[CR_ENTRY[gCharRef->cursor].chara].flags ^ 1) & 1;
     Flash_FindLabel(flash, NULL, "mc_ch_base_1", &ref);
     Flash_ClipSetTex(flash, &ref, tex);
     if (gCharRef->pageDir) {
@@ -394,11 +402,11 @@ void CharRef_Draw(void) {
     } else {
         y = gCharRef->cursor + 1;
     }
-    next = gCharRef->entry[y].chara;
+    next = CR_ENTRY[y].chara;
     if (y >= gCharRef->count) {
-        next = gCharRef->entry[0].chara;
+        next = CR_ENTRY[0].chara;
     } else if (y < 0) {
-        next = gCharRef->entry[gCharRef->count - 1].chara;
+        next = CR_ENTRY[gCharRef->count - 1].chara;
     }
     tex = (tbl[next].flags ^ 1) & 1;
     Flash_FindLabel(flash, NULL, "mc_ch_base_2", &ref);
@@ -570,18 +578,26 @@ void CharRef_StateDetails(void) {
             gCharRef->state = CHARREF_ST_PROFILE;
             Flash_GotoLabel(&gCharRef->flash[0], "fl_chara_1_in", 1);
         } else if (gCharRef->menuCursor == 1) {
-            Voice_PlayChara(0, gCharRef->entry[gCharRef->cursor].chara, rand() % 2);
+            Voice_PlayChara(0, CR_ENTRY[gCharRef->cursor].chara, rand() % 2);
             gCharRef->state = CHARREF_ST_VOICE;
             Flash_GotoLabel(&gCharRef->flash[0], "fl_voise_in", 1);
         } else if (gCharRef->menuCursor == 2) {
             gCharRef->voiceLine = 0;
             gCharRef->commentBase = 9;
-            gCharRef->commentBase += gCharRef->entry[gCharRef->cursor].commentLine;
+            gCharRef->commentBase += CR_ENTRY[gCharRef->cursor].commentLine;
             gCharRef->comment = 0;
             gCharRef->state = CHARREF_ST_COMMENT;
             MsgWin_SetSide(1);
             MsgWin_Open();
-            CR_SAY_COMMENT();
+#ifdef PORT
+            if (gPortBt4) { /* its first comment line is always line 9 (REA: 0x358270) */
+                gCharRef->pose = gCharRef->poseTbl[gCharRef->commentBase + gCharRef->comment - 9];
+                Voice_PlayWithSubtitle(gCharRef->subtitles, CHARREF_VOICE_BASE, 9);
+            } else
+#endif
+            {
+                CR_SAY_COMMENT();
+            }
             Flash_GotoLabel(&gCharRef->flash[0], "fl_chichi_comment_in", 1);
         } else {
             gCharRef->costume = 0;
@@ -635,7 +651,7 @@ void CharRef_StateVoice(void) {
     }
     if (gPad[0].gamePressed & PADG_CROSS) {
         Voice_Stop(0);
-        Voice_PlayChara(0, gCharRef->entry[gCharRef->cursor].chara, rand() % 2);
+        Voice_PlayChara(0, CR_ENTRY[gCharRef->cursor].chara, rand() % 2);
     }
     if (gPad[0].gamePressed & PADG_TRIANGLE) {
         Flash_GotoLabel(&gCharRef->flash[0], "fl_voise_out", 1);
@@ -652,7 +668,7 @@ void CharRef_StateComment(void) {
         return;
     }
     if (Voice_GetStat(0) == MVOICE_IDLE) {
-        if (gCharRef->comment < gCharRef->entry[gCharRef->cursor].commentNum - 1) {
+        if (gCharRef->comment < CR_ENTRY[gCharRef->cursor].commentNum - 1) {
             gCharRef->comment++;
             CR_SAY_COMMENT();
         } else {
@@ -664,7 +680,7 @@ void CharRef_StateComment(void) {
             Snd_PlaySe(1, 2);
         }
     } else if (gPad[0].gamePressed & PADG_CROSS) {
-        if (gCharRef->comment < gCharRef->entry[gCharRef->cursor].commentNum - 1) {
+        if (gCharRef->comment < CR_ENTRY[gCharRef->cursor].commentNum - 1) {
             gCharRef->comment++;
             gCharRef->pose = gCharRef->poseTbl[gCharRef->commentBase + gCharRef->comment - 9];
             Snd_PlaySe(1, 1);
@@ -697,18 +713,31 @@ void CharRef_StateCostume(void) {
     }
     if (gPad[0].gamePressed & PADG_UP) {
         if (--gCharRef->costume < 0) {
-            gCharRef->costume = ChrTbl_WrapCostume(gCharRef->entry[gCharRef->cursor].chara, NULL) - 1;
+            gCharRef->costume = ChrTbl_WrapCostume(CR_ENTRY[gCharRef->cursor].chara, NULL) - 1;
         }
         Snd_PlaySe(1, 0);
     } else if (gPad[0].gamePressed & PADG_DOWN) {
-        if (++gCharRef->costume > ChrTbl_WrapCostume(gCharRef->entry[gCharRef->cursor].chara, NULL) - 1) {
+        if (++gCharRef->costume > ChrTbl_WrapCostume(CR_ENTRY[gCharRef->cursor].chara, NULL) - 1) {
             gCharRef->costume = 0;
         }
         Snd_PlaySe(1, 0);
-    } else if (gPad[0].gamePressed & PADG_CROSS) {
+    } else if (gPad[0].gamePressed & PORT_BT4(PADG_CROSS, PADG_CROSS | PADG_SQUARE)) { /* (BT4: REA, 0x3588F0) */
         CharRef_ClipGoto(0, 2, "fl_ok");
         gCharRef->state = CHARREF_ST_VIEW_WAIT;
-        ChrView_Show(gCharRef->entry[gCharRef->cursor].chara, gCharRef->costume, 0);
+#ifdef PORT
+        if (gPortBt4) { /* held buttons: square the damaged model, R1 / L2 / R2 / L1 parts 1..4 (REA: 0x358938 -> 0x26BFCC) */
+            u32 held = gPad[0].gameHeld;
+            s32 parts = 0;
+
+            parts |= (held & PADG_SQUARE) ? 1 : 0;
+            parts |= (held & PADG_L1) ? 0x10 : 0;
+            parts |= (held & PADG_L2) ? 4 : 0;
+            parts |= (held & PADG_R1) ? 2 : 0;
+            parts |= (held & PADG_R2) ? 8 : 0;
+            ChrView_Show(CR_ENTRY[gCharRef->cursor].chara, gCharRef->costume, parts);
+        } else
+#endif
+        ChrView_Show(CR_ENTRY[gCharRef->cursor].chara, gCharRef->costume, 0);
         Snd_PlaySe(1, 1);
     } else if (gPad[0].gamePressed & PADG_TRIANGLE) {
         CharRef_ClipGoto(0, 2, "fl_off_start");
@@ -775,7 +804,7 @@ void CharRef_BuildList(void) {
 
     gCharRef->count = 0;
     gCharRef->head = NULL;
-    memset(gCharRef->entry, 0, sizeof(gCharRef->entry));
+    memset(CR_ENTRY, 0, PORT_BT4(sizeof(gCharRef->entry), sizeof(gCharRef->bt4Entry)));
     n = 0;
     for (; i < gCharRef->total; i++) {
         chara = gCharRef->charaTbl[i];
@@ -786,7 +815,8 @@ void CharRef_BuildList(void) {
         }
         /* The quotient is never used: only the divide-by-zero check of the division is left in the code, once
            in each arm (dividend and operator are a guess; the divisor is a variable holding 3). */
-        if (!(s32)((gSaveData->charaBits[chara >> 6] >> (chara - ((chara >> 6) << 6))) & 1)) {
+        /* (BT4: the characters past 0xA4 have no save bit and are always listed, REA 0x358C5C -> 0x3BF1FC) */
+        if (!(gPortBt4 && chara >= 0xA5) && !(s32)((gSaveData->charaBits[chara >> 6] >> (chara - ((chara >> 6) << 6))) & 1)) {
             s32 perPage = 3;
 
             page = i / perPage;
@@ -798,17 +828,17 @@ void CharRef_BuildList(void) {
             page = i / perPage;
         }
         if (gCharRef->head == NULL) {
-            gCharRef->head = &gCharRef->entry[n];
+            gCharRef->head = &CR_ENTRY[n];
         }
-        gCharRef->entry[n].prev = prev;
-        gCharRef->entry[n].chara = chara;
-        gCharRef->entry[n].commentLine = line;
-        gCharRef->entry[n].commentNum = num;
+        CR_ENTRY[n].prev = prev;
+        CR_ENTRY[n].chara = chara;
+        CR_ENTRY[n].commentLine = line;
+        CR_ENTRY[n].commentNum = num;
         gCharRef->count++;
         if (prev != NULL) {
-            prev->next = &gCharRef->entry[n];
+            prev->next = &CR_ENTRY[n];
         }
-        prev = &gCharRef->entry[n];
+        prev = &CR_ENTRY[n];
         n++;
     }
 }

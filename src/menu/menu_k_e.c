@@ -194,8 +194,8 @@ void Bracket_SetupDraw(Bracket *b) {
             if (BK_ENT(BK_MATCH.ent[i]).flags & TOUR_ENT_REC) {
                 chara = 0xA3;
             } else {
-                /* two pairs of characters share a name line */
-                switch (chara) {
+                /* two pairs of characters share a name line (BT4: not, its 0xA5 and 0xA7 are characters: REA 0x367E10) */
+                switch (PORT_BT4(chara, -1)) {
                 case 0x16:
                 case 0x17:
                     chara = 0xA7;

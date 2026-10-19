@@ -132,7 +132,18 @@ typedef struct CharRef {
     /* 0x162C */ s32 prevState;
     /* 0x1630 */ s32 flags;          /* CHARREF_ */
     /* 0x1634 */ f32 imageAlpha;
-} CharRef; /* 0x1638 */
+#ifdef PORT
+    /* 0x1638 */ CharRefEntry bt4Entry[249]; /* BT4: the list, moved here and grown (REA 0x358BCC); BT4 keeps the
+                                                model viewer's motion buffer at + 400 (view_a_d.c keeps its own) */
+#endif
+} CharRef; /* 0x1638 (BT4: 0x29AC) */
+
+/* The list entries: BT4's moved array or BT3's. */
+#ifdef PORT
+#define CR_ENTRY (gPortBt4 ? gCharRef->bt4Entry : gCharRef->entry)
+#else
+#define CR_ENTRY (gCharRef->entry)
+#endif
 
 #define CHARREF_IMAGE_CHANGE 1   /* the current character changed: load its picture */
 #define CHARREF_IMAGE_READY 2    /* the picture is loaded and fades in */

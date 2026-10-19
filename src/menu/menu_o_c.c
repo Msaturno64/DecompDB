@@ -90,7 +90,11 @@ s32 Ub_Main(void) {
             break;
         case 14:
             Bgm_Play(PORT_BT4(UB_BGM, 0x84A));
-            if (MisSel_Run(2)) {
+            r = MisSel_Run(2);
+            if (gPortBt4 && r >= 2) { /* (BT4: straight to the battle, REA 0x379B9C -> 0x3BE7B4) */
+                UO_PROG->mode = 16;
+                done = 1;
+            } else if (r) {
                 UO_PROG->mode = 15;
             } else {
                 UO_PROG->mode = 13;

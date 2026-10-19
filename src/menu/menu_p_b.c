@@ -154,6 +154,17 @@ void MisResult_Init(s32 section) {
     total = UbScore_CalcRank(1, &MR->score);
     if (MR->outcome == 0) {
         MR->newRecord = UbScore_SaveMissionBest(MR->mission, total, &MR->score);
+#ifdef PORT
+        if (gPortBt4) { /* the battle's unlock bit and its reward 5 (REA: 0x37C008 -> 0x3BE828) */
+            s32 bit = BattleResult_GetPtr()->unk44 - 1;
+
+            if (bit >= 0) {
+                *(s32 *)((u8 *)gSaveData + 8) |= 1 << bit; /* (SaveData.unlockFlags) */
+                MR->reward = 5;
+                MR->rewardItem = bit + 351;
+            }
+        }
+#endif
         if (MisResult_MarkCleared(MR->mission, &MR->cleared)) {
             if (MR->cleared == 30) {
                 MR->reward = 1;
@@ -326,6 +337,22 @@ void MisResult_Draw(void) {
             Flash_FindLabel(flash, NULL, "mc_text_kari1", &ref);
             TextBox_AttachLine(flash, &ref, 0, 0, 0x13, &MR->box[5]);
             break;
+#ifdef PORT
+        case 4:
+        case 5:
+            if (!gPortBt4) {
+                break;
+            }
+            if (MR->reward == 5) { /* the unlocked battle's picture (REA: 0x37CA88, 0x3BE918) */
+                Flash_FindLabel(flash, "mc_item_plate00", "mc_item_graphic", &ref);
+                uv.x0 = 0x40;
+                uv.y0 = 0;
+                uv.x1 = 0x80;
+                uv.y1 = 0x40;
+                Flash_ClipSetUv(flash, &ref, &uv);
+            }
+            /* fall through */
+#endif
         case 2:
         case 3:
             Flash_FindLabel(flash, "mc_item_plate00", "mc_item_text_kari", &ref);

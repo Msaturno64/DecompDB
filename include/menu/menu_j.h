@@ -183,7 +183,11 @@ typedef struct ESel {
     /* 0x1B24 */ s32 talk[2];
     /* 0x1B2C */ MTextBox box[2];    /* character name, form name */
     /* 0x1C44 */ void *items;        /* item table of common file 4 */
-} ESel; /* 0x1C48 */
+#ifdef PORT
+    /* 0x1C48 */ void *bt4Text;      /* BT4: section 40, the costume names (REA 0x345080) */
+    /* 0x1C4C */ MTextBox bt4Box;
+#endif
+} ESel; /* 0x1C48 (BT4: 0x1CD8) */
 
 #define ESEL_DONE 1
 #define ESEL_LEAVING 2

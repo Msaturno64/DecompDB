@@ -214,7 +214,11 @@ typedef struct UbTeamSel {
     /* 0x1AE4 */ s32 talk[2];
     /* 0x1AEC */ MTextBox box[2];    /* character name, form name */
     /* 0x1C04 */ void *items;        /* item table of common file 4 */
-} UbTeamSel; /* 0x1C08 */
+#ifdef PORT
+    /* 0x1C08 */ void *bt4Text;      /* BT4: section 35, the costume names (REA 0x3450F8) */
+    /* 0x1C0C */ MTextBox bt4Box;
+#endif
+} UbTeamSel; /* 0x1C08 (BT4: 0x1C98) */
 
 /* UbTeamState.step */
 #define UBTEAM_STEP_CHARA 0

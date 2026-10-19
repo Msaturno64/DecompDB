@@ -2,6 +2,13 @@
 #include "menu/menu_i.h"
 #include "menu/menu_j.h"
 #include "sys/pad.h"
+
+#ifdef PORT
+extern void MenuColor_PortBt4Plates(MFlash *f, s32 cur, s32 count);
+extern void MenuColor_PortBt4Name(MFlash *f, MTextBox *box, void *text, s32 chara, s32 costume);
+extern s32 MChr_PortBt4Valid(s32 id);
+#endif
+
 #include "sys/save.h"
 
 ESel *gEntrySel = NULL; /* 0x3B5910 */
@@ -160,8 +167,8 @@ void EntrySel_Init(s32 section) {
     s32 movie;
     s32 i;
 
-    gEntrySel = Heap_Alloc(0x1C48, 0x20, 0, 2);
-    memset(gEntrySel, 0, 0x1C48);
+    gEntrySel = Heap_Alloc(PORT_BT4(0x1C48, 0x1CD8), 0x20, 0, 2); /* (BT4: REA, 0x35E7B8) */
+    memset(gEntrySel, 0, PORT_BT4(0x1C48, 0x1CD8));
     gEntrySel->pack = (u32 *)MPACK_AT(gMenuArc4, section);
     gEntrySel->res = Sprite_Unpack(gEntrySel->pack, NULL, NULL);
     gEntrySel->file = File_LoadSync(TOUR_PROG->t.tour + 0x3C9, NULL, 0);
@@ -296,7 +303,7 @@ void EntrySel_Init(s32 section) {
         gEntrySel->sel->entry[0].col = 0;
         TOUR_PROG->lastEntry = gEntrySel->sel->entry[0];
     }
-    switch (TOUR_PROG->t.tour) {
+    switch (PORT_BT4(TOUR_PROG->t.tour, TOUR_PROG->t.tour == 1 ? TOUR_YAMCHA : 0)) { /* (BT4: the drawn entrants are tour 1's, REA 0x35F3A0) */
     case 0:
     case 1:
     case 2:
@@ -341,6 +348,13 @@ void EntrySel_Init(s32 section) {
     TextBox_SetUnk80(&gEntrySel->box[0], 1);
     TextBox_Init(&gEntrySel->box[1], gEntrySel->formText, 3);
     TextBox_SetUnk80(&gEntrySel->box[1], 1);
+#ifdef PORT
+    if (gPortBt4) {
+        gEntrySel->bt4Text = MPACK_AT(gEntrySel->res, 40);
+        TextBox_Init(&gEntrySel->bt4Box, MPACK_AT(gEntrySel->bt4Text, 1), 7);
+        TextBox_SetUnk80(&gEntrySel->bt4Box, 1);
+    }
+#endif
 }
 
 /*
@@ -465,6 +479,16 @@ void EntrySel_Draw(void) {
             Flash_ClipSetFlags(flash, &ref, 2, ES_CELL.id != ESEL_ID_RANDOM);
         }
     }
+#ifdef PORT
+    if (gPortBt4) { /* one plate and the costume's name (REA: 0x35FC74) */
+        s32 cur = gEntrySel->sel->cur;
+
+        /* (cur 5 is the generic helper's "menu plate": nothing is changed) */
+        MenuColor_PortBt4Plates(flash, cur != 5 ? gEntrySel->sel->entry[cur].costume : -1, gEntrySel->colorCount);
+        MenuColor_PortBt4Name(flash, &gEntrySel->bt4Box, gEntrySel->bt4Text, cur != 5 ? gEntrySel->sel->image : -1,
+                              gEntrySel->sel->entry[cur].costume);
+    } else
+#endif
     for (i = 0; i < 4; i++) {
         /* costume plates */
         uv.x0 = (i % 2) * 0x40;
@@ -596,6 +620,7 @@ void EntrySel_Update(void) {
 }
 
 /* Pad 0: grid cursor, form, item set, item panel and costume of the entrant being chosen. */
+/* (BT4: the tour of drawn entrants is 1, REA: EntrySel_Input's ten tests at 0x360488..0x3614A4) */
 void EntrySel_Input(s32 *result) {
     if (!(gEntrySel->flash[0].flags & MFLASH_PAD)) {
         return;
@@ -607,21 +632,21 @@ void EntrySel_Input(s32 *result) {
     }
     switch (gEntrySel->sel->step) {
     case ESEL_STEP_CHARA:
-        if ((gPad[0].gameRepeat & 1) && TOUR_PROG->t.tour != TOUR_YAMCHA) {
+        if ((gPad[0].gameRepeat & 1) && TOUR_PROG->t.tour != PORT_BT4(TOUR_YAMCHA, 1)) {
             EntrySel_ClipGoto(1, 0, "fl_off_start");
             ChrGrid_MoveLeft(gEntrySel->grid, &ES_CUR.col, ES_CUR.row);
             EntrySel_ClipGoto(1, 0, "fl_on_start");
             gEntrySel->sel->image = gEntrySel->sel->rowChara[ES_CUR.col];
             EntrySel_ChangeImage();
             Snd_PlaySe(2, 0);
-        } else if ((gPad[0].gameRepeat & 2) && TOUR_PROG->t.tour != TOUR_YAMCHA) {
+        } else if ((gPad[0].gameRepeat & 2) && TOUR_PROG->t.tour != PORT_BT4(TOUR_YAMCHA, 1)) {
             EntrySel_ClipGoto(1, 0, "fl_off_start");
             ChrGrid_MoveRight(gEntrySel->grid, &ES_CUR.col, ES_CUR.row);
             EntrySel_ClipGoto(1, 0, "fl_on_start");
             gEntrySel->sel->image = gEntrySel->sel->rowChara[ES_CUR.col];
             EntrySel_ChangeImage();
             Snd_PlaySe(2, 0);
-        } else if ((gPad[0].gameRepeat & 8) && TOUR_PROG->t.tour != TOUR_YAMCHA) {
+        } else if ((gPad[0].gameRepeat & 8) && TOUR_PROG->t.tour != PORT_BT4(TOUR_YAMCHA, 1)) {
             if (gEntrySel->rows >= 2) {
                 Flash_GotoLabel(&gEntrySel->flash[1], "fl_reel_down", 1);
                 gEntrySel->sel->rowAnim = 1;
@@ -633,7 +658,7 @@ void EntrySel_Input(s32 *result) {
                 EntrySel_ChangeImage();
                 Snd_PlaySe(2, 2);
             }
-        } else if ((gPad[0].gameRepeat & 4) && TOUR_PROG->t.tour != TOUR_YAMCHA) {
+        } else if ((gPad[0].gameRepeat & 4) && TOUR_PROG->t.tour != PORT_BT4(TOUR_YAMCHA, 1)) {
             if (gEntrySel->rows >= 2) {
                 Flash_GotoLabel(&gEntrySel->flash[1], "fl_reel_up", 1);
                 gEntrySel->sel->rowAnim = 1;
@@ -663,7 +688,7 @@ void EntrySel_Input(s32 *result) {
                 Snd_PlaySe(1, 1);
             } else if (ES_CELL.formCount != 0) {
                 gEntrySel->sel->flags |= ESEL_SEL_FORM;
-                if (ES_CUR.form >= ES_CELL.formCount) {
+                if (ES_CUR.form >= ES_CELL.formCount || (gPortBt4 && !MChr_PortBt4Valid(ES_CELL.form[ES_CUR.form]))) { /* (BT4: REA, 0x3609A8 -> 0x200660) */
                     ES_CUR.form = 0;
                 }
                 Flash_GotoLabel(&gEntrySel->flash[1], "fl_form", 1);
@@ -707,14 +732,14 @@ void EntrySel_Input(s32 *result) {
         }
         break;
     case ESEL_STEP_FORM:
-        if ((gPad[0].gameRepeat & 1) && TOUR_PROG->t.tour != TOUR_YAMCHA) {
+        if ((gPad[0].gameRepeat & 1) && TOUR_PROG->t.tour != PORT_BT4(TOUR_YAMCHA, 1)) {
             EntrySel_ClipGoto(1, 1, "fl_off_start");
             ChrGrid_PrevForm(gEntrySel->sel->rowChara, &ES_CUR.form);
             EntrySel_ClipGoto(1, 1, "fl_on_start");
             gEntrySel->sel->image = gEntrySel->sel->rowChara[ES_CUR.form];
             EntrySel_ChangeImage();
             Snd_PlaySe(2, 0);
-        } else if ((gPad[0].gameRepeat & 2) && TOUR_PROG->t.tour != TOUR_YAMCHA) {
+        } else if ((gPad[0].gameRepeat & 2) && TOUR_PROG->t.tour != PORT_BT4(TOUR_YAMCHA, 1)) {
             EntrySel_ClipGoto(1, 1, "fl_off_start");
             ChrGrid_NextForm(gEntrySel->sel->rowChara, &ES_CUR.form);
             EntrySel_ClipGoto(1, 1, "fl_on_start");
@@ -746,7 +771,7 @@ void EntrySel_Input(s32 *result) {
         }
         break;
     case ESEL_STEP_CUSTOM:
-        if ((gPad[0].gameRepeat & 8) && TOUR_PROG->t.tour != TOUR_YAMCHA) {
+        if ((gPad[0].gameRepeat & 8) && TOUR_PROG->t.tour != PORT_BT4(TOUR_YAMCHA, 1)) {
             if (gEntrySel->customCount >= 2) {
                 EntrySel_ClipGoto(2, 2, "fl_off_start");
                 ES_CUR.custom--;
@@ -756,7 +781,7 @@ void EntrySel_Input(s32 *result) {
                 EntrySel_ClipGoto(2, 2, "fl_on_start");
                 Snd_PlaySe(1, 0);
             }
-        } else if ((gPad[0].gameRepeat & 4) && TOUR_PROG->t.tour != TOUR_YAMCHA) {
+        } else if ((gPad[0].gameRepeat & 4) && TOUR_PROG->t.tour != PORT_BT4(TOUR_YAMCHA, 1)) {
             if (gEntrySel->customCount >= 2) {
                 EntrySel_ClipGoto(2, 2, "fl_off_start");
                 ES_CUR.custom++;
@@ -820,7 +845,7 @@ void EntrySel_Input(s32 *result) {
         }
         break;
     case ESEL_STEP_COLOR:
-        if ((gPad[0].gameRepeat & 1) && TOUR_PROG->t.tour != TOUR_YAMCHA) {
+        if ((gPad[0].gameRepeat & 1) && TOUR_PROG->t.tour != PORT_BT4(TOUR_YAMCHA, 1)) {
             EntrySel_ClipGoto(2, 5, "fl_off_start");
             ES_CUR.costume--;
             if (ES_CUR.costume < 0) {
@@ -828,7 +853,7 @@ void EntrySel_Input(s32 *result) {
             }
             EntrySel_ClipGoto(2, 5, "fl_on_start");
             Snd_PlaySe(1, 0);
-        } else if ((gPad[0].gameRepeat & 2) && TOUR_PROG->t.tour != TOUR_YAMCHA) {
+        } else if ((gPad[0].gameRepeat & 2) && TOUR_PROG->t.tour != PORT_BT4(TOUR_YAMCHA, 1)) {
             EntrySel_ClipGoto(2, 5, "fl_off_start");
             ES_CUR.costume++;
             if (ES_CUR.costume >= gEntrySel->colorCount) {
@@ -868,6 +893,22 @@ void EntrySel_Input(s32 *result) {
                     s32 chara;
                     s32 id;
 
+#ifdef PORT
+                    if (gPortBt4) { /* a character entrant and a form of it that is one (REA: 0x361880 -> 0x2006C0, 0x3BF074) */
+                        do {
+                            slot = Rand_Range(gEntrySel->gridCount);
+                        } while (!MChr_PortBt4Valid(gEntrySel->grid[slot].id));
+                        cell = &gEntrySel->grid[slot];
+                        chara = cell->id;
+                        if (cell->formCount != 0) { /* (the game assumes one; it would loop without a character form) */
+                            do {
+                                id = cell->form[Rand_Range(cell->formCount)];
+                            } while (!MChr_PortBt4Valid(id));
+                            chara = id;
+                        }
+                        ES_CUR.chara = chara;
+                    } else {
+#endif
                     do {
                         slot = Rand_Range(gEntrySel->gridCount);
                         id = gEntrySel->grid[slot].id;
@@ -878,6 +919,9 @@ void EntrySel_Input(s32 *result) {
                         chara = cell->form[Rand_Range(cell->formCount)];
                     }
                     ES_CUR.chara = chara;
+#ifdef PORT
+                    }
+#endif
                 } else {
                     ES_CUR.chara = gEntrySel->sel->rowChara[ES_CUR.col];
                     slot = ES_CUR.col + ES_CUR.row * ESEL_COLS;

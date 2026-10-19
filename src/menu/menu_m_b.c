@@ -1,6 +1,13 @@
 #include "common.h"
 #include "menu/menu_m.h"
 #include "sys/pad.h"
+
+#ifdef PORT
+extern void MenuColor_PortBt4Plates(MFlash *f, s32 cur, s32 count);
+extern void MenuColor_PortBt4Name(MFlash *f, MTextBox *box, void *text, s32 chara, s32 costume);
+extern s32 MChr_PortBt4Valid(s32 id);
+#endif
+
 #include "sys/save.h"
 
 /*
@@ -260,8 +267,8 @@ void UbTeamSel_Init(s32 section) {
     s32 i;
     s32 j;
 
-    gUbTeamSel = Heap_Alloc(sizeof(UbTeamSel), 0x20, 0, 2);
-    memset(gUbTeamSel, 0, sizeof(UbTeamSel));
+    gUbTeamSel = Heap_Alloc(PORT_BT4(0x1C08, 0x1C98), 0x20, 0, 2); /* (BT4: REA, 0x36EBB8) */
+    memset(gUbTeamSel, 0, PORT_BT4(0x1C08, 0x1C98));
     gUbTeamSel->pack = (u32 *)MPACK_AT(gMenuArc3, section);
     gUbTeamSel->res = Sprite_Unpack(gUbTeamSel->pack, NULL, NULL);
     switch (UB_PROG->dpRule) {
@@ -427,6 +434,13 @@ void UbTeamSel_Init(s32 section) {
     TextBox_SetUnk80(&gUbTeamSel->box[0], 1);
     TextBox_Init(&gUbTeamSel->box[1], gUbTeamSel->formText, 3);
     TextBox_SetUnk80(&gUbTeamSel->box[1], 1);
+#ifdef PORT
+    if (gPortBt4) {
+        gUbTeamSel->bt4Text = MPACK_AT(gUbTeamSel->res, 35);
+        TextBox_Init(&gUbTeamSel->bt4Box, MPACK_AT(gUbTeamSel->bt4Text, 1), 7);
+        TextBox_SetUnk80(&gUbTeamSel->bt4Box, 1);
+    }
+#endif
 }
 
 /* Frees the screen: the windows, the movies, the portrait buffers and the work area. */
@@ -532,6 +546,16 @@ void UbTeamSel_Draw(void) {
             Flash_ClipSetFlags(flash, &ref, 2, 0);
         }
     }
+#ifdef PORT
+    if (gPortBt4) { /* one plate and the costume's name (REA: 0x36FFB4) */
+        s32 cur = gUbTeamSel->sel->cur;
+
+        /* (cur 5: on the menu plate, nothing is changed) */
+        MenuColor_PortBt4Plates(flash, cur != 5 ? gUbTeamSel->sel->team.member[cur].color : -1, gUbTeamSel->colorCount);
+        MenuColor_PortBt4Name(flash, &gUbTeamSel->bt4Box, gUbTeamSel->bt4Text, cur != 5 ? gUbTeamSel->sel->chara : -1,
+                              gUbTeamSel->sel->team.member[cur].color);
+    } else
+#endif
     for (i = 0; i < 4; i++) {
         /* costume plates */
         uv.x0 = (i % 2) * 0x40;
@@ -745,7 +769,7 @@ void UbTeamSel_Input(s32 *result) {
             if (UbTeamSel_FitsDp(gUbTeamSel->sel->chara)) {
                 if (UT_CELL.formCount != 0) {
                     gUbTeamSel->sel->flags |= UBTEAM_SEL_FORM;
-                    if (UT_CUR.form >= UT_CELL.formCount) {
+                    if (UT_CUR.form >= UT_CELL.formCount || (gPortBt4 && !MChr_PortBt4Valid(UT_CELL.form[UT_CUR.form]))) { /* (BT4: REA, 0x370CE4 -> 0x200660) */
                         UT_CUR.form = 0;
                     }
                     Flash_GotoLabel(&gUbTeamSel->flash[2], "fl_form", 1);

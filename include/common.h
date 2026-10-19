@@ -12,6 +12,7 @@ extern int gPortBt4;
 #define PORT_BT4(bt3, bt4) (gPortBt4 ? (bt4) : (bt3))
 #else
 #define PORT_BT4(bt3, bt4) (bt3)
+#define gPortBt4 0 /* (the PS2 build: BT3 only) */
 #endif
 
 #endif
