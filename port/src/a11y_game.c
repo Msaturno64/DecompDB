@@ -2181,9 +2181,12 @@ typedef struct {
     int menuCursor;                     /* 0x15FC: item of the page's menu, 5 while the model is shown */
     char unk1600[0x1628 - 0x1600];
     int state;                          /* 0x1628: CHARREF_ST_ */
+    char unk162C[0x1638 - 0x162C];
+    A11yCharRefEntry bt4Entry[249];     /* 0x1638: BT4's list (menu_h.h) */
 } A11yCharRef;
 _Static_assert(sizeof(A11yCharRefEntry) == 0x14 && offsetof(A11yCharRef, cursor) == 0x15DC, "CharRef");
 _Static_assert(offsetof(A11yCharRef, menuCursor) == 0x15FC && offsetof(A11yCharRef, state) == 0x1628, "CharRef");
+extern int gPortBt4; /* plat_mem.c: the BT4 disc (PRIVATE) */
 extern A11yCharRef GAME_PTR gCharRef; /* NULL outside the screen */
 #define CHARREF_CHARA_MAX 161
 #define CHARREF_ITEMS 4
@@ -2240,7 +2243,7 @@ static void char_ref(void) {
         return;
     }
     if (c->state < CHARREF_ST_LIST || c->state > CHARREF_ST_VIEW_WAIT || c->count <= 0 ||
-        c->count > CHARREF_CHARA_MAX || c->cursor < 0 || c->cursor >= c->count) {
+        c->count > (gPortBt4 ? 249 : CHARREF_CHARA_MAX) || c->cursor < 0 || c->cursor >= c->count) {
         return; /* the intro, or leaving */
     }
     if (!open) {
@@ -2248,7 +2251,7 @@ static void char_ref(void) {
         open = 1;
         state = cursor = item = costume = -1;
     }
-    chara = c->entry[c->cursor].chara;
+    chara = (gPortBt4 ? c->bt4Entry : c->entry)[c->cursor].chara;
     switch (c->state) {
     case CHARREF_ST_LIST:
         if (state == CHARREF_ST_LIST && cursor == c->cursor) {

@@ -87,6 +87,9 @@ extern s32 Dialog_IsOpen(void);
 /* Card titles, full-width Shift-JIS: "DBZ-BUDOKAI-TENKAICHI3" and "DBZ-TENKAICHI3-REPLAY-0". */
 #define MCFLOW_TITLE_SAVE "\x82\x63\x82\x61\x82\x79\x81\x7C\x82\x61\x82\x74\x82\x63\x82\x6E\x82\x6A\x82\x60\x82\x68\x81\x7C\x82\x73\x82\x64\x82\x6D\x82\x6A\x82\x60\x82\x68\x82\x62\x82\x67\x82\x68\x82\x52"
 #define MCFLOW_TITLE_REPLAY "\x82\x63\x82\x61\x82\x79\x81\x7C\x82\x73\x82\x64\x82\x6D\x82\x6A\x82\x60\x82\x68\x82\x62\x82\x67\x82\x68\x82\x52\x81\x7C\x82\x71\x82\x64\x82\x6F\x82\x6B\x82\x60\x82\x78\x81\x7C\x82\x4F"
+/* BT4: "...TENKAICHI4" (REA: 0x2EBD40, 0x2EBD60) */
+#define MCFLOW_TITLE_SAVE_BT4 "\x82\x63\x82\x61\x82\x79\x81\x7C\x82\x61\x82\x74\x82\x63\x82\x6E\x82\x6A\x82\x60\x82\x68\x81\x7C\x82\x73\x82\x64\x82\x6D\x82\x6A\x82\x60\x82\x68\x82\x62\x82\x67\x82\x68\x82\x53"
+#define MCFLOW_TITLE_REPLAY_BT4 "\x82\x63\x82\x61\x82\x79\x81\x7C\x82\x73\x82\x64\x82\x6D\x82\x6A\x82\x60\x82\x68\x82\x62\x82\x67\x82\x68\x82\x53\x81\x7C\x82\x71\x82\x64\x82\x6F\x82\x6B\x82\x60\x82\x78\x81\x7C\x82\x4F"
 
 /* Fragments every flow repeats. They are plain statements: use them inside braces only. */
 #define MCF_CARD gMcCard[0]
@@ -159,13 +162,13 @@ void McFlow_SetupRequest(s32 kind, s32 slot) {
     if (kind == 0) {
         gMcFlow->req.icon = (u8 *)gMcFlow->res + (gMcFlow->res[1] / 4 * 4);
         gMcFlow->req.iconSize = 0x9C9A;
-        strcpy((char *)&gMcFlow->req.title, MCFLOW_TITLE_SAVE);
+        strcpy((char *)&gMcFlow->req.title, PORT_BT4(MCFLOW_TITLE_SAVE, MCFLOW_TITLE_SAVE_BT4));
         gMcFlow->req.titleBreak = 0x18;
         McCardFile_SetNames(&gMcFlow->req, PORT_BT4("DBZT3", "DBZT4"), -1, -1, 0); /* (BT4: REA, 0x2FE948) */
     } else {
         gMcFlow->req.icon = (u8 *)gMcFlow->res + (gMcFlow->res[2] / 4 * 4);
         gMcFlow->req.iconSize = 0xBE8A;
-        strcpy((char *)&gMcFlow->req.title, MCFLOW_TITLE_REPLAY);
+        strcpy((char *)&gMcFlow->req.title, PORT_BT4(MCFLOW_TITLE_REPLAY, MCFLOW_TITLE_REPLAY_BT4));
         gMcFlow->req.titleBreak = 0x1E;
         gMcFlow->req.title.text[0x2D] += slot + 1;
         McCardFile_SetNames(&gMcFlow->req, PORT_BT4("DBZT3R", "DBZT4R"), slot, -1, 1);

@@ -491,7 +491,8 @@ extern int Port_Setting(const char *name, int def); /* plat_settings.c */
 int Port_AspectMilli(void) {
     if (sAspectMilli < 0) {
         int a = 0, b = 0, w = 0, h = 0;
-        sAspectMilli = Port_Setting("aspect_milli", 1333); /* the saved choice; the variables below win */
+        extern int gPortBt4; /* plat_mem.c: the BT4 disc (PRIVATE), a game drawn for 16:9 */
+        sAspectMilli = Port_Setting("aspect_milli", gPortBt4 ? 1778 : 1333); /* the saved choice; the variables below win */
         if (getenv("BT3_WIDE") != NULL && atoi(getenv("BT3_WIDE")) == 0) {
             sAspectMilli = 1333; /* 4:3 */
         } else if (getenv("BT3_ASPECT") != NULL && sscanf(getenv("BT3_ASPECT"), "%d:%d", &a, &b) == 2 && a > 0 && b > 0) {
@@ -536,6 +537,11 @@ int Port_IsWide(void) {
    each other), so they are shown as they are, stretched to the picture's width (the user's choice). */
 extern int gPortMenuMode; /* headless.c */
 float Port_WideFactor(void) {
+    extern int gPortBt4;
+
+    if (gPortBt4) { /* its fights are projected for 16:9 already (btl_cam.c): 1 at 16:9, 3/4 at 4:3 */
+        return gPortMenuMode ? 1.0f : (float)Port_AspectMilli() * 9.0f / 16000.0f;
+    }
     return Port_IsWide() && !gPortMenuMode ? (float)Port_AspectMilli() * 3.0f / 4000.0f : 1.0f;
 }
 /* "Menus in 4:3" (F1, UI; setting menus_43): the menus' pages are shown at the shape they were composed for, in the
