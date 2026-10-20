@@ -44,6 +44,8 @@ f32 Ps_Y(f32 y);
 u32 Ps_Uv(f32 t);
 void Ps_SpriteScreen(s32 id, f32 x0, f32 y0, f32 x1, f32 y1, f32 u0, f32 v0, f32 u1, f32 v1, u32 tint, s32 alpha);
 void Ps_Sprite(s32 id, f32 x0, f32 y0, f32 x1, f32 y1, f32 u0, f32 v0, f32 u1, f32 v1, u32 tint, s32 alpha);
+void Ps_GameTex(u8 *tex, f32 x0, f32 y0, f32 x1, f32 y1, u32 tint, s32 alpha); /* a game picture (a chip) */
+f32 Ps_GameTexShape(u8 *tex);                                                   /* its width / height */
 f32 Ps_PicW(s32 id);
 f32 Ps_PicH(s32 id);
 void Ps_Stand(s32 id, f32 cx, f32 feet, f32 height, s32 alpha);
@@ -62,6 +64,7 @@ void Ps_TextEx(f32 x, f32 y, char *str, f32 scale, f32 width, u32 top, u32 botto
 void Ps_Heading(f32 x, f32 y, char *str, f32 scale, f32 width, s32 alpha);
 f32 Ps_MsgWidth(char *str, f32 scale);
 void Ps_Msg(f32 x, f32 y, char *str, f32 scale, s32 alpha);
+void Ps_MsgLines(char *say, f32 x, f32 y, f32 width, s32 lines); /* word-wrapped, `lines` at most */
 s32 Ps_ButtonPic(s32 kind);
 f32 Ps_ButtonW(s32 kind, f32 size);
 void Ps_Button(s32 kind, f32 cx, f32 cy, f32 size);

@@ -253,12 +253,7 @@ static void Pt_Draw(void) {
 static void Pt_DrawText(void) {
     char value[16];
     char help[200];
-    char line[200];
-    char *say;
-    f32 y = 343.0f;
     s32 i;
-    s32 at;
-    s32 lines;
 
     Ps_Heading(44.0f, Ps_TextTop(32.0f, 1.3f), TX(TX_TITLE), 1.3f, 300.0f, 0x80);
     for (i = 0; i < PT_ROWS; i++) {
@@ -272,39 +267,8 @@ static void Pt_DrawText(void) {
             Ps_Align(0);
         }
     }
-    /* the line about the row, word by word, three lines at most */
-    say = Pt_Help(help);
-    at = 0;
-    for (lines = 0; say[at] != 0 && lines < 3; lines++) {
-        s32 len = 0;
-        s32 fit = 0;
-
-        while (say[at] == ' ') {
-            at++;
-        }
-        while (say[at + len] != 0) {
-            s32 end = len;
-
-            while (say[at + end] != 0 && say[at + end] != ' ') {
-                end++;
-            }
-            Ps_Copy(line, say + at, end + 1 < 200 ? end + 1 : 200);
-            if (fit > 0 && Ps_MsgWidth(line, 1.0f) > 360.0f) { /* (up to 400: the hosts stand to the right) */
-                break;
-            }
-            fit = len = end;
-            while (say[at + len] == ' ') {
-                len++;
-            }
-        }
-        if (fit == 0) { /* (one word wider than the box: it goes alone) */
-            fit = len;
-        }
-        Ps_Copy(line, say + at, fit + 1 < 200 ? fit + 1 : 200);
-        Ps_Msg(40.0f, y, line, 1.0f, 0x80);
-        y += 21.0f;
-        at += fit;
-    }
+    /* the line about the row, three lines at most (up to 400 units: the hosts stand to the right) */
+    Ps_MsgLines(Pt_Help(help), 40.0f, 343.0f, 360.0f, 3);
 }
 
 static void Pt_WinInit(void) {

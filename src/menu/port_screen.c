@@ -185,8 +185,8 @@ u32 Ps_Uv(f32 t) {
     return v < 0 ? 0 : v > 0x3FFF ? 0x3FFF : (u32)v;
 }
 
-/* A picture's part (u, v in 0..1) over a box of the SCREEN, tinted (0x80 per channel = as it is). */
-void Ps_SpriteScreen(s32 id, f32 x0, f32 y0, f32 x1, f32 y1, f32 u0, f32 v0, f32 u1, f32 v1, u32 tint, s32 alpha) {
+/* A textured box of the SCREEN: TEX0 as given, UV in 1/16 texels, tinted (0x80 per channel = as it is). */
+static void Ps_TexBox(u64 tex0, f32 x0, f32 y0, f32 x1, f32 y1, u32 uv0, u32 vv0, u32 uv1, u32 vv1, u32 tint, s32 alpha) {
     u64 *p;
 
     if (alpha <= 0 || x1 <= x0 || y1 <= y0) {
@@ -217,18 +217,43 @@ void Ps_SpriteScreen(s32 id, f32 x0, f32 y0, f32 x1, f32 y1, f32 u0, f32 v0, f32
     p[0] = (u64)(tint & 0xFFFFFF) | ((u64)alpha << 24);
     p[1] = 0;
     p += 2;
-    /* TEX0: base 1, width 1, format TBO_PSM, 1024 x 1024, the texture's alpha, modulated, the picture's number where
-       the palette address goes */
-    p[0] = 1ULL | (1ULL << 14) | ((u64)TBO_PSM << 20) | (10ULL << 26) | (10ULL << 30) | (1ULL << 34) | ((u64)(id & 0x3FFF) << 37);
+    p[0] = tex0;
     p[1] = 0x156; /* PRIM: sprite, textured, blended, UV */
     p += 2;
-    p[0] = (u64)Ps_Uv(u0) | ((u64)Ps_Uv(v0) << 16);
+    p[0] = (u64)uv0 | ((u64)vv0 << 16);
     p[1] = (u64)((s32)(x0 * 16.0f) + 0x7000) | ((u64)((s32)(y0 * 16.0f) + 0x7200) << 16);
     p += 2;
-    p[0] = (u64)Ps_Uv(u1) | ((u64)Ps_Uv(v1) << 16);
+    p[0] = (u64)uv1 | ((u64)vv1 << 16);
     p[1] = (u64)((s32)(x1 * 16.0f) + 0x7000) | ((u64)((s32)(y1 * 16.0f) + 0x7200) << 16);
     p += 2;
     Dma_EndDirect(p);
+}
+
+/* A picture's part (u, v in 0..1) over a box of the SCREEN, tinted (0x80 per channel = as it is). */
+void Ps_SpriteScreen(s32 id, f32 x0, f32 y0, f32 x1, f32 y1, f32 u0, f32 v0, f32 u1, f32 v1, u32 tint, s32 alpha) {
+    /* TEX0: base 1, width 1, format TBO_PSM, 1024 x 1024, the texture's alpha, modulated, the picture's number where
+       the palette address goes */
+    Ps_TexBox(1ULL | (1ULL << 14) | ((u64)TBO_PSM << 20) | (10ULL << 26) | (10ULL << 30) | (1ULL << 34) | ((u64)(id & 0x3FFF) << 37), x0, y0,
+              x1, y1, Ps_Uv(u0), Ps_Uv(v0), Ps_Uv(u1), Ps_Uv(v1), tint, alpha);
+}
+
+/* A picture of the game's own over a box of the page: entry 0 of a menu pack's texture table (with its palette), as
+   the character chips are. It goes where the menus' Flash pictures go in the GS's memory (block 0x3000), and is
+   drawn whole. */
+extern u64 FlashDraw_UploadTex(void *tex, s32 index, s32 tbp); /* sys/gfxm_c.c */
+extern void Dma_AddTexFlush(void);
+void Ps_GameTex(u8 *tex, f32 x0, f32 y0, f32 x1, f32 y1, u32 tint, s32 alpha) {
+    u64 tex0 = FlashDraw_UploadTex(tex, 0, 0x3000);
+
+    Dma_AddTexFlush();
+    Ps_TexBox(tex0, Ps_X(x0), Ps_Y(y0), Ps_X(x1), Ps_Y(y1), 0, 0, 16u << (u32)(tex0 >> 26 & 15), 16u << (u32)(tex0 >> 30 & 15), tint, alpha);
+}
+
+/* The shape of such a picture: its width over its height. */
+f32 Ps_GameTexShape(u8 *tex) {
+    u64 tex0 = *(u64 *)(tex + 0x30); /* (TexEntry.tex0, include/sys/gfxm_b_b.h: the sizes in bits 26..33) */
+
+    return (f32)(1u << (u32)(tex0 >> 26 & 15)) / (f32)(1u << (u32)(tex0 >> 30 & 15));
 }
 
 /* The same over a box of the page. */
@@ -475,6 +500,45 @@ void Ps_Msg(f32 x, f32 y, char *str, f32 scale, s32 alpha) {
     Ps_Line(id, x, y + PS_MSG_BASE * scale, PS_MSG_CAP * scale, 1.0f, 0, 0, Ps_Rgba(16, 20, 40, 255), 0, alpha);
     Ps_Line(id, x, y + PS_MSG_BASE * scale, PS_MSG_CAP * scale, 1.0f, Ps_Rgba(255, 255, 255, 255),
             Ps_Rgba(255, 255, 255, 255), 0, 1, alpha);
+}
+
+/* A line of the message box's kind, word by word over `lines` lines at most, each `width` units wide at most (a word
+   wider than that goes alone), 21 units apart. */
+void Ps_MsgLines(char *say, f32 x, f32 y, f32 width, s32 lines) {
+    char line[200];
+    s32 at = 0;
+    s32 n;
+
+    for (n = 0; say[at] != 0 && n < lines; n++) {
+        s32 len = 0;
+        s32 fit = 0;
+
+        while (say[at] == ' ') {
+            at++;
+        }
+        while (say[at + len] != 0) {
+            s32 end = len;
+
+            while (say[at + end] != 0 && say[at + end] != ' ') {
+                end++;
+            }
+            Ps_Copy(line, say + at, end + 1 < 200 ? end + 1 : 200);
+            if (fit > 0 && Ps_MsgWidth(line, 1.0f) > width) {
+                break;
+            }
+            fit = len = end;
+            while (say[at + len] == ' ') {
+                len++;
+            }
+        }
+        if (fit == 0) {
+            fit = len;
+        }
+        Ps_Copy(line, say + at, fit + 1 < 200 ? fit + 1 : 200);
+        Ps_Msg(x, y, line, 1.0f, 0x80);
+        y += 21.0f;
+        at += fit;
+    }
 }
 
 /* ---- the pad's buttons ---- */

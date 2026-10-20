@@ -3557,6 +3557,23 @@ static void fight_cues(void) {
     }
 }
 
+/* For the port's own screens that run in an online match (menu/port_nsel.c): a stage's name, and a line said only
+   when it differs from the last one said this way. Kept here, out of the game's state: each copy says its own
+   player's line, and a blank run again (rollback) says nothing. */
+const char *PortA11y_StageName(int id) {
+    return stage_name(id);
+}
+
+void PortA11y_SayChanged(const char *text, int interrupt) {
+    static char said[400];
+
+    if (gPortResim || strncmp(said, text, sizeof(said) - 1) == 0) {
+        return;
+    }
+    snprintf(said, sizeof(said), "%s", text);
+    PortA11y_Say(text, interrupt);
+}
+
 /* Once per blank (plat_stub.c: Port_VBlank). */
 void PortA11y_GameTick(void) {
     int v;

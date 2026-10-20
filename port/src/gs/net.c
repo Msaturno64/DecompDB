@@ -749,6 +749,13 @@ static int receive(void) {
                 memcpy(&sSeed, pkt + 28 + NAME_LEN, 4);
             }
             take_place(pkt, n);
+            if (n >= 40 + NAME_LEN + (int)sizeof(sNames)) { /* (more than two: everyone's names, for the select) */
+                int k;
+                memcpy(sNames, pkt + 40 + NAME_LEN, sizeof(sNames));
+                for (k = 0; k < NMAX; k++) {
+                    sNames[k][NAME_LEN - 1] = '\0';
+                }
+            }
             sCfgGot = 2;
             net_send(ack, sizeof(ack), &from);
         } else if (type == T_CONFIG_ACK && sMode == 1) {
@@ -1168,7 +1175,7 @@ static void net_start(int role, const char *host, const char *join) {
             if (now - lastCfg >= 50000000ull) {
                 int k;
                 for (k = 1; k < sCount; k++) {
-                    uint32_t cfg[10 + NAME_LEN / 4] = {MAGIC, T_CONFIG, (uint32_t)sDelay, (uint32_t)sRollMax, NET_VERSION, sRules};
+                    uint32_t cfg[10 + NAME_LEN / 4 + sizeof(sNames) / 4] = {MAGIC, T_CONFIG, (uint32_t)sDelay, (uint32_t)sRollMax, NET_VERSION, sRules};
                     if (sCfgAcked & 1 << k) {
                         continue;
                     }
@@ -1176,7 +1183,8 @@ static void net_start(int role, const char *host, const char *join) {
                     memcpy(&cfg[6], sMyName, NAME_LEN);
                     cfg[6 + NAME_LEN / 4] = sOpts[0];
                     place_words(&cfg[8 + NAME_LEN / 4], k);
-                    net_send(cfg, sizeof(cfg), peer_of(k));
+                    memcpy(&cfg[10 + NAME_LEN / 4], sNames, sizeof(sNames)); /* (more than two: everyone's names) */
+                    net_send(cfg, sCount > 2 ? (int)sizeof(cfg) : (int)(40 + NAME_LEN), peer_of(k));
                 }
                 lastCfg = now;
             }
@@ -1270,9 +1278,9 @@ int Port_NetVoiceAlt(void) {
    goes out with its greeting (T_HELLO, the one who joins) or its answer and choices (T_HELLO_ACK, T_CONFIG, the
    host), 20 bytes after the words those packets had. */
 
-/* The name of the player of side 0 or 1 in the match this copy is in ("" if it is not known). */
+/* The name of player `player` (0 the host) in the match this copy is in ("" if it is not known). */
 const char *Port_NetName(int player) {
-    return Port_NetActive() && (player == 0 || player == 1) ? sNames[player] : "";
+    return Port_NetActive() && player >= 0 && player < sCount ? sNames[player] : "";
 }
 
 /* Whether this copy shows the two sides of the fight's HUD in each other's places: the player who joined is side 1,

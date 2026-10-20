@@ -629,6 +629,15 @@ static char *Tb_Fighter(s32 chara) {
     return name[chara];
 }
 
+/* A fighter's name, as these screens show it, for the online select of more than two (menu/port_nsel.c): straight
+   from the table, so that drawing leaves nothing behind in the game's state (Tb_Fighter keeps copies). */
+char *PortTbo_FighterName(s32 chara) {
+    if (chara < 0 || chara >= (s32)(sizeof(sTbNames) / sizeof(sTbNames[0]))) {
+        return "?";
+    }
+    return (char *)sTbNames[chara];
+}
+
 static void Tb_SparUpdate(s32 live) {
     Pad *pad = &gPad[0];
     s32 *who;
