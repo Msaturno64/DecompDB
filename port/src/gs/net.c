@@ -1293,7 +1293,13 @@ int Port_HudSwap(void) {
         forced = getenv("BT3_HUD_SWAP") != NULL ? atoi(getenv("BT3_HUD_SWAP")) != 0 : 0;
         pref = Port_Setting("net_hud_own", 1) != 0;
     }
-    return forced || (pref && Port_NetActive() && sMe == 1);
+    if (forced || !pref || !Port_NetActive()) {
+        return forced;
+    }
+    {   /* (the player's own panel is side 1's: the one who joined, or a fighter of side 1's team beyond the leads) */
+        extern int BattleSide_GetTeam(int side); /* src/battle/battle_load.c */
+        return sMe == 1 || (sMe >= 2 && BattleSide_GetTeam(sMe) == 1);
+    }
 }
 
 /* Which player this copy plays in an online match (0 the host, 1 the one who joined). */
@@ -1600,6 +1606,12 @@ int Port_NetView(void) {
    two. -1 otherwise, and when a view is forced (BT3_VIEW: tests that compare everything between the copies). */
 int Port_NetViewFighter(void) {
     return Port_NetView() >= 0 && sViewForced < 0 && sMe >= 2 ? sMe : -1;
+}
+
+/* This copy shows its own player's screen (online, no view forced): its camera, and the HUD's panels of its own
+   fighter and of the one that fighter is set on (multi_fighter.c, PortMulti_HudFighter). */
+int Port_NetOwnScreen(void) {
+    return Port_NetView() >= 0 && sViewForced < 0;
 }
 
 /* ---------------------------------------------------------------------------------------------------------------

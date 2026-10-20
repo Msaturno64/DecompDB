@@ -696,28 +696,35 @@ void PortMulti_HudPass(int on) {
 
 int PortMulti_HudFighter(int side) {
     extern int BattleSide_GetControl(int side); /* src/battle/battle_load.c: 0 a pad, 2 the computer */
-    int n = BattleSide_GetCount(), h, t;
+    int n = BattleSide_GetCount(), h, me, t;
 
-    extern int Port_NetActive(void); /* gs/net.c */
+    extern int Port_NetActive(void), Port_NetOwnScreen(void), Port_NetMe(void); /* gs/net.c */
 
-    /* (online the panels are the console's on both copies: the HUD is state both copies hold alike, and each copy's
-       player is someone else; a panel that showed this copy's target made the two differ: the face drawn in it moved
-       the effects' textures in video memory, seen in a 2v1 online test) */
-    if (!sHudPass || n <= 2 || side < 0 || side > 1 || Port_NetActive()) {
+    if (!sHudPass || n <= 2 || side < 0 || side > 1) {
         return side;
     }
-    if (BattleSide_GetControl(0) == 0 && BattleSide_GetControl(1) != 0) {
-        h = 0;
+    if (Port_NetActive()) {
+        /* Online: each copy's own panels, as its own camera (Port_NetOwnScreen). They make what the copies hold of
+           the HUD differ (the face in a panel moves the effects' textures in video memory, seen in a 2v1 test that
+           compared everything); the fight's own values stay the same (research/tests/net_n_test.py --viewof). A
+           test that forces one view on every copy keeps the console's panels on all. */
+        if (!Port_NetOwnScreen()) {
+            return side;
+        }
+        me = Port_NetMe();
+        h = me < 2 ? me : BattleSide_GetTeam(me);
+    } else if (BattleSide_GetControl(0) == 0 && BattleSide_GetControl(1) != 0) {
+        me = h = 0;
     } else if (BattleSide_GetControl(1) == 0 && BattleSide_GetControl(0) != 0) {
-        h = 1;
+        me = h = 1;
     } else {
         return side;
     }
     if (side == h) {
-        return h;
+        return me;
     }
-    t = sTarget[h];
-    return t >= 0 && t < n && BattleSide_GetBand(t) != BattleSide_GetBand(h) ? t : side;
+    t = sTarget[me];
+    return t >= 0 && t < n && BattleSide_GetBand(t) != BattleSide_GetBand(me) ? t : side;
 }
 
 /* ------------------------------------------------------------------------------- health bars over the fighters */
