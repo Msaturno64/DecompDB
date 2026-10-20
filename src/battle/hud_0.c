@@ -73,9 +73,12 @@ void BtlGame_Draw(void) {
     {
         extern void PortMulti_HudPass(s32 on); /* port/src/multi_fighter.c: the by-side questions are the panels' */
 
+        extern void HudGauge_PortClearAllFaceMarks(void); /* hud_b.c: the faces' marks alike on every copy */
+
         PortMulti_HudPass(1);
         Hud_Draw();
         PortMulti_HudPass(0);
+        HudGauge_PortClearAllFaceMarks();
     }
 #else
     Hud_Draw();
@@ -179,7 +182,12 @@ s32 PauseMenu_SkillListFunc(BtlMenuEvent *ev) {
 
     if (ev->menu->state == BTL_MENU_STATE_ACTIVE) {
         BtlMenuList *list = &work->list[work->pad];
+#ifdef PORT
+        extern s32 gPortMenuPad; /* hud_0_b.c: the pad of the menu's owner when it is not its place */
+        u32 pad = PAD_AT(gPortMenuPad >= 0 ? gPortMenuPad : work->pad).gameRepeat;
+#else
         u32 pad = gPad[work->pad].gameRepeat;
+#endif
         s32 last = list->pages - 1;
         s32 page = list->page;
         s32 move;
@@ -370,12 +378,29 @@ s32 PauseMenu_Update(s32 pad, s32 which) {
     void (*set)(s32, s32);
     BtlMenu *menu;
     BtlMenuItem *item;
+#ifdef PORT
+    s32 done;
+#endif
 
     gPauseMenuWhich = which;
     menu = PauseMenu_GetMenu(which);
     BtlMenu_SetScript(BtlObj_Get(BattleSide_GetObjId(pad))->skillText);
     set = BattleResult_Set;
+#ifdef PORT
+    {
+        /* A player beyond the two (online, more than two): the menu's tables are for two places, so it takes their
+           team's place, and reads their own pad (gPortMenuPad, hud_0_b.c); the skill list is their fighter's. */
+        extern s32 gPortMenuPad;
+        extern s32 BattleSide_GetTeam(s32 side);
+
+        gPortMenuPad = pad;
+        done = BtlMenu_Update(which, NULL, menu, pad < 2 ? pad : BattleSide_GetTeam(pad));
+        gPortMenuPad = -1;
+    }
+    if (done) {
+#else
     if (BtlMenu_Update(which, NULL, menu, pad)) {
+#endif
         Battle_GetWork()->flags &= ~BATTLE_FLAG_PAUSE;
         BtlMenu_ClearActive();
         Adx_ResumeSeVoice();

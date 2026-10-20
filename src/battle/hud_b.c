@@ -972,9 +972,40 @@ void HudGauge_DrawBlast(void) {
     HudSprite_Draw(&gHudGauge->spr[75], gHudGauge->res, 0);
 }
 
+#ifdef PORT
+/* Online with more than two fighters each copy's panels show its own player's fighter and the one it is set on
+   (port/src/multi_fighter.c, PortMulti_HudFighter), so the copies draw different faces; and drawing one clears the
+   mark of that fighter's face sheet, which is fighter data the copies hold alike (when it was left so, five CPU
+   fighters made the copies' fights differ, and crashed them). So every fighter's marks are cleared, on every copy,
+   before the panels are drawn and after: the same whichever faces a copy shows. */
+void HudGauge_PortClearAllFaceMarks(void) {
+    extern s32 BattleSide_GetCount(void);   /* battle_load.c */
+    extern s32 BattleSide_GetObjId(s32 side);
+    extern void *BtlObj_Get(s32 id);        /* btl_obj.c */
+    extern int Port_NetActive(void);        /* port/src/gs/net.c */
+    s32 k;
+
+    if (!Port_NetActive() || BattleSide_GetCount() <= 2 || gPortBt4) {
+        return;
+    }
+    for (k = 0; k < BattleSide_GetCount(); k++) {
+        HudBObj *o = (HudBObj *)BtlObj_Get(BattleSide_GetObjId(k));
+
+        if (o != NULL && o->faceRes != NULL && o->faceRes->tex != NULL) {
+            o->faceRes->tex[0].mark = 0;
+            o->faceRes->tex[1].mark = 0;
+        }
+    }
+}
+#endif
+
 /* Clears the mark of texture i of side i's face sheet. */
 void HudGauge_ClearFaceTexMark(void) {
     s32 i;
+
+#ifdef PORT
+    HudGauge_PortClearAllFaceMarks();
+#endif
 
     for (i = 0; i < 2; i++) {
         if (gHudGauge->faceRes[i] != NULL) {

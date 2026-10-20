@@ -1341,9 +1341,16 @@ static int bot_pad(unsigned tick, uint8_t *mine) {
         mine[0] = (uint8_t)(~b & 0xFF);
         mine[1] = (uint8_t)(~(b >> 8) & 0xFF);
     } else if (seen) {
+        const char *e = getenv("BT3_TEST_PAUSE_AT"); /* testing: <player>:<blank>, that player's START there (its
+                                                       pause menu, left open: no more crosses from it) */
+        int pauser = e != NULL && atoi(e) == sMe + 1 && strchr(e, ':') != NULL;
+
         memcpy(mine, kGone, PAD);
-        if (tick % 60 < 4) {
+        if (tick % 60 < 4 && !pauser) {
             mine[1] = (uint8_t)~0x40; /* (cross: 0x4000) */
+        }
+        if (pauser && tick - (unsigned)atoi(strchr(e, ':') + 1) < 4) {
+            mine[0] = (uint8_t)~0x08;
         }
     }
     return 1;
@@ -1638,6 +1645,12 @@ int Port_NetView(void) {
    two. -1 otherwise, and when a view is forced (BT3_VIEW: tests that compare everything between the copies). */
 int Port_NetViewFighter(void) {
     return Port_NetView() >= 0 && sViewForced < 0 && sMe >= 2 ? sMe : -1;
+}
+
+/* This copy shows its own player's screen (online, no view forced): its camera, and the HUD's panels of its own
+   fighter and of the one that fighter is set on (multi_fighter.c, PortMulti_HudFighter). */
+int Port_NetOwnScreen(void) {
+    return Port_NetView() >= 0 && sViewForced < 0;
 }
 
 /* ---------------------------------------------------------------------------------------------------------------

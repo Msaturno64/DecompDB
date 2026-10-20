@@ -46,13 +46,26 @@ s32 BtlPause_CheckOpen(void) {
     BtlPause *work = BtlPause_GetWork();
     s32 port;
     s32 i;
+#ifdef PORT
+    /* (online with more than two, every player's START opens their own pause menu: the fight goes on under it,
+       btl_seq.c; hud_0.c PauseMenu_Update gives a player beyond the two the menu's place of their team) */
+    extern int Port_NetActive(void), Port_NetPlayers(void);
+    s32 pads = Port_NetActive() && Port_NetPlayers() > 2 ? Port_NetPlayers() : work->padCount;
 
+    for (i = 0; i < pads; i++) {
+        if (PAD_AT(i).gamePressed & BTL_PAUSE_START) {
+            work->pad = i;
+            return 1;
+        }
+    }
+#else
     for (i = 0; i < work->padCount; i++) {
         if (gPad[i].gamePressed & BTL_PAUSE_START) {
             work->pad = i;
             return 1;
         }
     }
+#endif
     if (Battle_GetMode() != 7) {
 #ifdef PORT
         /* (online nothing stops the fight, btl_seq.c: a pad pulled out does not either) */

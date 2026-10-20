@@ -12,6 +12,7 @@
  *   BT3_TEAMS=<a>v<b>  (tests) the attract-demo battle with a members on side 0 and b on side 1, 1..5 each, and
  *                      with every member on the field at once (gPortMultiAll)
  */
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -690,7 +691,35 @@ void PortMulti_UpdateTargets(void) {
    players, or none (the demo), the panels are the console's. sHudPass is raised and lowered within one frame. */
 static int sHudPass;
 
+/* The HUD draws random numbers of its own (the rolling damage digits and the streak's shake from libc rand, the
+   finish line from Rand_Range, hud_c_b.c / hud_d_b.c / hud_e.c), from the generators the fight uses too. Online with
+   more than two fighters each copy's panels are its own player's, so those draws differ between the copies: the
+   generators are put back as they were after each HUD pass (the update and the draw), and the HUD takes nothing
+   from the fight's numbers. (Five CPU fighters made the copies' fights differ, and crashed them, without this.) */
+static unsigned long long sHudRandLibc;
+static uint32_t sHudRandVu0, sHudRandMt[624];
+static int sHudRandMtIndex, sHudRandSaved;
+
 void PortMulti_HudPass(int on) {
+    extern unsigned long long gPortRandNext; /* plat_sys.c: libc rand */
+    extern uint32_t gPortVu0R;               /* mathf_pc.c: the VU0 R register */
+    extern uint32_t gRandState[624];         /* src/sys/rand.c: Rand_* (the twister) */
+    extern int gRandIndex;
+    extern int Port_NetActive(void);         /* gs/net.c */
+
+    if (on && Port_NetActive() && BattleSide_GetCount() > 2) {
+        sHudRandLibc = gPortRandNext;
+        sHudRandVu0 = gPortVu0R;
+        memcpy(sHudRandMt, gRandState, sizeof(sHudRandMt));
+        sHudRandMtIndex = gRandIndex;
+        sHudRandSaved = 1;
+    } else if (!on && sHudRandSaved) {
+        gPortRandNext = sHudRandLibc;
+        gPortVu0R = sHudRandVu0;
+        memcpy(gRandState, sHudRandMt, sizeof(sHudRandMt));
+        gRandIndex = sHudRandMtIndex;
+        sHudRandSaved = 0;
+    }
     sHudPass = on;
 }
 
@@ -698,17 +727,20 @@ int PortMulti_HudFighter(int side) {
     extern int BattleSide_GetControl(int side); /* src/battle/battle_load.c: 0 a pad, 2 the computer */
     int n = BattleSide_GetCount(), h, me, t;
 
-    extern int Port_NetActive(void); /* gs/net.c */
+    extern int Port_NetActive(void), Port_NetOwnScreen(void), Port_NetMe(void); /* gs/net.c */
 
     if (!sHudPass || n <= 2 || side < 0 || side > 1) {
         return side;
     }
     if (Port_NetActive()) {
-        /* (online the panels are the console's on every copy: the HUD is state the copies hold alike, and each
-           copy's player is someone else. A panel that showed this copy's target made them differ: the face drawn
-           in it moves the effects' textures in video memory (a 2v1 online test), and with five CPU fighters that
-           reached the fight and crashed the copies (net_n_test.py --viewof=all, 2026-10-20)) */
-        return side;
+        /* Online: each copy's own panels, as its own camera (Port_NetOwnScreen). What differs between the copies is
+           the HUD's own memory; the faces' marks, fighter data, are kept alike (hud_b.c,
+           HudGauge_PortClearAllFaceMarks). A test that forces one view on every copy keeps the console's panels. */
+        if (!Port_NetOwnScreen()) {
+            return side;
+        }
+        me = Port_NetMe();
+        h = me < 2 ? me : BattleSide_GetTeam(me);
     } else if (BattleSide_GetControl(0) == 0 && BattleSide_GetControl(1) != 0) {
         me = h = 0;
     } else if (BattleSide_GetControl(1) == 0 && BattleSide_GetControl(0) != 0) {

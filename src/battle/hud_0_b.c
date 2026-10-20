@@ -34,6 +34,11 @@
  */
 
 extern BtlMenuWork *gBtlMenu;
+#ifdef PORT
+/* The pad of the menu's owner when it is not the menu's place (a player beyond the two online: hud_0.c,
+   PauseMenu_Update); -1 when it is. */
+s32 gPortMenuPad = -1;
+#endif
 extern void *gCommonRes;
 
 extern void *memset(void *dst, s32 c, u32 n);
@@ -665,7 +670,11 @@ s32 BtlMenu_Update(s32 which, BtlMenu *parent, BtlMenu *menu, s32 pad) {
     if (menu->items[menu->cursor].active && menu->items[menu->cursor].func != NULL) {
         goto end;
     }
+#ifdef PORT
+    press = PAD_AT(gPortMenuPad >= 0 ? gPortMenuPad : pad).gamePressed;
+#else
     press = gPad[pad].gamePressed;
+#endif
     if (BtlMenu_IsSkillList(menu)) {
         gBtlMenu->skillList = 1;
     }
