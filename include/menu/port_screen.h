@@ -46,6 +46,7 @@ void Ps_SpriteScreen(s32 id, f32 x0, f32 y0, f32 x1, f32 y1, f32 u0, f32 v0, f32
 void Ps_Sprite(s32 id, f32 x0, f32 y0, f32 x1, f32 y1, f32 u0, f32 v0, f32 u1, f32 v1, u32 tint, s32 alpha);
 void Ps_GameTex(u8 *tex, f32 x0, f32 y0, f32 x1, f32 y1, u32 tint, s32 alpha); /* a game picture (a chip) */
 f32 Ps_GameTexShape(u8 *tex);                                                   /* its width / height */
+void Ps_GameTexPart(u8 *tex, f32 x0, f32 y0, f32 x1, f32 y1, f32 s0, f32 t0, f32 s1, f32 t1, u32 tint, s32 alpha); /* texels s, t */
 f32 Ps_PicW(s32 id);
 f32 Ps_PicH(s32 id);
 void Ps_Stand(s32 id, f32 cx, f32 feet, f32 height, s32 alpha);

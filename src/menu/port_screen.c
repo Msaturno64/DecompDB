@@ -242,11 +242,17 @@ void Ps_SpriteScreen(s32 id, f32 x0, f32 y0, f32 x1, f32 y1, f32 u0, f32 v0, f32
    drawn whole. */
 extern u64 FlashDraw_UploadTex(void *tex, s32 index, s32 tbp); /* sys/gfxm_c.c */
 extern void Dma_AddTexFlush(void);
-void Ps_GameTex(u8 *tex, f32 x0, f32 y0, f32 x1, f32 y1, u32 tint, s32 alpha) {
+void Ps_GameTexPart(u8 *tex, f32 x0, f32 y0, f32 x1, f32 y1, f32 s0, f32 t0, f32 s1, f32 t1, u32 tint, s32 alpha) {
     u64 tex0 = FlashDraw_UploadTex(tex, 0, 0x3000);
 
     Dma_AddTexFlush();
-    Ps_TexBox(tex0, Ps_X(x0), Ps_Y(y0), Ps_X(x1), Ps_Y(y1), 0, 0, 16u << (u32)(tex0 >> 26 & 15), 16u << (u32)(tex0 >> 30 & 15), tint, alpha);
+    Ps_TexBox(tex0, Ps_X(x0), Ps_Y(y0), Ps_X(x1), Ps_Y(y1), (u32)(s0 * 16.0f), (u32)(t0 * 16.0f), (u32)(s1 * 16.0f), (u32)(t1 * 16.0f), tint, alpha);
+}
+
+void Ps_GameTex(u8 *tex, f32 x0, f32 y0, f32 x1, f32 y1, u32 tint, s32 alpha) {
+    u64 tex0 = *(u64 *)(tex + 0x30);
+
+    Ps_GameTexPart(tex, x0, y0, x1, y1, 0.0f, 0.0f, (f32)(1 << (u32)(tex0 >> 26 & 15)), (f32)(1 << (u32)(tex0 >> 30 & 15)), tint, alpha);
 }
 
 /* The shape of such a picture: its width over its height. */
