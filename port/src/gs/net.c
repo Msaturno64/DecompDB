@@ -52,7 +52,7 @@ enum { T_HELLO = 1, T_HELLO_ACK = 2, T_INPUT = 3, T_BYE = 4, T_PING = 5, T_PONG 
 /* The version of what goes over the line. The greeting and its answer carry it, and two copies that differ do not
    start a match (the input packets changed with version 2: times for the ping were added; a copy that read them
    the old way took them for input). 1 was releases 0.1.8 and 0.1.9, which said no version. */
-enum { NET_VERSION = 5, IN_HEAD = 44 }; /* 3 (0.1.15): the host's battle rules travel with its choices.
+enum { NET_VERSION_BASE = 5, IN_HEAD = 44 }; /* 3 (0.1.15): the host's battle rules travel with its choices.
    4 (0.1.34): a session's start-up no longer follows the player's "Skip logos" / "Skip intro video" (0.1.32 and
    0.1.33 with either on computed another start-up than the other side and the two never agreed again: such a copy
    must not be let into a match); the input packets carry the sender's check value (sync_*, below), 12 bytes more
@@ -60,7 +60,25 @@ enum { NET_VERSION = 5, IN_HEAD = 44 }; /* 3 (0.1.15): the host's battle rules t
    5 (multi-fighter): the rules word carries the host's "every member on the field" and each team's starting health
    (RULE_MULTI, below): a copy that did not read them would set up another battle than the host's. */
 static int sVersionBad; /* the other side answered with another version */
-static const uint32_t kVersion = NET_VERSION;
+extern int gPortBt4; /* plat_mem.c: the BT4 disc (PRIVATE) */
+/* BT4 computes another game: its copies meet only each other (0x400 apart, in the greeting and at the service). */
+#define NET_VERSION ((uint32_t)(gPortBt4 ? NET_VERSION_BASE + 0x400 : NET_VERSION_BASE))
+static int version_is(const uint8_t *p) {
+    uint32_t v = NET_VERSION;
+    return memcmp(p, &v, 4) == 0;
+}
+/* The system save's folder and icon on the memory card (sys/mcflow_a.c, stgm_a_b.c): BT4's have its own names. */
+#define NET_SAVE_DIR (gPortBt4 ? "BASLUS-21978DBZT4" : "BASLUS-21678DBZT3")
+#define NET_SAVE_ICO (gPortBt4 ? "dbzs4.ico" : "dbzsm.ico")
+static void remove_session_save(void) {
+    char path[160];
+    snprintf(path, sizeof(path), "net_session/card1/%s/%s", NET_SAVE_DIR, NET_SAVE_DIR);
+    remove(path);
+    snprintf(path, sizeof(path), "net_session/card1/%s/icon.sys", NET_SAVE_DIR);
+    remove(path);
+    snprintf(path, sizeof(path), "net_session/card1/%s/%s", NET_SAVE_DIR, NET_SAVE_ICO);
+    remove(path);
+}
 #include "net_match.h"
 #include "net_relay.h"
 #include "net_chat.h"
@@ -169,7 +187,7 @@ static uint32_t own_options(void) {
     if (carried != NULL) {
         return OPT_MARK | ((uint32_t)strtoul(carried, NULL, 0) & 0xFFFFu);
     }
-    snprintf(path, sizeof(path), "%s/card1/BASLUS-21678DBZT3/BASLUS-21678DBZT3", root);
+    snprintf(path, sizeof(path), "%s/card1/%s/%s", root, NET_SAVE_DIR, NET_SAVE_DIR);
     fp = fopen(path, "rb");
     if (fp != NULL) {
         if (fseek(fp, 0x1694, SEEK_SET) == 0 && fread(w, 1, 8, fp) == 8) {
@@ -593,7 +611,7 @@ static int receive(void) {
                 memcpy(&why, pkt + 8, 4);
             }
             sGone = why == BYE_APART ? 2 : 1;
-        } else if (type == T_HELLO && sMode == 1 && !(n >= 12 && memcmp(pkt + 8, &kVersion, 4) == 0)) {
+        } else if (type == T_HELLO && sMode == 1 && !(n >= 12 && version_is(pkt + 8))) {
             static int said;
             if (!said++) {
                 fprintf(stderr, "bt3: net: a copy of another version tried to join; both players need the same release\n");
@@ -638,7 +656,7 @@ static int receive(void) {
         } else if (type == T_HELLO_ACK && sMode == 2 && sFromLobby && n < 20) {
             /* an answer to the lobby's greeting, still in the socket the session took over: nothing to do */
         } else if (type == T_HELLO_ACK && sMode == 2) {
-            if (!(n >= 20 && memcmp(pkt + 16, &kVersion, 4) == 0)) {
+            if (!(n >= 20 && version_is(pkt + 16))) {
                 sVersionBad = 1;
             } else if (!sConnected) {
                 uint32_t v[2];
@@ -992,7 +1010,7 @@ static int own_voice_alt(void) {
     FILE *fp;
     int alt = 0;
 
-    snprintf(path, sizeof(path), "%s/card1/BASLUS-21678DBZT3/BASLUS-21678DBZT3", root);
+    snprintf(path, sizeof(path), "%s/card1/%s/%s", root, NET_SAVE_DIR, NET_SAVE_DIR);
     fp = fopen(path, "rb");
     if (fp != NULL) {
         if (fseek(fp, 0x1608, SEEK_SET) == 0 && fread(w, 1, 4, fp) == 4) {
@@ -1354,9 +1372,7 @@ static void relaunch(int role, const char *join, int port) {
         }
         SETENV("BT3_SAVES", "net_session");
         /* the session's own save folder starts empty: both sides begin from the game's defaults */
-        remove("net_session/card1/BASLUS-21678DBZT3/BASLUS-21678DBZT3");
-        remove("net_session/card1/BASLUS-21678DBZT3/icon.sys");
-        remove("net_session/card1/BASLUS-21678DBZT3/dbzsm.ico");
+        remove_session_save();
     } else {
         SETENV("BT3_SAVES", NULL); /* (a save folder named on the command line is not carried over a session: known) */
         SETENV("BT3_NOMOVIE", "1");
@@ -1428,9 +1444,7 @@ void Port_NetSessionBegin(int role, const char *address, int port) {
         snprintf(sSavesBefore, sizeof(sSavesBefore), "%s", saves != NULL ? saves : "");
     }
     /* the session's own save folder starts empty: both sides begin from the game's defaults */
-    remove("net_session/card1/BASLUS-21678DBZT3/BASLUS-21678DBZT3");
-    remove("net_session/card1/BASLUS-21678DBZT3/icon.sys");
-    remove("net_session/card1/BASLUS-21678DBZT3/dbzsm.ico");
+    remove_session_save();
     sVoiceAlt = own_voice_alt(); /* (before the save folder changes: it is read from the player's own) */
     put_env("BT3_SAVES", "net_session");
     snprintf(host, sizeof(host), "%d", port);
@@ -1766,7 +1780,7 @@ int Port_LobbyPoll(void) {
         if (magic != MAGIC) {
             continue;
         }
-        if (sLobbyRole == 1 && type == T_HELLO && !(n >= 12 && memcmp(pkt + 8, &kVersion, 4) == 0)) {
+        if (sLobbyRole == 1 && type == T_HELLO && !(n >= 12 && version_is(pkt + 8))) {
             sLobbyOther = 1; /* someone with another release is trying: the window says so, and goes on waiting */
         } else if (sLobbyRole == 1 && type == T_HELLO) {
             uint32_t ack[3] = {MAGIC, T_HELLO_ACK, NET_VERSION};
@@ -1781,7 +1795,7 @@ int Port_LobbyPoll(void) {
             }
             sLobby = 2;
         } else if (sLobbyRole == 2 && type == T_HELLO_ACK) {
-            sLobby = n >= 12 && memcmp(pkt + 8, &kVersion, 4) == 0 ? 2 : -2; /* -2: the host is another release */
+            sLobby = n >= 12 && version_is(pkt + 8) ? 2 : -2; /* -2: the host is another release */
             if (sCodeMode && sLobby == 2) { /* the address that answered is the one the session joins */
                 inet_ntop(AF_INET, &from.sin_addr, sLobbyAddr, sizeof(sLobbyAddr));
                 sLobbyPort = ntohs(from.sin_port);

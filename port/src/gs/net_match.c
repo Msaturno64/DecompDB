@@ -33,7 +33,7 @@
 #include <unistd.h>
 #endif
 
-#define MATCH_URL_DEFAULT "https://odd-surf-0af7.bt3decomp.workers.dev"
+#define MATCH_URL_DEFAULT "https://tt-rooms.pibecom.workers.dev" /* this copy's own Worker (research/cf-worker): the original's takes official releases only */
 #include "net_match.h"
 #include "../port_release.h"
 #include "net_relay.h"
