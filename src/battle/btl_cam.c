@@ -383,6 +383,15 @@ extern s32 BattleSide_GetBand(s32 side); /* battle_load.c: who fights with whom 
                 who = k;
             }
         }
+        {
+            extern int Port_NetViewFighter(void); /* port/src/gs/net.c: this copy's player, beyond the two leads */
+            s32 mine = Port_NetViewFighter();
+
+            if (mine >= 2 && side == 0) { /* (online: this copy's view 0 is its own player's fighter's camera) */
+                objId = BattleSide_GetObjId(mine);
+                who = mine;
+            }
+        }
         PortMulti_NoteViewSubject(side, who); /* (whose technique camera this view is: BtlCam_UpdateOverride) */
     }
 #endif

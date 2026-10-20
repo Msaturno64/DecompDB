@@ -1583,17 +1583,23 @@ int Port_NetResim(void) {
 /* Which player's view this copy shows full screen in a two-player battle: the local player's when online; -1
    otherwise (the two views side by side, as always). BT3_VIEW=0|1: the same without a connection, for looking at
    it and for comparing the game's state between the three ways of showing a battle. */
+static int sViewForced = -2;
 int Port_NetView(void) {
-    static int forced = -2;
-    if (forced == -2) {
+    if (sViewForced == -2) {
         const char *e = getenv("BT3_VIEW");
-        forced = e != NULL ? atoi(e) : -1;
+        sViewForced = e != NULL ? atoi(e) : -1;
     }
-    if (forced >= 0) {
-        return forced & 1;
+    if (sViewForced >= 0) {
+        return sViewForced & 1;
     }
-    return Port_NetActive() ? (sMe < 2 ? sMe : 0) : -1; /* (a third player on: the first side's view, until each player
-                                                           has a view of their own: player-view) */
+    return Port_NetActive() ? (sMe < 2 ? sMe : 0) : -1; /* (a third player on: view 0, which follows their fighter) */
+}
+
+/* A match of more than two: the fighter of this copy's player when it is beyond the two leads. This copy's view 0
+   then follows that fighter's camera (btl_cam.c, BtlCam_UpdateView): each player has a screen of their own, as with
+   two. -1 otherwise, and when a view is forced (BT3_VIEW: tests that compare everything between the copies). */
+int Port_NetViewFighter(void) {
+    return Port_NetView() >= 0 && sViewForced < 0 && sMe >= 2 ? sMe : -1;
 }
 
 /* ---------------------------------------------------------------------------------------------------------------

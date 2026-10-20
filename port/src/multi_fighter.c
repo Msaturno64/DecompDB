@@ -418,10 +418,10 @@ void PortMulti_NoteViewSubject(int view, int fighter) {
    one side is a player's and the other the computer's; -1 with two players on one screen or none (the demo). */
 static int viewer(void) {
     extern int BattleSide_GetControl(int side); /* src/battle/battle_load.c: 0 a pad, 2 the computer */
-    extern int Port_NetActive(void), Port_NetView(void); /* gs/net.c */
+    extern int Port_NetActive(void), Port_NetView(void), Port_NetViewFighter(void); /* gs/net.c */
 
     if (Port_NetActive()) {
-        return Port_NetView();
+        return Port_NetViewFighter() >= 0 ? Port_NetViewFighter() : Port_NetView();
     }
     if (BattleSide_GetControl(0) == 0 && BattleSide_GetControl(1) != 0) {
         return 0;
