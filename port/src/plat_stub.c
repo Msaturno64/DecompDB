@@ -396,6 +396,32 @@ void Port_PadPlaySeek(long pos) { if (sPadPlay != NULL) { fseek(sPadPlay, pos >=
 static unsigned char sPadLast[2][18] = {{0xFF, 0xFF, 0x80, 0x80, 0x80, 0x80}, {0xFF, 0xFF, 0x80, 0x80, 0x80, 0x80}};
 static int pad_read(int socket, unsigned char *data);
 
+/* Pads 2..9 (one per fighter past the two leads, src/sys/pad.c) without a connection: nobody holds them, unless
+   BT3_PAD_TEST=<pad>:<buttons>:<period> (tests): that pad presses <buttons> (the game's PAD_* bits, hexadecimal, as
+   held in Pad.held) for 4 blanks of every <period>, counted by its own reads (game state: rewound with the rest). */
+static unsigned sPadTestReads; /* (game state, as the file: rewound with the rest) */
+static int pad_more(int socket, unsigned char *data) {
+    PORT_HOST static int to = -2, period;
+    PORT_HOST static unsigned buttons;
+    int btn = 0;
+
+    if (to == -2) {
+        const char *e = getenv("BT3_PAD_TEST");
+        to = -1;
+        if (e == NULL || sscanf(e, "%d:%x:%d", &to, &buttons, &period) != 3 || period < 5) {
+            to = -1;
+        }
+    }
+    if (socket == to) {
+        btn = sPadTestReads++ % (unsigned)period < 4 ? (int)(buttons & 0xFFFF) : 0;
+    }
+    data[0] = (unsigned char)(~btn & 0xFF); /* (active low, as the controller sends them) */
+    data[1] = (unsigned char)(~btn >> 8 & 0xFF);
+    data[2] = data[3] = data[4] = data[5] = 0x80;
+    memset(data + 6, 0, 12);
+    return 18;
+}
+
 int scePad2Read(int socket, unsigned char *data) {
     extern int Port_NetActive(void);                       /* gs/net.c: online play */
     extern void Port_NetInput(int player, unsigned char *data);
@@ -408,6 +434,8 @@ int scePad2Read(int socket, unsigned char *data) {
     if (Port_NetActive()) {
         Port_NetInput(socket, data); /* both pads come from the exchange with the other player */
         n = 18;
+    } else if (socket >= 2) {
+        n = pad_more(socket, data);
     } else {
         n = pad_read(socket, data);
     }

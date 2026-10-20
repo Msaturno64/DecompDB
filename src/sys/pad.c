@@ -16,6 +16,15 @@ extern s32 sceVibSetActParam(s32 socket, s32 profileSize, u8 *profile, s32 dataS
 extern u32 Pad_CalcRepeat(u32 held, u32 pressed, s32 *timer, u32 *last, s32 delay, s32 interval);
 extern void Pad_UpdateGameButtons(s32 pad);
 
+#ifdef PORT
+static Pad sPadMore[PAD_TOTAL - PAD_COUNT]; /* (pads 2..9: game state, rewound with the rest) */
+
+/* Pad i: the game's two, then the port's. (A negative i reads before gPad, as the game's own gPad[i] did.) */
+Pad *Pad_At(s32 i) {
+    return i < PAD_COUNT ? &gPad[i] : &sPadMore[i - PAD_COUNT];
+}
+#endif
+
 /* Starts libdbc/libpad2, opens one socket per controller port and sets the default key repeat. */
 void Pad_Init(void) {
     Pad2SocketParam param;
@@ -29,17 +38,23 @@ void Pad_Init(void) {
     param.option = 2;
     param.slot = 0;
     param.port = 0;
-    gPad[0].socket = scePad2CreateSocket(&param, &gPad[0]);
+    PAD_AT(0).socket = scePad2CreateSocket(&param, &PAD_AT(0));
 
     memset(&param, 0, sizeof(param));
     param.port = 1;
     param.option = 2;
     param.slot = 0;
-    gPad[1].socket = scePad2CreateSocket(&param, &gPad[1]);
+    PAD_AT(1).socket = scePad2CreateSocket(&param, &PAD_AT(1));
 
-    for (i = 0; i < PAD_COUNT; i++) {
-        gPad[i].repeatDelay = 20;
-        gPad[i].repeatInterval = 1;
+#ifdef PORT
+    for (i = PAD_COUNT; i < PAD_TOTAL; i++) { /* (the port's pads: socket i, scePad2Read of plat_stub.c) */
+        memset(&PAD_AT(i), 0, sizeof(Pad));
+        PAD_AT(i).socket = i;
+    }
+#endif
+    for (i = 0; i < PAD_TOTAL; i++) {
+        PAD_AT(i).repeatDelay = 20;
+        PAD_AT(i).repeatInterval = 1;
     }
 }
 
@@ -67,8 +82,13 @@ void Pad_Update(void) {
     f32 len;
     f32 inv;
 
+#ifdef PORT
+    for (i = 0; i < PAD_TOTAL; i++) {
+        pad = &PAD_AT(i);
+#else
     pad = gPad;
     for (i = 0; i < PAD_COUNT; i++, pad++) {
+#endif
         pad->state = scePad2GetState(pad->socket);
         if (pad->state == PAD_STATE_STABLE) {
             pad->status = 0;
@@ -156,30 +176,30 @@ void Pad_Update(void) {
 
 /* True when any button of mask is down. */
 s32 Pad_IsHeld(s32 pad, u32 mask) {
-    return Pad_TestMask(pad, gPad[pad].held, mask);
+    return Pad_TestMask(pad, PAD_AT(pad).held, mask);
 }
 
 /* True when any button of mask went down this frame. */
 s32 Pad_IsPressed(s32 pad, u32 mask) {
-    return Pad_TestMask(pad, gPad[pad].pressed, mask);
+    return Pad_TestMask(pad, PAD_AT(pad).pressed, mask);
 }
 
 /* True when any button of mask went down or auto-repeated this frame. */
 s32 Pad_IsRepeat(s32 pad, u32 mask) {
-    return Pad_TestMask(pad, gPad[pad].repeat, mask);
+    return Pad_TestMask(pad, PAD_AT(pad).repeat, mask);
 }
 
 /* Copies the left and right stick vectors (x, y in -1..1). */
 void Pad_GetSticks(s32 pad, f32 *left, f32 *right) {
-    left[0] = gPad[pad].left[0];
-    left[1] = gPad[pad].left[1];
-    right[0] = gPad[pad].right[0];
-    right[1] = gPad[pad].right[1];
+    left[0] = PAD_AT(pad).left[0];
+    left[1] = PAD_AT(pad).left[1];
+    right[0] = PAD_AT(pad).right[0];
+    right[1] = PAD_AT(pad).right[1];
 }
 
 /* Adds to this frame's vibration request: large motor power (summed, capped at 1) and the small motor flag. */
 void Pad_AddVibration(s32 pad, s32 small, f32 power) {
-    Pad *p = &gPad[pad];
+    Pad *p = &PAD_AT(pad);
 
     p->vibPower += power;
     p->vibSmall |= small != 0;
@@ -190,14 +210,14 @@ void Pad_AddVibration(s32 pad, s32 small, f32 power) {
 
 /* Reads the controller's actuator profile. */
 s32 Pad_GetVibProfile(s32 pad) {
-    Pad *p = &gPad[pad];
+    Pad *p = &PAD_AT(pad);
 
     return sceVibGetProfile(p->socket, p->vibProfile);
 }
 
 /* Sends the accumulated vibration request to the controller and clears it. */
 void Pad_SendActuator(s32 pad) {
-    Pad *p = &gPad[pad];
+    Pad *p = &PAD_AT(pad);
     s32 power = p->vibPower * 127.0f;
 
     if (power >= 0x80) {
@@ -216,14 +236,14 @@ void Pad_SendActuator(s32 pad) {
 
 /* Puts a port into the "nothing connected" state: no buttons, centred sticks. */
 void Pad_Reset(s32 pad) {
-    Pad *p = &gPad[pad];
+    Pad *p = &PAD_AT(pad);
 
-    gPad[pad].status = PAD_STATUS_NONE;
-    gPad[pad].gameHeld = 0;
-    gPad[pad].gamePressed = 0;
-    gPad[pad].gameRepeat = 0;
-    gPad[pad].gameRepeatTimer = 0;
-    gPad[pad].gameRepeatLast = 0;
+    PAD_AT(pad).status = PAD_STATUS_NONE;
+    PAD_AT(pad).gameHeld = 0;
+    PAD_AT(pad).gamePressed = 0;
+    PAD_AT(pad).gameRepeat = 0;
+    PAD_AT(pad).gameRepeatTimer = 0;
+    PAD_AT(pad).gameRepeatLast = 0;
     memset(p->data, 0, sizeof(p->data));
     p->data[PAD_DATA_BTN_LO] = 0xFF;
     p->data[PAD_DATA_BTN_HI] = 0xFF;
@@ -248,7 +268,7 @@ void Pad_Reset(s32 pad) {
 /* True when the button profile is F9 FF 00 00: every digital button except L3/R3 and no analog input.
    (The four byte tests compile to one masked 64-bit compare.) */
 s32 Pad_IsDigitalOnly(s32 pad) {
-    Pad *p = &gPad[pad];
+    Pad *p = &PAD_AT(pad);
 
     return p->profile[0] == 0xF9 && p->profile[1] == 0xFF && p->profile[2] == 0 && p->profile[3] == 0;
 }

@@ -38,6 +38,22 @@ int PortMulti_Ffa(void) {
     return gPortMultiAll && gPortMultiFfa;
 }
 
+/* Who plays a fighter past the two leads (src/battle/battle_load.c, BattleSetup_PortSpread): the pad of the person
+   playing it, or -1 for the computer (as before). BT3_TEAMS_HUMAN=<i>,<j>... (tests): fighters i, j by their own
+   pads i, j (pads 2..9, src/sys/pad.c). The online session's players come here too (SPEC-netplay-n.md). */
+int PortMulti_PadOf(int fighter) {
+    const char *e = getenv("BT3_TEAMS_HUMAN");
+
+    while (e != NULL && *e != '\0') {
+        if (atoi(e) == fighter) {
+            return fighter;
+        }
+        e = strchr(e, ',');
+        e = e != NULL ? e + 1 : NULL;
+    }
+    return -1;
+}
+
 /* ----------------------------------------------------------------------------------- BT3_HEAPCHECK (diagnostics) */
 
 /* BT3_HEAPCHECK=1: at the end of every battle frame the game heap's blocks are walked. The first block whose header

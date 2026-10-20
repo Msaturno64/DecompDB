@@ -2004,7 +2004,16 @@ void BattleSetup_PortSpread(void) {
                 *extra = *side;
                 extra->members[0] = side->members[i];
                 extra->memberCount = 1;
-                extra->control = BTL_CONTROL_CPU; /* the side's pad stays its lead's (more players: multi-pad) */
+                extra->control = BTL_CONTROL_CPU; /* the side's pad stays its lead's */
+                {
+                    extern s32 PortMulti_PadOf(s32 fighter); /* port/src/multi_fighter.c: a person's pad, or -1 */
+                    s32 pad = PortMulti_PadOf(n);
+
+                    if (pad >= 0) { /* a person plays it, with a pad of its own */
+                        extra->control = BTL_CONTROL_PAD;
+                        extra->pad = pad;
+                    }
+                }
                 extra->startForm.chara = extra->form.chara = side->members[i].chara;
                 extra->startForm.costume = extra->form.costume = side->members[i].costume;
                 extra->startForm.variant = extra->form.variant = side->members[i].variant;

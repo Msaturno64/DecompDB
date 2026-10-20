@@ -219,7 +219,7 @@ Vec4 *BtlChar_GetPos(BtlCharGetChr *chr) {
 
 /* The fighter's controller. */
 Pad *BtlChar_GetPad(BtlCharGetChr *chr) {
-    return &gPad[chr->pad];
+    return &PAD_AT(chr->pad);
 }
 
 /* 1 while the fighter's freeze counter is running. */

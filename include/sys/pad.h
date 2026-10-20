@@ -130,6 +130,18 @@ typedef struct Pad {
 
 extern Pad gPad[PAD_COUNT];
 
+#ifdef PORT
+/* One pad more for every fighter past the two leads (online with N players, SPEC-netplay-n.md at the project root):
+   pads 0 and 1 stay gPad, where the game keeps them; 2..9 are the port's, read and updated by Pad_Update the same
+   way. A fighter reads pad chr->pad (BtlChar_GetPad). */
+#define PAD_TOTAL 10
+Pad *Pad_At(s32 i);
+#define PAD_AT(i) (*Pad_At(i))
+#else
+#define PAD_TOTAL PAD_COUNT
+#define PAD_AT(i) (gPad[i])
+#endif
+
 void Pad_Init(void);
 void Pad_Stub0(void);
 void Pad_Stub1(void);
