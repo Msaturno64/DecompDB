@@ -4,7 +4,7 @@
 extern int Port_NetSession(void); /* port/src/gs/net.c */
 extern s32 PortTeams_Run(void);   /* menu/port_teams.c: the team battle settings; 1 = on to the team select */
 extern s32 PortNsel_Run(void);    /* menu/port_nsel.c: the select of an online match of more than two */
-extern int Port_NetPlayers(void); /* port/src/gs/net.c */
+extern int Port_NetFighters(void); /* port/src/gs/net.c: the players' fighters and the computer's */
 /* The PC's Team Battle screen, between the duel menu's Team and the team select (no game mode of its own: it runs
    here, where the versus archive it takes its windows from is loaded). Offline: an online session has no duel menu. */
 #define DUEL_MODE_PORT_TEAMS 81
@@ -94,7 +94,7 @@ s32 Duel_Main(void) {
 #endif
         case 40:
 #ifdef PORT
-            if (Port_NetSession() && Port_NetPlayers() > 2) { /* (each player picks their own fighter) */
+            if (Port_NetSession() && Port_NetFighters() > 2) { /* (each player picks their own fighter) */
                 if (!bgm) {
                     bgm = 1;
                     Bgm_Play(DUEL_BGM);

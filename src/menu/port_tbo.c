@@ -236,6 +236,7 @@ extern void Port_NetRulesSet(int type, int dp, int time);
 extern void Port_NetPlayersRules(int ffa);    /* a room for more than two: every fighter on the field */
 extern void Port_LobbyPlayersSet(int n);      /* how many the room this copy opens is for */
 extern int Port_LobbyCount(int *of);          /* a room for more than two: how many are in it so far, of how many */
+extern int Port_LobbyStartNow(void);          /* ... the host starts it with them (the computer takes the rest) */
 extern const char *Port_NetNameGet(void);
 extern void Port_NetNameSave(const char *name);
 extern int Port_LobbyStartCode(int host, const char *code);
@@ -582,8 +583,14 @@ static void Tb_WaitUpdate(s32 live) {
     Pad *pad = &gPad[0];
 
     if (!sTb->found) {
+        s32 of, here;
+
+        here = Port_LobbyCount(&of);
         if (sTb->host == 1 && Port_LobbyCode()[0] != 0) {
             Ps_Prompt(0, "Copy Code");
+        }
+        if (sTb->host == 1 && of > 2 && here >= 2) { /* (a room for more: start with whoever is there) */
+            Ps_Prompt(7, "Start Now");
         }
         Ps_Prompt(1, "Train While Waiting");
         Ps_Prompt(4, "Cancel");
@@ -598,6 +605,8 @@ static void Tb_WaitUpdate(s32 live) {
         PortTbo_Copy(Port_LobbyCode());
         Snd_PlaySe(1, 1);
         Tb_Note("COPIED: PASTE THE CODE TO YOUR RIVAL");
+    } else if ((pad->gamePressed & PADG_START) && sTb->host == 1 && Port_LobbyStartNow()) {
+        Snd_PlaySe(1, 1); /* (the computer takes the places nobody took) */
     } else if (pad->gamePressed & PADG_SQUARE) { /* the fighters of the sparring fight first; the search goes on */
         Snd_PlaySe(1, 1);
         sTb->spCur = 2;

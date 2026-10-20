@@ -93,6 +93,10 @@ int Port_LobbyRelayed(void);                                 // the other player
 int Port_LobbyPoll(void);
 void Port_LobbyCancel(void);
 void Port_LobbyLaunch(void);
+void Port_LobbyPlayersSet(int n);                            // how many the room this copy opens is for (2..10)
+int Port_LobbyCount(int *of);                                // a room for more than two: how many are in it, of how many
+int Port_LobbyStartNow(void);                                // the host starts it with whoever is there (the rest: the computer)
+void Port_NetPlayersRules(int ffa);                          // a room for more than two: every fighter on the field
 }
 static bool sReady, sOpen;
 static bool sNet;                              // the open window is the online screen (Dragon Net Battle), not the settings
@@ -729,7 +733,8 @@ static void quick_status(int state, int &lastState, const char *name) {
 
 static void build_net(void) {
     static char name[17] = "Player", address[64] = "", port[8] = "7000";
-    static int tab, roll = -1, delay = 1, battle = -1, timeLimit = 3, speed = -1;
+    static int tab, roll = -1, delay = 1, battle = -1, timeLimit = 3, speed = -1, players = -1;
+    static bool ffa; // (more than two players: free for all instead of two teams)
     static bool useCode = true;       // host with a room code (no port forwarding) or on a port
     static char roomCode[8] = "";     // the code to join with
     static int lastState = 0;         // what the lobby said last (for its messages after a failure)
@@ -825,6 +830,20 @@ static void build_net(void) {
                     ImGui::Combo("Battle", &battle, kBattle, 5);
                     ImGui::SetNextItemWidth(260.0f);
                     ImGui::Combo("Time limit", &timeLimit, kTime, 5);
+                    if (players < 0) {
+                        players = Port_Setting("net_players", 2);
+                        ffa = Port_Setting("net_ffa", 0) != 0;
+                        if (players < 2 || players > 10) { players = 2; }
+                    }
+                    ImGui::SetNextItemWidth(260.0f);
+                    ImGui::SliderInt("Players", &players, 2, 10, "%d", ImGuiSliderFlags_AlwaysClamp);
+                    ImGui::SetItemTooltip("How many play. With more than two everyone fights at once, one fighter each, in two\n"
+                                          "teams or free for all (the Battle choice does not apply). The host can start before\n"
+                                          "the room is full, two players at least: the computer takes the places nobody took.");
+                    if (players > 2) {
+                        ImGui::SameLine();
+                        ImGui::Checkbox("Free for all", &ffa);
+                    }
                     {
                         if (speed < 0) {
                             speed = Port_Setting("net_speed_host", Port_NetSpeedStandard()) /* (a new name with 0.1.31: the standard went from 120 to 114) */;
@@ -945,9 +964,27 @@ static void build_net(void) {
                             ImGui::TextDisabled("Copied");
                         }
                     }
-                    ImGui::TextUnformatted(state == 3 ? "Tell the other player this code. Waiting for them to join..." : "The other player has joined. Connecting...");
+                    {
+                        int of, here = Port_LobbyCount(&of);
+                        if (of > 2) { // a room for more than two: who is there, and the host may start with them
+                            ImGui::Text("%d of %d players are here. Waiting for the rest...", here, of);
+                            ImGui::BeginDisabled(here < 2);
+                            if (ImGui::Button("Start now", ImVec2(200.0f, 0.0f))) {
+                                Port_LobbyStartNow();
+                            }
+                            ImGui::EndDisabled();
+                            ImGui::SetItemTooltip("Start with the players who are here (two at least): the computer takes the other places.");
+                        } else {
+                            ImGui::TextUnformatted(state == 3 ? "Tell the other player this code. Waiting for them to join..." : "The other player has joined. Connecting...");
+                        }
+                    }
                 } else {
-                    ImGui::TextUnformatted(state == 1 ? "Found the room. Connecting to the host..." : tab == 0 ? "Getting a room code..." : "Looking for the room...");
+                    int of, here = Port_LobbyCount(&of);
+                    if (state == 1 && tab == 1 && of > 2) { // (a room for more than two: the host's count, T_WAIT)
+                        ImGui::Text("In the room: %d of %d players. Waiting for the host to start...", here, of);
+                    } else {
+                        ImGui::TextUnformatted(state == 1 ? "Found the room. Connecting to the host..." : tab == 0 ? "Getting a room code..." : "Looking for the room...");
+                    }
                 }
                 if (ImGui::Button("Cancel", ImVec2(120.0f, 0.0f))) {
                     Port_LobbyCancel();
@@ -982,6 +1019,12 @@ static void build_net(void) {
                             Port_SettingSave("net_speed_host", speed);
                             Port_NetRulesSet(battle == 0 ? 0 : battle == 1 ? 1 : 2, battle >= 2 ? battle - 2 : 0, timeLimit);
                             Port_NetMultiRules(); // (and the team battle's: every member on the field, starting health)
+                            if (players > 2) { // (more than two: a team battle with every fighter on the field, or free for all)
+                                Port_NetRulesSet(1, 0, timeLimit);
+                                Port_NetPlayersRules(ffa);
+                            }
+                            Port_SettingSave("net_players", players);
+                            Port_SettingSave("net_ffa", ffa ? 1 : 0);
                             Port_SettingSave("net_battle", battle);
                             Port_SettingSave("net_time", timeLimit);
                         }
@@ -995,6 +1038,9 @@ static void build_net(void) {
                     Port_SettingTextSave("net_name", name);
                     Port_SettingsWrite();
                     lastState = 0;
+                    if (tab == 0) {
+                        Port_LobbyPlayersSet(players < 2 ? 2 : players);
+                    }
                     if (byCode) {
                         Port_LobbyStartCode(tab == 0, roomCode);
                     } else {

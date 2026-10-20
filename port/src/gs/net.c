@@ -356,6 +356,8 @@ static int auto_delay(int rttMs) {
 enum { NMAX = 10 };
 static int sCount = 2;
 static int sLobbyPlayers = 2; /* the host's lobby: how many are to play (Port_LobbyPlayersSet) */
+static int sFighters = 2;     /* fighters in the match: the players', then the computer's (a room started before it
+                                 was full, Port_LobbyStartNow; multi_fighter.c PortMulti_PadOf gives them no pad) */
 static int sMode = -1; /* 0 off, 1 host, 2 join */
 static int sSock = -1, sMe, sDelay = 2, sConnected, sLoss, sLagMs;
 static struct sockaddr_in sPeer;            /* the host for the others; for the host, player 1 */
@@ -679,6 +681,10 @@ static void take_place(const uint8_t *pkt, int n) {
     }
     sMe = me;
     sCount = count;
+    {   /* (the fighters: as many as play, or more when the host started before its room was full) */
+        int fighters = (int)(w >> 16 & 0xFF);
+        sFighters = fighters >= count && fighters <= NMAX ? fighters : count;
+    }
     if (n >= 40 + NAME_LEN && sMe != 1) {
         opts_take(1, pkt + 36 + NAME_LEN);
     }
@@ -686,7 +692,7 @@ static void take_place(const uint8_t *pkt, int n) {
 
 /* The host's words after the seed for player k (take_place). */
 static void place_words(uint32_t *after, int k) {
-    after[0] = (uint32_t)k | (uint32_t)sCount << 8;
+    after[0] = (uint32_t)k | (uint32_t)sCount << 8 | (uint32_t)sFighters << 16;
     after[1] = sOpts[1];
 }
 
@@ -994,9 +1000,17 @@ static void net_start(int role, const char *host, const char *join) {
     sMe = sMode - 1;
     /* BT3_NET_PLAYERS=<n> on the host (tests, and across the restart into the session): that many play, 2..NMAX.
        The others learn theirs from its answer (take_place). */
-    sCount = sMode == 1 && getenv("BT3_NET_PLAYERS") != NULL ? atoi(getenv("BT3_NET_PLAYERS")) : 2;
+    /* ((getenv): the real one, not gs_internal.h's remembered answer: the lobby sets these for the session it
+       starts, put_env, so they change while the program runs; a room started before it was full got its old size) */
+    sCount = sMode == 1 && (getenv)("BT3_NET_PLAYERS") != NULL ? atoi((getenv)("BT3_NET_PLAYERS")) : 2;
     if (sCount < 2 || sCount > NMAX) {
         sCount = 2;
+    }
+    /* BT3_NET_FIGHTERS=<n> on the host: its room was started before it was full; the fighters past the players are
+       the computer's. The others learn it with their place (take_place). */
+    sFighters = sMode == 1 && (getenv)("BT3_NET_FIGHTERS") != NULL ? atoi((getenv)("BT3_NET_FIGHTERS")) : sCount;
+    if (sFighters < sCount || sFighters > NMAX) {
+        sFighters = sCount;
     }
     sJoined = 0;
     memset(sPeers, 0, sizeof(sPeers));
@@ -1621,6 +1635,11 @@ int Port_NetPlayers(void) {
     return Port_NetActive() ? sCount : 2;
 }
 
+/* How many fighters it has: the players', then the computer's (2 when it is in none). */
+int Port_NetFighters(void) {
+    return Port_NetActive() ? sFighters : 2;
+}
+
 int Port_NetResim(void) {
     return sResim;
 }
@@ -1714,9 +1733,12 @@ static void relaunch(int role, const char *join, int port) {
             SETENV("BT3_NET_RULES", value);
             snprintf(value, sizeof(value), "%d", sCount);
             SETENV("BT3_NET_PLAYERS", sCount > 2 ? value : NULL); /* (the others learn it from the host) */
+            snprintf(value, sizeof(value), "%d", sFighters);
+            SETENV("BT3_NET_FIGHTERS", sFighters > sCount ? value : NULL);
         } else {
             SETENV("BT3_NET_RULES", NULL);
             SETENV("BT3_NET_PLAYERS", NULL);
+            SETENV("BT3_NET_FIGHTERS", NULL);
         }
         SETENV("BT3_SOUND_TICKS", "1");
         SETENV("BT3_NOMOVIE", "1");
@@ -1873,6 +1895,7 @@ static int sLobbyRole, sLobbyPort;
 static char sLobbyAddr[128];
 /* A room for more than two: the host's lobby takes greetings until everyone is there, and answers the ones who are
    there already with T_WAIT; then it answers them all at once and every copy begins its session. */
+static int sLobbyGo; /* the host asked to start before the room was full (Port_LobbyStartNow) */
 static struct sockaddr_in sGreeted[NMAX];
 static uint32_t sGreetedId[NMAX]; /* (each copy's lobby greets with a number of its own: one player may come in by
                                      two ways, the home network's address and the public one, and counts once) */
@@ -1932,7 +1955,7 @@ int Port_LobbyStart(int host, const char *address, int port) {
     sLobby = 1;
     sLobbyOther = 0;
     sLobbyLast = 0;
-    sGreetedN = sWaitHave = sWaitOf = 0;
+    sGreetedN = sWaitHave = sWaitOf = sLobbyGo = 0;
     sLobbyId = (uint32_t)SDL_GetPerformanceCounter() * 2654435761u ^ (uint32_t)SDL_GetTicksNS();
     if (host) {
         memset(&local, 0, sizeof(local));
@@ -2016,6 +2039,7 @@ void Port_LobbyCancel(void) {
     }
     sLobby = 0;
     sLobbyPlayers = 2; /* (the next room is for two unless its host says otherwise) */
+    sLobbyGo = 0;
 }
 
 /* The other player's addresses as the matchmaking service gave them: where to knock, which of them is the host's
@@ -2102,6 +2126,22 @@ int Port_LobbyPoll(void) {
         return sLobby;
     }
     if (sLobby != 1) {
+        return sLobby;
+    }
+    if (sLobbyGo && sLobbyRole == 1) { /* started before the room was full: everyone there is answered at once */
+        uint32_t ack[3] = {MAGIC, T_HELLO_ACK, NET_VERSION};
+        int k, g;
+        for (k = 0; k < 3; k++) {
+            for (g = 0; g < sGreetedN; g++) {
+                net_send(ack, sizeof(ack), &sGreeted[g]);
+            }
+        }
+        if (sCodeMode) {
+            sCodePunch = sGreeted[sGreetedN - 1];
+            sCodePunchSet = 1;
+            sCodeVia = Relay_IsPeer(&sCodePunch);
+        }
+        sLobby = 2;
         return sLobby;
     }
     if (sCodeMode) {
@@ -2213,6 +2253,7 @@ int Port_LobbyPoll(void) {
 void Port_LobbyLaunch(void);
 void Port_LobbyPlayersSet(int n);
 int Port_LobbyCount(int *of);
+int Port_LobbyStartNow(void);
 
 /* BT3_LOBBY=host or BT3_LOBBY=join:CODE: the room-code lobby driven without its window, once a blank (tests; the
    code and each change of state are written to the log). BT3_RELAY_ONLY=1: the one who joins tries nothing but the
@@ -2255,6 +2296,10 @@ void Port_LobbyAuto(void) {
         if (here != was && of > 2) {
             was = here;
             fprintf(stderr, "bt3: lobby: %d of %d players are here\n", here, of);
+            /* BT3_LOBBY_GO_AT=<n> (tests): the host starts its room once n are there (Port_LobbyStartNow) */
+            if (getenv("BT3_LOBBY_GO_AT") != NULL && here >= atoi(getenv("BT3_LOBBY_GO_AT")) && Port_LobbyStartNow()) {
+                fprintf(stderr, "bt3: lobby: started with %d of %d\n", here, of);
+            }
         }
     }
     if (now != state || (!coded && Port_LobbyCode()[0] != '\0')) {
@@ -2269,6 +2314,16 @@ void Port_LobbyAuto(void) {
     } else if (now < 0) {
         begun = 2;
     }
+}
+
+/* The host of a room for more than two starts it with whoever is there, two at least: the places nobody took are
+   the computer's fighters. 1 when it is asked (Port_LobbyPoll answers everyone at its next look), 0 when it cannot. */
+int Port_LobbyStartNow(void) {
+    if (sLobby != 1 || sLobbyRole != 1 || sLobbyPlayers <= 2 || sGreetedN < 1) {
+        return 0;
+    }
+    sLobbyGo = 1;
+    return 1;
 }
 
 /* How many are to play in the match this copy hosts (2..NMAX; set before the lobby starts). */
@@ -2286,10 +2341,15 @@ int Port_LobbyCount(int *of) {
 void Port_LobbyLaunch(void) {
     if (sLobbyRole == 1) { /* (the session's host takes the number of players from here, also across a restart) */
         char value[8];
+        int players = sLobbyGo ? sGreetedN + 1 : sLobbyPlayers; /* (started before it was full: Port_LobbyStartNow) */
+        snprintf(value, sizeof(value), "%d", players);
+        put_env("BT3_NET_PLAYERS", players > 2 ? value : NULL);
         snprintf(value, sizeof(value), "%d", sLobbyPlayers);
-        put_env("BT3_NET_PLAYERS", sLobbyPlayers > 2 ? value : NULL);
-        sCount = sLobbyPlayers;
+        put_env("BT3_NET_FIGHTERS", sLobbyPlayers > players ? value : NULL);
+        sCount = players;
+        sFighters = sLobbyPlayers;
         sLobbyPlayers = 2;
+        sLobbyGo = 0;
     }
     if (sCodeMode && Port_SessionCan()) {
         sHandSock = sSock; /* the session goes on with this socket (see sHandSock) */

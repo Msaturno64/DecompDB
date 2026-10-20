@@ -18,7 +18,8 @@
  *   the costume left / right, cross: ready
  * Triangle goes a step back (the host's on the grid leaves: the session ends). The host also chooses the teams (L2:
  * how many on team 1) and the stage (R2) until it is ready. A player who left (their pad carries the NET_GONE mark,
- * btl_input.c) counts as ready: the computer plays them.
+ * btl_input.c) counts as ready: the computer plays them. So do the places nobody took (a room the host started before
+ * it was full, gs/net.c Port_LobbyStartNow): ready from the start, a random fighter each.
  * When everyone is ready the battle starts a second later. Player k plays fighter k (BattleSetup_PortSpread):
  * fighters 0 and 1 lead teams 1 and 2, then come team 1's others, then team 2's; so team 1 is players 0 and
  * 2 .. n1, team 2 player 1 and the rest. Free for all keeps that order, every fighter on its own.
@@ -52,6 +53,7 @@ extern void MsgWin_PortSameTop(void);
 extern int Port_PageAspectMilli(void);
 extern int Port_MenuLang(void);                /* port/src/gs/ui.cpp: 0 English, 1 Spanish */
 extern int Port_NetPlayers(void);              /* port/src/gs/net.c */
+extern int Port_NetFighters(void);
 extern int Port_NetMe(void);
 extern int Port_NetFfa(void);
 extern const char *Port_NetName(int player);
@@ -125,7 +127,8 @@ static const char *const kNsText[NX_COUNT][2] = {
 #define NX(id) ((char *)kNsText[id][Port_MenuLang() == 1])
 
 typedef struct PortNselScreen {
-    s32 players;
+    s32 players;        /* the fighters: the players', then the computer's */
+    s32 humans;         /* the players (those first) */
     s32 ffa;
     s32 team1;          /* how many on team 1 (1 .. players - 1) */
     s32 stage;          /* -1 random, else a stage id */
@@ -152,7 +155,7 @@ static PortNselScreen sNs;
 
 /* Player k's pad left the match: the host plays it with the NET_GONE mark (gs/net.c kGone). */
 static s32 Ns_Gone(s32 k) {
-    return PAD_AT(k).data[17] == 0x47;
+    return k >= sNs.humans || PAD_AT(k).data[17] == 0x47; /* (or the place is the computer's from the start) */
 }
 
 /* Which team player k is on: 0 or 1. */
@@ -186,8 +189,20 @@ static s32 Ns_Costumes(s32 k) {
     return n < 1 ? 1 : n;
 }
 
+/* (not `?:` between a table's entry and another pointer: the 32-bit pointer build read the entry as 8 bytes, a
+   card of the computer's on the "random" cell crashed; as port_tbo.c Tb_Fighter notes) */
 static char *Ns_Name(s32 chara) {
-    return chara == MCHR_RANDOM ? NX(NX_RANDOM) : PortTbo_FighterName(chara);
+    if (chara == MCHR_RANDOM) {
+        return NX(NX_RANDOM);
+    }
+    return PortTbo_FighterName(chara);
+}
+
+static char *Ns_StageName(void) {
+    if (sNs.stage < 0) {
+        return NX(NX_RANDOM);
+    }
+    return (char *)PortA11y_StageName(sNs.stage);
 }
 
 static void Ns_Leave(s32 result) {
@@ -313,7 +328,9 @@ static void Ns_Update(s32 live) {
         }
     }
     for (k = 0; k < sNs.players && !sNs.leaving; k++) {
-        Ns_Player(k);
+        if (k < sNs.humans) {
+            Ns_Player(k);
+        }
         all = all && sNs.step[k] == NS_READY;
     }
     sNs.allReady = all && !sNs.leaving ? sNs.allReady + 1 : 0;
@@ -524,7 +541,7 @@ static void Ns_DrawText(void) {
     Ps_Cat(line, "  -  ", 200);
     Ps_Cat(line, NX(NX_STAGE), 200);
     Ps_Cat(line, ": ", 200);
-    Ps_Cat(line, sNs.stage < 0 ? NX(NX_RANDOM) : (char *)PortA11y_StageName(sNs.stage), 200);
+    Ps_Cat(line, Ns_StageName(), 200);
     Ps_Text(20.0f, Ps_TextTop(72.0f, 0.5f), line, 0.5f, 470.0f, 2);
     for (k = 0; k < sNs.players; k++) {
         f32 x;
@@ -592,7 +609,7 @@ static void Ns_Speak(void) {
     Ps_Cat(now, ". ", 400);
     Ps_Cat(now, NX(NX_STAGE), 400);
     Ps_Cat(now, ": ", 400);
-    Ps_Cat(now, sNs.stage < 0 ? NX(NX_RANDOM) : (char *)PortA11y_StageName(sNs.stage), 400);
+    Ps_Cat(now, Ns_StageName(), 400);
     if (sNs.allReady > 0) {
         Ps_Cat(now, ". ", 400);
         Ps_Cat(now, NX(NX_STARTS), 400);
@@ -695,9 +712,10 @@ u32 PortNsel_BotButtons(s32 k, s32 want, u32 tick) {
 /* From the session's start (or the last battle) until everyone is ready: 1 the battle is set up, 0 the host left. */
 s32 PortNsel_Run(void) {
     s32 k;
-    s32 keep = sNs.players == Port_NetPlayers(); /* (a rematch: the same choices, everyone on their costume step) */
+    s32 keep = sNs.players == Port_NetFighters() && sNs.humans == Port_NetPlayers(); /* (a rematch: the same choices) */
 
-    sNs.players = Port_NetPlayers();
+    sNs.players = Port_NetFighters();
+    sNs.humans = Port_NetPlayers();
     sNs.ffa = Port_NetFfa();
     Ns_WinInit();
     if (!keep) {
@@ -713,6 +731,17 @@ s32 PortNsel_Run(void) {
     for (k = 0; k < NS_MAX; k++) {
         ChrGrid_FixCursor(sNs.grid, &sNs.col[k], &sNs.row[k], sNs.rows);
         sNs.step[k] = NS_GRID;
+        if (k >= sNs.humans) { /* the computer's place: on the grid's "random" cell, ready */
+            s32 c;
+
+            for (c = 0; c < sNs.cellCount && sNs.grid[c].id != MCHR_RANDOM; c++) {
+            }
+            if (c < sNs.cellCount) {
+                sNs.col[k] = c % MCHR_COLS;
+                sNs.row[k] = c / MCHR_COLS;
+            }
+            sNs.step[k] = NS_READY;
+        }
     }
     sNs.allReady = 0;
     sNs.frames = 0;
