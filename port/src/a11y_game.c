@@ -3564,6 +3564,11 @@ const char *PortA11y_StageName(int id) {
     return stage_name(id);
 }
 
+/* Line n of a game text file at game address `file`, as UTF-8 (text_line): for the port's own screens. */
+int PortA11y_TextLine(char *out, int cap, uint32_t file, int n) {
+    return text_line(out, cap, (uint32_t GAME_PTR)(uintptr_t)file, n);
+}
+
 void PortA11y_SayChanged(const char *text, int interrupt) {
     static char said[400];
 

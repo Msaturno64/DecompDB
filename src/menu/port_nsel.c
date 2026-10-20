@@ -59,6 +59,7 @@ extern int Port_NetFfa(void);
 extern const char *Port_NetName(int player);
 extern void PortA11y_SayChanged(const char *text, int interrupt); /* port/src/a11y_game.c */
 extern const char *PortA11y_StageName(int id);
+extern int PortA11y_TextLine(char *out, int cap, u32 file, int n); /* a line of a game text file, as UTF-8 */
 extern char *PortTbo_FighterName(s32 chara);   /* menu/port_tbo.c */
 extern s32 MChr_PortBt4Valid(s32 id);          /* menu/menu_c_e.c: a grid id that is a character */
 extern s32 ChrGrid_MoveRight(MChrCell *cells, s32 *col, s32 row);
@@ -84,15 +85,17 @@ extern void BattleSetup_Finish(void);
 #define NS_RES(pack, n) ((MTexRes *)MPACK_AT(pack, n))
 /* The reel's pictures (CharSel_Init's side textures): section 17 the bar (0) and the frame of seven windows (1),
    512 x 64; section 23 entry 0 the cursor's frame, 64 x 64. The frame's windows: 46 x 37 texels, the first at
-   (83, 12), one every 60 (measured on BT3's). The reel is drawn from texel 72 on (the emblem before is left out). */
-#define NS_TEX_BAR MTEX(NS_RES(sNs.selRes, 17), 0)
-#define NS_TEX_FRAME MTEX(NS_RES(sNs.selRes, 17), 1)
+   (83, 12), one every 60 (measured on BT3's). The reel is drawn from texel 72 on (the emblem before is left out).
+   BT4's (PRIVATE, its dumped textures): entry 0 is the frame, with hexagonal windows 38 wide at 87, entry 1 the
+   hexagons under the chips; its chips and cursor are 64 x 64 pictures centred on a window. */
+#define NS_TEX_BAR MTEX(NS_RES(sNs.selRes, 17), PORT_BT4(0, 1))
+#define NS_TEX_FRAME MTEX(NS_RES(sNs.selRes, 17), PORT_BT4(1, 0))
 #define NS_TEX_CURSOR MTEX(NS_RES(sNs.selRes, 23), 0)
 #define NS_REEL_S0 72.0f
 #define NS_REEL_S1 512.0f
-#define NS_WIN_S 83.0f
+#define NS_WIN_S PORT_BT4(83.0f, 87.0f)
 #define NS_WIN_STEP 60.0f
-#define NS_WIN_W 46.0f
+#define NS_WIN_W PORT_BT4(46.0f, 38.0f)
 #define NS_WIN_T0 12.0f
 #define NS_WIN_T1 49.0f
 
@@ -438,13 +441,25 @@ static void Ns_Reel(s32 k, f32 x, f32 y, f32 w) {
         s32 id = onGrid ? sNs.grid[i + sNs.row[k] * MCHR_COLS].id : i < Ns_Forms(k) && c->formCount > 0 ? c->form[i] : i == 0 ? c->id : MCHR_EMPTY;
         f32 x0 = x + (NS_WIN_S + NS_WIN_STEP * (f32)i - NS_REEL_S0) * su;
 
-        if (id != MCHR_EMPTY) {
+        if (id != MCHR_EMPTY && gPortBt4) {
+            f32 cx = x0 + NS_WIN_W * 0.5f * su;
+            f32 cy = y + (NS_WIN_T0 + NS_WIN_T1) * 0.5f * sv;
+
+            Ps_GameTex(NS_RES(sNs.chips, id + 1)->tex, cx - 32.0f * su, cy - 32.0f * sv, cx + 32.0f * su, cy + 32.0f * sv,
+                       i == cur || sNs.step[k] == NS_GRID ? PS_PLAIN : 0x505050, 0x80);
+        } else if (id != MCHR_EMPTY) {
             Ps_GameTex(NS_RES(sNs.chips, id + 1)->tex, x0, y + NS_WIN_T0 * sv, x0 + NS_WIN_W * su, y + NS_WIN_T1 * sv,
                        i == cur || sNs.step[k] == NS_GRID ? PS_PLAIN : 0x505050, 0x80);
         }
     }
     Ps_GameTexPart(NS_TEX_FRAME, x, y, x + w, y + 64.0f * sv, NS_REEL_S0, 0.0f, NS_REEL_S1, 64.0f, PS_PLAIN, 0x80);
-    {
+    if (gPortBt4) { /* (its cursor is a hexagon of its own colour) */
+        f32 cx = x + (NS_WIN_S + NS_WIN_STEP * (f32)cur + NS_WIN_W * 0.5f - NS_REEL_S0) * su;
+        f32 cy = y + (NS_WIN_T0 + NS_WIN_T1) * 0.5f * sv;
+
+        Ps_GameTex(NS_TEX_CURSOR, cx - 32.0f * su, cy - 32.0f * sv, cx + 32.0f * su, cy + 32.0f * sv,
+                   sNs.step[k] == NS_READY ? 0x208060 : PS_PLAIN, 0x80);
+    } else {
         f32 x0 = x + (NS_WIN_S + NS_WIN_STEP * (f32)cur - NS_REEL_S0 - 5.0f) * su;
         f32 x1 = x + (NS_WIN_S + NS_WIN_STEP * (f32)cur + NS_WIN_W - NS_REEL_S0 + 5.0f) * su;
 
@@ -514,9 +529,14 @@ static void Ns_Draw(void) {
 static void Ns_Choice(s32 k, char *out) {
     Ps_Copy(out, Ns_Name(Ns_Chara(k)), 80);
     if (sNs.step[k] >= NS_COSTUME && Ns_Costumes(k) > 1) {
-        char what[32];
+        char what[64];
 
-        sprintf(what, NX(NX_COSTUME), (int)(sNs.costume[k] + 1), (int)Ns_Costumes(k));
+        /* (BT4: the costume's name, as its select shows it: line `costume` of the character's list in section 57,
+           menu_c_e.c MenuColor_PortBt4Name) */
+        if (!gPortBt4 || PortA11y_TextLine(what, sizeof(what), (u32)MPACK_AT(MPACK_AT(sNs.selRes, 57), Ns_Chara(k) + 1),
+                                           sNs.costume[k]) <= 0) {
+            sprintf(what, NX(NX_COSTUME), (int)(sNs.costume[k] + 1), (int)Ns_Costumes(k));
+        }
         Ps_Cat(out, "  ", 80);
         Ps_Cat(out, what, 80);
     }
