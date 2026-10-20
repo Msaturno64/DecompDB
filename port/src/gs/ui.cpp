@@ -45,7 +45,8 @@ void Port_LateInputSet(int on);
 void Port_Menus43Set(int on);
 int Port_HudLayout(void);                      // gs_draw.c: 2 = the HUD is about the middle of the screen
 int GsDraw_HudShown(void);                     // ... and 1 while the game is drawing the HUD's side panels
-const char *Port_NetName(int player);          // the name of the player of side 0 or 1 ("" outside a match)
+const char *Port_NetName(int player);          // the name of a player of the match ("" outside a match, or none)
+int PortMulti_PanelFighter(int side);          // multi_fighter.c: the fighter a HUD panel shows (player k plays fighter k)
 int Port_HudSwap(void);                        // the two sides of the HUD are in each other's places on this copy
 int Port_NetActive(void);
 int Port_NetMe(void);                          // gs/net.c: this copy's side, 0 or 1
@@ -2475,7 +2476,7 @@ static bool frame_build(void) {
         float size = 15.0f * sy;
         ImFont *font = ImGui::GetFont();
         for (int place = 0; place < 2; place++) {
-            const char *text = Port_NetName(place ^ Port_HudSwap());
+            const char *text = Port_NetName(PortMulti_PanelFighter(place ^ Port_HudSwap())); // (the fighter the panel shows: its player's name)
             if (text[0] == '\0') {
                 continue;
             }

@@ -742,7 +742,26 @@ void PortMulti_HudPass(int on) {
     sHudPass = on;
 }
 
+static int hud_fighter(int side);
+
+/* The fighter each panel showed in the last HUD pass, for the names drawn under them (ui.cpp, on the render thread;
+   drawing only: PORT_HOST). */
+PORT_HOST static int sPanelShown[2] = {0, 1};
+
 int PortMulti_HudFighter(int side) {
+    int f = hud_fighter(side);
+
+    if (sHudPass && side >= 0 && side < 2) {
+        sPanelShown[side] = f;
+    }
+    return f;
+}
+
+int PortMulti_PanelFighter(int side) {
+    return sPanelShown[side & 1];
+}
+
+static int hud_fighter(int side) {
     extern int BattleSide_GetControl(int side); /* src/battle/battle_load.c: 0 a pad, 2 the computer */
     int n = BattleSide_GetCount(), h, me, t;
 
