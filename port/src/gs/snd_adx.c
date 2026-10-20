@@ -471,6 +471,13 @@ static void start(Player *p, const char *path) {
     }
     stop(p);
     snprintf(p->path, sizeof(p->path), "%s", path);
+    if (getenv("BT3_SND_VERBOSE") != NULL) { /* (also without a sound device: the tests run without one) */
+        FILE *probe = fopen(path, "rb");
+        fprintf(stderr, "adx: player %d: asked %s%s\n", (int)(p - sPlayers), path, probe != NULL ? "" : " (not found)");
+        if (probe != NULL) {
+            fclose(probe);
+        }
+    }
     if (!device()) {
         return;
     }

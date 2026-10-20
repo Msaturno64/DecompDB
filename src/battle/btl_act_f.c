@@ -3040,7 +3040,7 @@ void BtlAct_ClashStruggleHandler(ActGChr *chr, s32 phase) {
         BtlChar_SetFlag(chr, 0x128);
         BtlChar_SetFxBit(chr, 0x10);
         ChrCam_AddShake(chr, 5.0f, 0.1f);
-        BtlChar_SetFlag(chr, 0xE6);
+        BtlChar_SetFlag(chr, PORT_BT4(0xE6, 0xE8)); /* (BT4: REA, 0x1FB910) */
         BtlChar_Vibrate(chr, 1.0f, 0.1f);
         BtlChar_SetFlag(chr, 0xD2);
         BtlAct_PushAngle(chr, BtlUtil_WrapAngle(BtlChar_GetPos(chr)->rot.y + 3.14159265f), 1.0f, 5.0f);
@@ -3050,7 +3050,7 @@ void BtlAct_ClashStruggleHandler(ActGChr *chr, s32 phase) {
         BtlChar_SetFlag(chr, 0x45);
         BtlChar_SetFlag(chr, 0x46);
         BtlChar_SetFlag(chr, 0x134);
-        if (chr->actionFrame >= 0x10 && BtlInput_TestAction(chr, 0x33, 1)) {
+        if (chr->actionFrame >= 0x10 && BtlInput_TestAction(chr, PORT_BT4(0x33, 0x50), 1)) { /* (BT4: REA, 0x1FB9B8) */
             chr->clashPower += PORT_BT4(1, 3); /* (BT4: REA, 0x1FB9D0) */
 #ifdef PORT /* PC build: BT3_CLASH_LOG=1 says what a clash counts (testing the Square option) */
             Port_ClashLog(chr->player, "beam clash", 1, chr->clashPower, chr->actionFrame);
