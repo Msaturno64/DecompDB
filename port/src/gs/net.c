@@ -86,7 +86,7 @@ static int sLobbyOther;
 
 /* What the meter shows (ui.cpp): the round trip time, and per second how often the game went back, how far, and
    how often and for how long it waited for the other player. */
-static uint32_t sEchoTs, sEchoAtMs;     /* the other side's last send time and when it arrived here */
+static uint32_t sEchoTs[10], sEchoAtMs[10]; /* by player: its last send time and when it arrived here (NMAX below) */
 static int sPingMs = -1;
 static unsigned sSecRoll, sSecRollTicks, sSecWaits, sSecWaitMs, sSecTicks;
 static int sShown[5] = {0, 0, 0, 0, 0}; /* ping, rollbacks, depth x 10, waits, ms waited: of the last second */
@@ -106,7 +106,9 @@ extern void Port_UiNotice(const char *text); /* ui.cpp: a line over the picture 
 
 static int sAutoDelay;
 static int sOptAuto;      /* the host asked for the input delay to be chosen from the line's ping */
-static int sSetupRtt = -1; /* the smallest round trip measured while setting up, ms */
+static int sSetupRtt = -1; /* the smallest round trip measured while setting up, ms (with more players: the worst
+                              player's smallest) */
+static int sRttOf[10];     /* (by player: its smallest; NMAX below) */
 static int sCfgAcked;
 
 void Port_TestSlow(int what, int amount);
@@ -118,7 +120,7 @@ void Port_NetOptions(int rollback, int delay) {
 }
 
 #define NAME_LEN 20
-static char sNames[2][NAME_LEN], sMyName[NAME_LEN] = "Player";
+static char sNames[10][NAME_LEN], sMyName[NAME_LEN] = "Player"; /* (by player, NMAX below) */
 
 void Port_NetNameSet(const char *name) {
     snprintf(sMyName, sizeof(sMyName), "%s", name != NULL && name[0] != '\0' ? name : "Player");
@@ -174,7 +176,7 @@ static void seed_draw(void) {
    OPT_MARK | camera | shake << 8. */
 int Port_NetActive(void);
 #define OPT_MARK 0x4F500000u
-static uint32_t sOpts[2]; /* by player: 0 = not known */
+static uint32_t sOpts[10]; /* by player: 0 = not known (NMAX below) */
 
 static uint32_t own_options(void) {
     const char *root = getenv("BT3_SAVES") != NULL ? getenv("BT3_SAVES") : "saves";
@@ -336,11 +338,20 @@ static int auto_delay(int rttMs) {
     return delay < 1 ? 1 : delay > 6 ? 6 : delay;
 }
 
+/* Players in the match (SPEC-netplay-n.md at the project root): 2 as always, up to NMAX. Player k plays with pad k
+   and plays fighter k (port/src/multi_fighter.c, PortMulti_PadOf). Everyone talks to the host only: each sends the
+   host its own input, and the host passes each one's on to all the others ("star"). With 2 players that is exactly
+   the two-player exchange it always was. The host's number comes from BT3_NET_PLAYERS (tests) or its lobby; the
+   others learn it, and their own player number, from the host's answer to their greeting. */
+enum { NMAX = 10 };
+static int sCount = 2;
 static int sMode = -1; /* 0 off, 1 host, 2 join */
 static int sSock = -1, sMe, sDelay = 2, sConnected, sLoss, sLagMs;
-static struct sockaddr_in sPeer;
-static uint8_t sIn[2][RING][PAD]; /* [player][blank % RING] */
-static uint32_t sHave[2];         /* inputs known for blanks below this */
+static struct sockaddr_in sPeer;            /* the host for the others; for the host, player 1 */
+static struct sockaddr_in sPeers[NMAX];     /* the host: player k's address (k >= 1; sPeers[1] is sPeer) */
+static int sJoined;                         /* the host: players who have greeted it (1 .. sCount - 1) */
+static uint8_t sIn[NMAX][RING][PAD]; /* [player][blank % RING] */
+static uint32_t sHave[NMAX];         /* inputs known for blanks below this */
 static uint32_t sTick;            /* the blank the game is in */
 static FILE *sScript;
 static uint64_t sWaitNs, sWaits;
@@ -353,7 +364,7 @@ extern void Port_RollBack(int k);
 extern int gPortResim;
 int Port_NetWarp(void);
 static int sRollMax, sResim, sRollBegun;
-static uint8_t sUsed[RING][PAD]; /* what the other player's pad read in each blank */
+static uint8_t sUsed[NMAX][RING][PAD]; /* what each other player's pad read in each blank */
 static uint32_t sChecked;        /* blanks below this were given the other player's real input */
 static uint32_t sLive;           /* during a re-run: the blank that was the present when it began */
 static unsigned sRollbacks, sRollTicks, sStalls;
@@ -368,7 +379,7 @@ extern unsigned gPortPaceShiftNs;
 
 /* BT3_NET_LATENCY=<ms>: testing, a line that takes that long one way. What is sent waits in a queue. */
 static int sLatencyMs;
-static struct { uint64_t due; int n; uint8_t data[IN_HEAD + 16 * PAD]; } sQueue[256];
+static struct { uint64_t due; int n; struct sockaddr_in to; uint8_t data[IN_HEAD + 16 * PAD]; } sQueue[256];
 static unsigned sQueueHead, sQueueTail;
 
 /* Every packet of a match goes out and comes in through these two: the host of a match found with a room code may
@@ -430,23 +441,54 @@ static int net_recv(uint8_t *pkt, int size, struct sockaddr_in *from) {
 static void queue_flush(void) {
     uint64_t now = SDL_GetTicksNS();
     while (sQueueHead != sQueueTail && sQueue[sQueueHead % 256].due <= now) {
-        net_send(sQueue[sQueueHead % 256].data, sQueue[sQueueHead % 256].n, &sPeer);
+        net_send(sQueue[sQueueHead % 256].data, sQueue[sQueueHead % 256].n, &sQueue[sQueueHead % 256].to);
         sQueueHead++;
     }
 }
 
-static void send_to_peer(const void *buf, int n) {
+static void send_to(const struct sockaddr_in *to, const void *buf, int n) {
     if (sLoss != 0 && (rand() % 100) < sLoss) {
         return;
     }
     if (sLatencyMs > 0 && n <= (int)sizeof(sQueue[0].data) && sQueueTail - sQueueHead < 256) {
         sQueue[sQueueTail % 256].due = SDL_GetTicksNS() + (uint64_t)sLatencyMs * 1000000ull;
         sQueue[sQueueTail % 256].n = n;
+        sQueue[sQueueTail % 256].to = *to;
         memcpy(sQueue[sQueueTail % 256].data, buf, (size_t)n);
         sQueueTail++;
         return;
     }
-    net_send(buf, n, &sPeer);
+    net_send(buf, n, to);
+}
+
+/* Player k's address, for the host (k >= 1). */
+static const struct sockaddr_in *peer_of(int k) {
+    return k == 1 ? &sPeer : &sPeers[k];
+}
+
+/* To the other side: the host for the others; for the host, every other player. */
+static void send_to_peer(const void *buf, int n) {
+    int k;
+
+    if (sMode != 1) {
+        send_to(&sPeer, buf, n);
+        return;
+    }
+    for (k = 1; k < sCount; k++) {
+        send_to(peer_of(k), buf, n);
+    }
+}
+
+/* The host: which player an address is (1 .. sCount - 1), or -1. */
+static int player_at(const struct sockaddr_in *from) {
+    int k;
+
+    for (k = 1; k < sJoined + 1 && k < sCount; k++) {
+        if (from->sin_addr.s_addr == peer_of(k)->sin_addr.s_addr && from->sin_port == peer_of(k)->sin_port) {
+            return k;
+        }
+    }
+    return -1;
 }
 
 /* Do the two copies still compute the same game? Only button presses are exchanged, so nothing else would say:
@@ -459,7 +501,8 @@ static void send_to_peer(const void *buf, int n) {
    saying so. A dozen bytes a packet and a few hundred bytes hashed twice a second. */
 enum { SYNC_EVERY = 32, SYNC_SLOTS = 64, BYE_APART = 0x41504152 };
 typedef struct { uint32_t tick; uint64_t value; } SyncNote;
-static SyncNote sSyncMine[SYNC_SLOTS], sSyncTheirs[SYNC_SLOTS];
+static SyncNote sSyncMine[SYNC_SLOTS], sSyncTheirs[10][SYNC_SLOTS]; /* (by player: the host checks every other
+                                                                       copy, the others the host's) */
 static uint32_t sSyncOutTick, sByeWhy;
 static unsigned sSyncCompared; /* (for the log: notes of the two copies compared since the last line) */
 static uint64_t sSyncOutValue;
@@ -488,17 +531,17 @@ static void sync_check(uint32_t sure, unsigned tick) {
     if (getenv("BT3_TEST_APART") != NULL && tick == (unsigned)atoi(getenv("BT3_TEST_APART"))) {
         sSyncOutValue ^= 1; /* testing: from that blank on this copy claims another game than it has, once */
     }
-    for (k = 0; k < SYNC_SLOTS; k++) {
-        SyncNote *o = &sSyncTheirs[k];
+    for (k = 0; k < SYNC_SLOTS * sCount; k++) {
+        SyncNote *o = &sSyncTheirs[k / SYNC_SLOTS][k % SYNC_SLOTS];
         if (o->tick != 0 && o->tick <= sure) {
-            const SyncNote *m = &sSyncMine[k];
+            const SyncNote *m = &sSyncMine[k % SYNC_SLOTS];
             uint32_t was = o->tick;
             int differ = m->tick == was && m->value != o->value;
             o->tick = 0;
             sSyncCompared += m->tick == was;
             if (differ) {
-                fprintf(stderr, "bt3: net: the two games differ at blank %u (this copy %016llx, the other %016llx)\n", (unsigned)was, (unsigned long long)m->value,
-                        (unsigned long long)o->value);
+                fprintf(stderr, "bt3: net: the two games differ at blank %u (this copy %016llx, player %d's %016llx)\n", (unsigned)was,
+                        (unsigned long long)m->value, k / SYNC_SLOTS + 1, (unsigned long long)o->value);
                 sByeWhy = BYE_APART;
                 ended("The two games no longer agree (desync): the match has ended.", tick);
             }
@@ -508,11 +551,25 @@ static void sync_check(uint32_t sure, unsigned tick) {
 
 static void gone(unsigned tick);
 
+/* The input known from every other player: blanks below this. */
+static uint32_t have_others(void) {
+    uint32_t least = 0xFFFFFFFFu;
+    int k;
+
+    for (k = 0; k < sCount; k++) {
+        if (k != sMe && sHave[k] < least) {
+            least = sHave[k];
+        }
+    }
+    return least;
+}
+
 static void send_inputs(void) {
     uint8_t pkt[IN_HEAD + REDUNDANT * PAD];
-    uint32_t tsend = now_ms(), techo = sEchoTs, thold = sEchoTs != 0 ? tsend - sEchoAtMs : 0;
-    uint32_t magic = MAGIC, type = T_INPUT, n = sHave[sMe] < REDUNDANT ? sHave[sMe] : REDUNDANT, base = sHave[sMe] - n, i;
-    int32_t ahead = (int32_t)sTick - (int32_t)sHave[!sMe]; /* how far this copy is beyond the input it has from the other */
+    uint32_t tsend = now_ms(), techo, thold;
+    /* (the type word's top half says whose input it is: the host passes the others' on as they came) */
+    uint32_t magic = MAGIC, type = T_INPUT | (uint32_t)sMe << 16, n = sHave[sMe] < REDUNDANT ? sHave[sMe] : REDUNDANT, base = sHave[sMe] - n, i;
+    int32_t ahead = (int32_t)sTick - (int32_t)have_others(); /* how far this copy is beyond the input it has from the others */
 
     memcpy(pkt, &magic, 4);
     memcpy(pkt + 4, &type, 4);
@@ -521,14 +578,21 @@ static void send_inputs(void) {
     sMyAhead = ahead;
     memcpy(pkt + 16, &ahead, 4);
     memcpy(pkt + 20, &tsend, 4); /* for the ping: when this left, */
-    memcpy(pkt + 24, &techo, 4); /* the other side's last such time that arrived here, */
-    memcpy(pkt + 28, &thold, 4); /* and how long ago that was */
     memcpy(pkt + 32, &sSyncOutTick, 4); /* the check: the newest blank this copy is sure of, */
     memcpy(pkt + 36, &sSyncOutValue, 8); /* and what the game was at it (Port_NetDigest) */
     for (i = 0; i < n; i++) {
         memcpy(pkt + IN_HEAD + i * PAD, sIn[sMe][(base + i) % RING], PAD);
     }
-    send_to_peer(pkt, (int)(IN_HEAD + n * PAD));
+    {   /* to the host, or from the host to each other player: with that one's own echo */
+        int k = sMode == 1 ? 1 : 0;
+        do {
+            techo = sEchoTs[k];
+            thold = techo != 0 ? tsend - sEchoAtMs[k] : 0;
+            memcpy(pkt + 24, &techo, 4); /* the other side's last such time that arrived here, */
+            memcpy(pkt + 28, &thold, 4); /* and how long ago that was */
+            send_to(sMode == 1 ? peer_of(k) : &sPeer, pkt, (int)(IN_HEAD + n * PAD));
+        } while (sMode == 1 && ++k < sCount);
+    }
 }
 
 /* The lines of text that are due to go to the other player (net_chat.c: each is sent a few times). */
@@ -542,6 +606,38 @@ static void chat_send(void) {
         memcpy(pkt, head, 16);
         send_to_peer(pkt, 16 + len);
     }
+}
+
+/* The one who joins, from the host's answer or choices (T_HELLO_ACK, T_CONFIG: the words after the seed): its own
+   player number and how many play, and player 1's options (every copy sets the two leads' sides up with them). */
+static void take_place(const uint8_t *pkt, int n) {
+    uint32_t w;
+    int me, count;
+
+    if (n < 36 + NAME_LEN) {
+        return;
+    }
+    memcpy(&w, pkt + 32 + NAME_LEN, 4);
+    me = (int)(w & 0xFF);
+    count = (int)(w >> 8 & 0xFF);
+    if (count < 2 || count > NMAX || me < 1 || me >= count) {
+        return;
+    }
+    if (me != sMe) {
+        sOpts[me] = sOpts[sMe];
+        memset(sNames[sMe], 0, NAME_LEN);
+    }
+    sMe = me;
+    sCount = count;
+    if (n >= 40 + NAME_LEN && sMe != 1) {
+        opts_take(1, pkt + 36 + NAME_LEN);
+    }
+}
+
+/* The host's words after the seed for player k (take_place). */
+static void place_words(uint32_t *after, int k) {
+    after[0] = (uint32_t)k | (uint32_t)sCount << 8;
+    after[1] = sOpts[1];
 }
 
 /* Takes in what has arrived. Returns 1 if anything did. */
@@ -560,8 +656,8 @@ static int receive(void) {
         if (magic != MAGIC) {
             continue;
         }
-        if (sConnected && (from.sin_addr.s_addr != sPeer.sin_addr.s_addr || from.sin_port != sPeer.sin_port)) {
-            continue; /* a match takes packets from the other player's address only: nobody else can end it or put buttons in */
+        if (sConnected && (sMode == 1 ? player_at(&from) < 0 : from.sin_addr.s_addr != sPeer.sin_addr.s_addr || from.sin_port != sPeer.sin_port)) {
+            continue; /* a match takes packets from its players' addresses only: nobody else can end it or put buttons in */
         }
         got = 1;
         if (type == T_PING && n >= 12) { /* setting up: sent back as it came, for the round trip time */
@@ -573,8 +669,16 @@ static int receive(void) {
             int rtt;
             memcpy(&ts, pkt + 8, 4);
             rtt = (int)(now_ms() - ts);
-            if (rtt >= 0 && rtt < 5000 && (sSetupRtt < 0 || rtt < sSetupRtt)) {
-                sSetupRtt = rtt;
+            {   /* (each player's best round trip; the line is as good as the worst of them) */
+                int k = sMode == 1 ? player_at(&from) : 0, j;
+                if (k >= 0 && rtt >= 0 && rtt < 5000 && (sRttOf[k] < 0 || rtt < sRttOf[k])) {
+                    sRttOf[k] = rtt;
+                }
+                for (j = 0; j < sCount; j++) {
+                    if (j != sMe && sRttOf[j] > sSetupRtt) {
+                        sSetupRtt = sRttOf[j];
+                    }
+                }
             }
         } else if (type == T_CONFIG && sMode == 2 && n >= 16) { /* the host's choices, made after it measured the line */
             uint32_t v[2], ack[2] = {MAGIC, T_CONFIG_ACK};
@@ -594,10 +698,12 @@ static int receive(void) {
             if (n >= 32 + NAME_LEN) {
                 memcpy(&sSeed, pkt + 28 + NAME_LEN, 4);
             }
+            take_place(pkt, n);
             sCfgGot = 2;
             net_send(ack, sizeof(ack), &from);
         } else if (type == T_CONFIG_ACK && sMode == 1) {
-            sCfgAcked = 1;
+            int k = player_at(&from);
+            sCfgAcked |= k > 0 ? 1 << k : 0; /* (a bit per player who has the choices) */
         } else if (type == T_CHAT && sConnected && n >= 16) { /* (from the other player's address only: above) */
             uint32_t seq, len;
             memcpy(&seq, pkt + 8, 4);
@@ -622,17 +728,31 @@ static int receive(void) {
             uint32_t ack[3] = {MAGIC, T_HELLO_ACK, NET_VERSION};
             net_send(ack, sizeof(ack), &from);
         } else if (type == T_HELLO && sMode == 1) {
-            uint32_t ack[8 + NAME_LEN / 4] = {MAGIC, T_HELLO_ACK, (uint32_t)sDelay, (uint32_t)sRollMax, NET_VERSION, sRules};
+            uint32_t ack[10 + NAME_LEN / 4] = {MAGIC, T_HELLO_ACK, (uint32_t)sDelay, (uint32_t)sRollMax, NET_VERSION, sRules};
+            int k = player_at(&from);
+
+            if (k < 0) { /* a new player: the next number, while there is room */
+                if (sJoined + 1 >= sCount) {
+                    continue;
+                }
+                k = ++sJoined;
+                if (k == 1) {
+                    sPeer = from;
+                } else {
+                    sPeers[k] = from;
+                }
+            }
             ack[7 + NAME_LEN / 4] = sSeed;
             memcpy(&ack[6], sMyName, NAME_LEN);
             ack[6 + NAME_LEN / 4] = sOpts[0];
             if (n >= 12 + NAME_LEN) { /* the other player's name came with the greeting */
-                memcpy(sNames[1], pkt + 12, NAME_LEN);
-                sNames[1][NAME_LEN - 1] = '\0';
+                memcpy(sNames[k], pkt + 12, NAME_LEN);
+                sNames[k][NAME_LEN - 1] = '\0';
             }
             if (n >= 16 + NAME_LEN) {
-                opts_take(1, pkt + 12 + NAME_LEN);
+                opts_take(k, pkt + 12 + NAME_LEN);
             }
+            place_words(&ack[8 + NAME_LEN / 4], k);
             {   /* (does the other copy know the 120% pace? if not, the match is at the game's own) */
                 uint32_t cap = 0;
                 if (n >= 20 + NAME_LEN) {
@@ -650,9 +770,9 @@ static int receive(void) {
                 ack[5] = sRules;
             }
             memcpy(sNames[0], sMyName, NAME_LEN);
-            sPeer = from; /* the host learns the other side's address from its greeting */
-            sConnected = 1;
-            net_send(ack, sizeof(ack), &sPeer);
+            /* (the host learned the player's address from its greeting, above) the match begins with everyone */
+            sConnected = sJoined + 1 >= sCount;
+            net_send(ack, sizeof(ack), &from);
         } else if (type == T_HELLO_ACK && sMode == 2 && sFromLobby && n < 20) {
             /* an answer to the lobby's greeting, still in the socket the session took over: nothing to do */
         } else if (type == T_HELLO_ACK && sMode == 2) {
@@ -676,35 +796,62 @@ static int receive(void) {
                 if (n >= 32 + NAME_LEN) {
                     memcpy(&sSeed, pkt + 28 + NAME_LEN, 4);
                 }
-                memcpy(sNames[1], sMyName, NAME_LEN);
+                take_place(pkt, n);
+                memcpy(sNames[sMe], sMyName, NAME_LEN);
                 sCfgGot = 1;
                 sConnected = 1;
             }
-        } else if (type == T_INPUT && n >= IN_HEAD && (sConnected || sMode == 1)) { /* (the joining side: not before the host's answer) */
-            uint32_t base, count, i, other = (uint32_t)!sMe;
+        } else if ((type & 0xFFFFu) == T_INPUT && n >= IN_HEAD && (sConnected || sMode == 1)) { /* (the joining side: not before the host's answer) */
+            uint32_t base, count, i, other = type >> 16; /* (whose input: the type word's top half) */
+            int own;                                     /* the sender's own packet, not one the host passed on */
+
+            if (sMode == 1) {
+                int k = player_at(&from);
+                if (k < 0 && sCount == 2 && !sConnected) { /* (two players: the input says the greeting got through) */
+                    sPeer = from;
+                    sJoined = 1;
+                    k = 1;
+                }
+                if (k < 0 || other != (uint32_t)k) {
+                    continue; /* a player puts in its own input only */
+                }
+                own = 1;
+            } else {
+                if (other >= (uint32_t)sCount || other == (uint32_t)sMe) {
+                    continue;
+                }
+                own = other == 0;
+            }
             memcpy(&base, pkt + 8, 4);
             memcpy(&count, pkt + 12, 4);
-            memcpy(&sTheirAhead, pkt + 16, 4);
-            if (sMode == 1 && !sConnected) {
-                sPeer = from;
-            }
-            {
+            if (own) {
                 uint32_t at;
+                memcpy(&sTheirAhead, pkt + 16, 4);
                 memcpy(&at, pkt + 32, 4);
                 if (at != 0) { /* the other copy's check value for that blank: compared when this copy is sure of it too */
-                    SyncNote *o = &sSyncTheirs[at / SYNC_EVERY % SYNC_SLOTS];
+                    SyncNote *o = &sSyncTheirs[other][at / SYNC_EVERY % SYNC_SLOTS];
                     o->tick = at;
                     memcpy(&o->value, pkt + 36, 8);
                 }
             }
-            sConnected = 1; /* (an input packet says the greeting got through) */
-            {
+            if (sMode == 2 || sCount == 2) {
+                sConnected = 1; /* (an input packet says the greeting got through) */
+            }
+            if (sMode == 1 && sCount > 2) { /* the host passes it on to every other player, as it came */
+                int k;
+                for (k = 1; k < sCount; k++) {
+                    if ((uint32_t)k != other) {
+                        send_to(peer_of(k), pkt, n);
+                    }
+                }
+            }
+            if (own) {
                 uint32_t ts, echo, hold, now = now_ms();
                 memcpy(&ts, pkt + 20, 4);
                 memcpy(&echo, pkt + 24, 4);
                 memcpy(&hold, pkt + 28, 4);
-                sEchoTs = ts;
-                sEchoAtMs = now;
+                sEchoTs[other] = ts;
+                sEchoAtMs[other] = now;
                 if (echo != 0 && now - echo - hold < 5000u) { /* the round trip: there and back, less their holding time */
                     /* The smallest of the last 64: a packet waits in the socket until the next blank looks, on both
                        sides, which adds up to two blanks to a single measurement and nothing to the best one. */
@@ -784,6 +931,20 @@ static void net_start(int role, const char *host, const char *join) {
 #endif
     }
     sMe = sMode - 1;
+    /* BT3_NET_PLAYERS=<n> on the host (tests, and across the restart into the session): that many play, 2..NMAX.
+       The others learn theirs from its answer (take_place). */
+    sCount = sMode == 1 && getenv("BT3_NET_PLAYERS") != NULL ? atoi(getenv("BT3_NET_PLAYERS")) : 2;
+    if (sCount < 2 || sCount > NMAX) {
+        sCount = 2;
+    }
+    sJoined = 0;
+    memset(sPeers, 0, sizeof(sPeers));
+    {
+        int k;
+        for (k = 0; k < NMAX; k++) {
+            sRttOf[k] = -1;
+        }
+    }
     if (getenv("BT3_NET_LOCALPORT") != NULL && sCodeLocalPort == 0) { /* (across the restart into the session) */
         sCodeLocalPort = atoi(getenv("BT3_NET_LOCALPORT"));
     }
@@ -821,7 +982,7 @@ static void net_start(int role, const char *host, const char *join) {
     sCfgGot = 0;
     sGone = 0;
     sVersionBad = 0;
-    sEchoTs = 0;
+    memset(sEchoTs, 0, sizeof(sEchoTs));
     sPingMs = -1;
     sSecRoll = sSecRollTicks = sSecWaits = sSecWaitMs = sSecTicks = 0;
     memset(sShown, 0, sizeof(sShown));
@@ -947,14 +1108,21 @@ static void net_start(int role, const char *host, const char *join) {
         }
         fprintf(stderr, "bt3: net: round trip %d ms%s\n", sSetupRtt, sAutoDelay ? " (the input delay is chosen from it)" : "");
         start = SDL_GetTicksNS();
-        while (!sCfgAcked && SDL_GetTicksNS() - start < 3000000000ull) {
+        while (sCfgAcked != (1 << sCount) - 2 && SDL_GetTicksNS() - start < 3000000000ull) { /* (every other player) */
             uint64_t now = SDL_GetTicksNS();
             if (now - lastCfg >= 50000000ull) {
-                uint32_t cfg[8 + NAME_LEN / 4] = {MAGIC, T_CONFIG, (uint32_t)sDelay, (uint32_t)sRollMax, NET_VERSION, sRules};
-                cfg[7 + NAME_LEN / 4] = sSeed;
-                memcpy(&cfg[6], sMyName, NAME_LEN);
-                cfg[6 + NAME_LEN / 4] = sOpts[0];
-                net_send(cfg, sizeof(cfg), &sPeer);
+                int k;
+                for (k = 1; k < sCount; k++) {
+                    uint32_t cfg[10 + NAME_LEN / 4] = {MAGIC, T_CONFIG, (uint32_t)sDelay, (uint32_t)sRollMax, NET_VERSION, sRules};
+                    if (sCfgAcked & 1 << k) {
+                        continue;
+                    }
+                    cfg[7 + NAME_LEN / 4] = sSeed;
+                    memcpy(&cfg[6], sMyName, NAME_LEN);
+                    cfg[6 + NAME_LEN / 4] = sOpts[0];
+                    place_words(&cfg[8 + NAME_LEN / 4], k);
+                    net_send(cfg, sizeof(cfg), peer_of(k));
+                }
                 lastCfg = now;
             }
             receive();
@@ -975,12 +1143,19 @@ static void net_start(int role, const char *host, const char *join) {
             sRollMax = Port_RollCan() ? sCfgRoll : 0;
         }
     }
-    /* the blanks before any input can have arrived (0 .. delay) are idle for both players */
-    for (i = 0; i <= (uint32_t)sDelay; i++) {
-        memcpy(sIn[0][i], kIdle, PAD);
-        memcpy(sIn[1][i], kIdle, PAD);
+    /* the blanks before any input can have arrived (0 .. delay) are idle for every player */
+    {
+        int k;
+        for (k = 0; k < sCount; k++) {
+            for (i = 0; i <= (uint32_t)sDelay; i++) {
+                memcpy(sIn[k][i], kIdle, PAD);
+            }
+            sHave[k] = (uint32_t)sDelay + 1;
+        }
     }
-    sHave[0] = sHave[1] = (uint32_t)sDelay + 1;
+    if (sCount > 2) {
+        fprintf(stderr, "bt3: net: %d players; this copy is player %d\n", sCount, sMe + 1);
+    }
     fprintf(stderr, "bt3: net: connected%s; input delay %d blanks, %s\n", sFromLobby && Port_LobbyRelayed() ? " through the relay" : sFromLobby ? " directly" : "", sDelay,
             sRollMax > 0 ? "rollback" : "waiting for each other");
     fprintf(stderr, "bt3: net: game speed %d%%\n", rules_speed());
@@ -1087,9 +1262,10 @@ static void sample_local(unsigned tick) {
     }
     memcpy(mine, kIdle, PAD);
     if (sScript != NULL) {
-        uint8_t both[2 * PAD];
-        if (fseek(sScript, (long)tick * 2 * PAD, SEEK_SET) == 0 && fread(both, 1, sizeof(both), sScript) == sizeof(both)) {
-            memcpy(mine, both + sMe * PAD, PAD);
+        uint8_t all[NMAX * PAD]; /* (a table holds every player's pad per blank: sCount of them) */
+        size_t row = (size_t)sCount * PAD;
+        if (fseek(sScript, (long)tick * (long)row, SEEK_SET) == 0 && fread(all, 1, row, sScript) == row) {
+            memcpy(mine, all + sMe * PAD, PAD);
         }
     } else if (!Port_PadRead(0, mine)) {
         memcpy(mine, kIdle, PAD);
@@ -1126,8 +1302,9 @@ static void gone_quiet(unsigned tick) {
  * input. It never runs more than sRollMax blanks ahead of the other player's last known input: there it waits.
  */
 static void roll_tick(unsigned tick) {
-    uint32_t other = (uint32_t)!sMe, t, limit;
+    uint32_t t, limit, sure, from;
     uint64_t t0, last;
+    int p;
 
     if (!sRollBegun) {
         sRollBegun = 1;
@@ -1146,11 +1323,11 @@ static void roll_tick(unsigned tick) {
             gone(tick);
         }
         t0 = last = SDL_GetTicksNS();
-        if (tick >= sHave[other] + (uint32_t)sRollMax) {
+        if (tick >= have_others() + (uint32_t)sRollMax) {
             sStalls++;
             sSecWaits++;
         }
-        while (tick >= sHave[other] + (uint32_t)sRollMax) {
+        while (tick >= have_others() + (uint32_t)sRollMax) {
             uint64_t now = SDL_GetTicksNS();
             if (now - last > 4000000ull) {
                 send_inputs();
@@ -1167,7 +1344,8 @@ static void roll_tick(unsigned tick) {
             }
         }
         {   /* (see sTheirAhead) */
-            int diff = (int)sMyAhead - (int)sTheirAhead; /* (both taken at the same point of a blank: when sending) */
+            int diff = sMode == 1 && sCount > 2 ? 0 : (int)sMyAhead - (int)sTheirAhead; /* (both taken at the same point of a
+                blank: when sending. The others keep to the host; the host of more than two keeps its own pace) */
             if (getenv("BT3_NET_SKEW") != NULL && tick == 1500) { /* testing: this copy falls behind by that many ms, once */
                 gPortPaceShiftNs = (unsigned)atoi(getenv("BT3_NET_SKEW")) * 1000000u;
             }
@@ -1185,11 +1363,27 @@ static void roll_tick(unsigned tick) {
             sShown[4] = (int)sSecWaitMs;
             sSecRoll = sSecRollTicks = sSecWaits = sSecWaitMs = sSecTicks = 0;
         }
-        limit = sHave[other] < tick ? sHave[other] : tick;
-        for (t = sChecked; t < limit && memcmp(sUsed[t % RING], sIn[other][t % RING], PAD) == 0; t++) {
+        /* each other player: the first blank that was given something else than what they really pressed (from),
+           and how far every blank was given their real input (sure) */
+        from = 0xFFFFFFFFu;
+        sure = 0xFFFFFFFFu;
+        for (p = 0; p < sCount; p++) {
+            if (p == sMe) {
+                continue;
+            }
+            limit = sHave[p] < tick ? sHave[p] : tick;
+            for (t = sChecked; t < limit && memcmp(sUsed[p][t % RING], sIn[p][t % RING], PAD) == 0; t++) {
+            }
+            if (t < limit && t < from) {
+                from = t;
+            }
+            if (t < sure) {
+                sure = t;
+            }
         }
-        sChecked = t;
-        if (t < limit) { /* blank t was given something else than what they really pressed */
+        sChecked = sure; /* (not past `from`: another player's blanks before it may still be guesses) */
+        t = from != 0xFFFFFFFFu ? from : sure;
+        if (from != 0xFFFFFFFFu) { /* blank t was given something else than what someone really pressed */
             sLive = tick;
             sResim = 1;
             sRollbacks++;
@@ -1210,7 +1404,11 @@ static void roll_tick(unsigned tick) {
         sTick = tick; /* back at this blank, to run from here again */
     }
     gPortResim = sResim || Port_NetWarp();
-    memcpy(sUsed[tick % RING], sIn[other][(tick < sHave[other] ? tick : sHave[other] - 1) % RING], PAD);
+    for (p = 0; p < sCount; p++) {
+        if (p != sMe) {
+            memcpy(sUsed[p][tick % RING], sIn[p][(tick < sHave[p] ? tick : sHave[p] - 1) % RING], PAD);
+        }
+    }
 }
 
 void Port_NetBeginTick(unsigned tick) {
@@ -1231,7 +1429,7 @@ void Port_NetBeginTick(unsigned tick) {
     send_inputs();
     receive();
     t0 = last = SDL_GetTicksNS();
-    while (sHave[!sMe] <= tick) {
+    while (have_others() <= tick) {
         uint64_t now = SDL_GetTicksNS();
         if (now - last > 4000000ull) {
             send_inputs(); /* the other side may be waiting for a packet that was lost */
@@ -1273,11 +1471,16 @@ void Port_NetBeginTick(unsigned tick) {
 
 /* What the game reads for a pad during this blank. */
 void Port_NetInput(int player, unsigned char *data) {
-    if (sRollMax > 0 && player == !sMe) {
-        memcpy(data, sUsed[sTick % RING], PAD); /* their real input, or the guess (roll_tick) */
+    if (sRollMax > 0 && player >= 0 && player < sCount && player != sMe) {
+        memcpy(data, sUsed[player][sTick % RING], PAD); /* their real input, or the guess (roll_tick) */
         return;
     }
-    memcpy(data, player >= 0 && player < 2 && sTick < sHave[player] ? sIn[player][sTick % RING] : kIdle, PAD);
+    memcpy(data, player >= 0 && player < sCount && sTick < sHave[player] ? sIn[player][sTick % RING] : kIdle, PAD);
+}
+
+/* How many play in the match this copy is in (2 when it is in none). */
+int Port_NetPlayers(void) {
+    return Port_NetActive() ? sCount : 2;
 }
 
 int Port_NetResim(void) {
@@ -1296,7 +1499,8 @@ int Port_NetView(void) {
     if (forced >= 0) {
         return forced & 1;
     }
-    return Port_NetActive() ? sMe : -1;
+    return Port_NetActive() ? (sMe < 2 ? sMe : 0) : -1; /* (a third player on: the first side's view, until each player
+                                                           has a view of their own: player-view) */
 }
 
 /* ---------------------------------------------------------------------------------------------------------------
@@ -1358,8 +1562,11 @@ static void relaunch(int role, const char *join, int port) {
         if (role == 1) {
             snprintf(value, sizeof(value), "%u", (unsigned)sRules);
             SETENV("BT3_NET_RULES", value);
+            snprintf(value, sizeof(value), "%d", sCount);
+            SETENV("BT3_NET_PLAYERS", sCount > 2 ? value : NULL); /* (the others learn it from the host) */
         } else {
             SETENV("BT3_NET_RULES", NULL);
+            SETENV("BT3_NET_PLAYERS", NULL);
         }
         SETENV("BT3_SOUND_TICKS", "1");
         SETENV("BT3_NOMOVIE", "1");
@@ -1498,7 +1705,10 @@ void Port_NetLeave(void) {
         uint32_t bye[3] = {MAGIC, T_BYE, sByeWhy};
         int k;
         for (k = 0; k < 3; k++) {
-            net_send(bye, sizeof(bye), &sPeer);
+            int j;
+            for (j = 1; j < (sMode == 1 ? sCount : 2); j++) { /* (the host: every other player) */
+                net_send(bye, sizeof(bye), sMode == 1 ? peer_of(j) : &sPeer);
+            }
         }
     }
     if (Port_SessionCan()) {

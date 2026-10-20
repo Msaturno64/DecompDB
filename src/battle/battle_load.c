@@ -1988,8 +1988,17 @@ void BattleSetup_PortSpread(void) {
     if (PortMulti_WantAll()) {
         for (s = 0; s < 2; s++) {
             extern s32 PortMulti_Handicap(s32 team); /* port/src/multi_fighter.c: the team's starting health, % */
+            extern s32 PortMulti_TestTeamSize(s32 side), PortMulti_TestChara(s32 side, s32 i); /* (tests) */
+            s32 want = PortMulti_TestTeamSize(s);
 
             side = Side(s);
+            while (want > 0 && side->memberCount < want) { /* BT3_NET_TEAMS: copies of the lead with other characters */
+                side->members[side->memberCount] = side->members[0];
+                side->members[side->memberCount].chara = PortMulti_TestChara(s, side->memberCount);
+                side->members[side->memberCount].costume = 0;
+                side->members[side->memberCount].variant = 0;
+                side->memberCount++;
+            }
             for (i = 0; i < side->memberCount; i++) {
                 side->members[i].health = side->members[i].health * PortMulti_Handicap(s) / 100.0f;
             }

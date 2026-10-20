@@ -42,7 +42,12 @@ int PortMulti_Ffa(void) {
    playing it, or -1 for the computer (as before). BT3_TEAMS_HUMAN=<i>,<j>... (tests): fighters i, j by their own
    pads i, j (pads 2..9, src/sys/pad.c). The online session's players come here too (SPEC-netplay-n.md). */
 int PortMulti_PadOf(int fighter) {
+    extern int Port_NetActive(void), Port_NetPlayers(void); /* gs/net.c: online, and how many play */
     const char *e = getenv("BT3_TEAMS_HUMAN");
+
+    if (Port_NetActive()) { /* online: player k plays fighter k with pad k; the fighters past the players: the computer */
+        return fighter < Port_NetPlayers() ? fighter : -1;
+    }
 
     while (e != NULL && *e != '\0') {
         if (atoi(e) == fighter) {
@@ -1193,6 +1198,24 @@ extern void BattleSetup_Finish(void);
 /* Characters for the added members: the attract demo's own pairings (src/battle/view_b_c.c), side 0's column and
    side 1's, so a run with the same BT3_TEAMS is the same battle every time. */
 static const int kDemoExtra[2][5] = {{0x0A, 0x2A, 0x19, 0x27, 0x17}, {0x93, 0x6C, 0x5C, 0x60, 0x6F}};
+
+/* BT3_NET_TEAMS=<a>v<b> (tests of online play with N players, research/tests/net_n_test.py): every battle with
+   those team sizes, whatever the select gave, so that the players past the two leads have fighters. Every copy is
+   given the same, so all set up the same battle. The added members are the demo's characters. Returns the size
+   wanted for a side (0: leave it), and the character of its member i. */
+int PortMulti_TestTeamSize(int side) {
+    const char *e = getenv("BT3_NET_TEAMS");
+    int a, b;
+
+    if (e == NULL || sscanf(e, "%dv%d", &a, &b) != 2 || a < 1 || a > 5 || b < 1 || b > 5) {
+        return 0;
+    }
+    return side == 0 ? a : b;
+}
+
+int PortMulti_TestChara(int side, int i) {
+    return kDemoExtra[side & 1][(i - 1) % 5];
+}
 
 /* headless.c, after Demo_SetupBattle: a members on side 0 and b on side 1. Each added member is a copy of the
    side's first (its CPU level, health and items) with another character. */
