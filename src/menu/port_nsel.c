@@ -137,6 +137,7 @@ typedef struct PortNselScreen {
     s32 pick[NS_MAX];   /* the character each one plays (set as the screen is left: "random" drawn then) */
     s32 allReady;       /* blanks since everyone was ready */
     s32 frames;
+    s32 running;        /* the select is on (for the online bots, PortNsel_BotButtons) */
     s32 leaving;
     s32 result;
     void *winRes;       /* the Duel menu's screen unpacked: its windows */
@@ -644,6 +645,53 @@ static void Ns_WinTerm(void) {
     sNs.chips = NULL;
 }
 
+/* ---- online bots (BT3_NET_BOT, port/src/gs/net.c): a copy whose player the PC plays ---- */
+s32 PortNsel_On(void) {
+    return sNs.running;
+}
+
+/* The PS2 buttons (raw bits, 1 = pressed) that bring player k to character `want` (-1: whatever the cursor is on)
+   and make it ready, a press every 8 blanks (each held 4). The way: the grid's row, then its column, cross; the
+   form, cross; the costume as it is, cross. */
+u32 PortNsel_BotButtons(s32 k, s32 want, u32 tick) {
+    enum { B_UP = 0x10, B_RIGHT = 0x20, B_DOWN = 0x40, B_LEFT = 0x80, B_CROSS = 0x4000 };
+    s32 i;
+    s32 cell = -1;
+    s32 form = 0;
+
+    if (!sNs.running || k < 0 || k >= sNs.players || tick % 8 >= 4 || !ColorFade_IsInDone()) {
+        return 0;
+    }
+    for (i = 0; want >= 0 && i < sNs.cellCount && cell < 0; i++) {
+        s32 f;
+
+        if (sNs.grid[i].id == want) {
+            cell = i;
+        }
+        for (f = 0; f < sNs.grid[i].formCount && f < NS_REEL; f++) {
+            if (sNs.grid[i].form[f] == want) {
+                cell = i;
+                form = f;
+            }
+        }
+    }
+    switch (sNs.step[k]) {
+    case NS_GRID:
+        if (cell < 0 || cell == sNs.col[k] + sNs.row[k] * MCHR_COLS) {
+            return B_CROSS;
+        }
+        if (cell / MCHR_COLS != sNs.row[k]) {
+            return cell / MCHR_COLS > sNs.row[k] ? B_DOWN : B_UP;
+        }
+        return cell % MCHR_COLS > sNs.col[k] ? B_RIGHT : B_LEFT;
+    case NS_FORM:
+        return sNs.form[k] == form ? B_CROSS : B_RIGHT;
+    case NS_COSTUME:
+        return B_CROSS;
+    }
+    return 0;
+}
+
 /* From the session's start (or the last battle) until everyone is ready: 1 the battle is set up, 0 the host left. */
 s32 PortNsel_Run(void) {
     s32 k;
@@ -668,6 +716,7 @@ s32 PortNsel_Run(void) {
     }
     sNs.allReady = 0;
     sNs.frames = 0;
+    sNs.running = 1;
     sNs.leaving = 0;
     sNs.result = 0;
     ColorFade_StartIn(0, 0, 0, 0x14);
@@ -696,6 +745,7 @@ s32 PortNsel_Run(void) {
         }
     }
     sceGsSyncPath(0, 0);
+    sNs.running = 0;
     if (sNs.result) {
         Ns_Pick();
     }

@@ -698,21 +698,17 @@ int PortMulti_HudFighter(int side) {
     extern int BattleSide_GetControl(int side); /* src/battle/battle_load.c: 0 a pad, 2 the computer */
     int n = BattleSide_GetCount(), h, me, t;
 
-    extern int Port_NetActive(void), Port_NetOwnScreen(void), Port_NetMe(void); /* gs/net.c */
+    extern int Port_NetActive(void); /* gs/net.c */
 
     if (!sHudPass || n <= 2 || side < 0 || side > 1) {
         return side;
     }
     if (Port_NetActive()) {
-        /* Online: each copy's own panels, as its own camera (Port_NetOwnScreen). They make what the copies hold of
-           the HUD differ (the face in a panel moves the effects' textures in video memory, seen in a 2v1 test that
-           compared everything); the fight's own values stay the same (research/tests/net_n_test.py --viewof). A
-           test that forces one view on every copy keeps the console's panels on all. */
-        if (!Port_NetOwnScreen()) {
-            return side;
-        }
-        me = Port_NetMe();
-        h = me < 2 ? me : BattleSide_GetTeam(me);
+        /* (online the panels are the console's on every copy: the HUD is state the copies hold alike, and each
+           copy's player is someone else. A panel that showed this copy's target made them differ: the face drawn
+           in it moves the effects' textures in video memory (a 2v1 online test), and with five CPU fighters that
+           reached the fight and crashed the copies (net_n_test.py --viewof=all, 2026-10-20)) */
+        return side;
     } else if (BattleSide_GetControl(0) == 0 && BattleSide_GetControl(1) != 0) {
         me = h = 0;
     } else if (BattleSide_GetControl(1) == 0 && BattleSide_GetControl(0) != 0) {

@@ -1319,6 +1319,36 @@ int Port_NetActive(void) {
     return sMode > 0;
 }
 
+/* BT3_NET_BOT=<character id>|any: the PC plays this copy's player (tests, and a room filled with bots for a person
+   to try). In the select of more than two (menu/port_nsel.c) it goes to that character and is ready; after it the
+   computer plays its fighter (its pad carries kGone, as a player who left), and it presses cross now and then so
+   that the screens between battles go on. Returns 1 when it has made this blank's pad. */
+static int bot_pad(unsigned tick, uint8_t *mine) {
+    static int bot = -2, seen;
+    extern int PortNsel_On(void);
+    extern unsigned PortNsel_BotButtons(int k, int want, unsigned tick);
+
+    if (bot == -2) {
+        const char *e = getenv("BT3_NET_BOT");
+        bot = e == NULL ? -3 : strcmp(e, "any") == 0 ? -1 : atoi(e);
+    }
+    if (bot == -3) {
+        return 0;
+    }
+    if (PortNsel_On()) {
+        unsigned b = PortNsel_BotButtons(sMe, bot, tick);
+        seen = 1;
+        mine[0] = (uint8_t)(~b & 0xFF);
+        mine[1] = (uint8_t)(~(b >> 8) & 0xFF);
+    } else if (seen) {
+        memcpy(mine, kGone, PAD);
+        if (tick % 60 < 4) {
+            mine[1] = (uint8_t)~0x40; /* (cross: 0x4000) */
+        }
+    }
+    return 1;
+}
+
 /* A new vertical blank begins (Port_VBlank): this player's input made now takes effect `delay` blanks on; then
    wait until the other player's input for THIS blank is here. */
 /* The local player's input of this blank, entered for the blank `delay` later (once per blank). */
@@ -1330,7 +1360,9 @@ static void sample_local(unsigned tick) {
         return;
     }
     memcpy(mine, kIdle, PAD);
-    if (sScript != NULL) {
+    if (bot_pad(tick, mine)) {
+        /* (the PC plays this copy's player) */
+    } else if (sScript != NULL) {
         uint8_t all[NMAX * PAD]; /* (a table holds every player's pad per blank: sCount of them) */
         size_t row = (size_t)sCount * PAD;
         if (fseek(sScript, (long)tick * (long)row, SEEK_SET) == 0 && fread(all, 1, row, sScript) == row) {
@@ -1606,12 +1638,6 @@ int Port_NetView(void) {
    two. -1 otherwise, and when a view is forced (BT3_VIEW: tests that compare everything between the copies). */
 int Port_NetViewFighter(void) {
     return Port_NetView() >= 0 && sViewForced < 0 && sMe >= 2 ? sMe : -1;
-}
-
-/* This copy shows its own player's screen (online, no view forced): its camera, and the HUD's panels of its own
-   fighter and of the one that fighter is set on (multi_fighter.c, PortMulti_HudFighter). */
-int Port_NetOwnScreen(void) {
-    return Port_NetView() >= 0 && sViewForced < 0;
 }
 
 /* ---------------------------------------------------------------------------------------------------------------
