@@ -444,11 +444,28 @@ static void Ns_Backdrop(void) {
     Ps_SpriteScreen(TBO_BG, 0.0f, 0.0f, 512.0f, 448.0f, 0.5f - u * 0.5f, 0.5f - v * 0.5f, 0.5f + u * 0.5f, 0.5f + v * 0.5f, PS_PLAIN, 0x80);
 }
 
-/* The reel's width on a card of height h: as wide as the card lets it, as tall as 60 % of the card at most. */
-static f32 Ns_ReelW(f32 h) {
-    f32 w = 0.6f * h * 0.857f * (NS_REEL_S1 - NS_REEL_S0) / 64.0f;
+/* A card's inside: from its x, what lies between the bar's round ends (x0, and the width w). */
+static void Ns_Inside(f32 x, f32 h, f32 *x0, f32 *w) {
+    f32 cap = Ps_PillCap(TBO_KIT_BAR, h);
 
-    return w > 206.0f ? 206.0f : w;
+    *x0 = x + cap * 0.75f;
+    *w = NS_CARD_W - cap * 1.5f;
+}
+
+/* The reel's width on a card of height h: what the card's inside leaves after the team's colour, as tall as 55 %
+   of the card at most. */
+static f32 Ns_ReelW(f32 h) {
+    f32 x0;
+    f32 in;
+    f32 w = 0.55f * h * 0.857f * (NS_REEL_S1 - NS_REEL_S0) / 64.0f;
+
+    Ns_Inside(0.0f, h, &x0, &in);
+    return w > in - 14.0f ? in - 14.0f : w;
+}
+
+/* The reel's height for that width. */
+static f32 Ns_ReelH(f32 w) {
+    return 64.0f * w / (NS_REEL_S1 - NS_REEL_S0) / 0.857f;
 }
 
 static void Ns_Draw(void) {
@@ -463,8 +480,14 @@ static void Ns_Draw(void) {
 
         Ns_Card(k, &x, &y);
         Ps_Pill(sNs.step[k] == NS_READY ? TBO_KIT_SEL : TBO_KIT_BAR, x, y, x + NS_CARD_W, y + h, 0x80);
-        Ps_Rect(x + 16.0f, y + h * 0.18f, x + 20.0f, y + h * 0.82f, c, c); /* the team's colour, inside the round end */
-        Ns_Reel(k, x + 24.0f, y + h * 0.36f, w);
+        {
+            f32 x0;
+            f32 in;
+
+            Ns_Inside(x, h, &x0, &in);
+            Ps_Rect(x0 + 5.0f, y + h * 0.3f, x0 + 9.0f, y + h * 0.84f, c, c); /* the team's colour, clear of the border */
+            Ns_Reel(k, x0 + 14.0f + (in - 14.0f - w) * 0.5f, y + h * 0.62f - Ns_ReelH(w) * 0.5f, w);
+        }
     }
     MsgWin_PortDrawString(NULL);
 }
@@ -515,11 +538,19 @@ static void Ns_DrawText(void) {
         } else {
             sprintf(what, NX(NX_PLAYER), (int)(k + 1));
         }
-        Ps_Text(x + 26.0f, Ps_TextTop(y + h * 0.19f, 0.4f), what, 0.4f, 72.0f, 0);
-        Ns_Choice(k, what);
-        Ps_Align(2);
-        Ps_Text(x + 222.0f, Ps_TextTop(y + h * 0.19f, big), what, big, 136.0f, sNs.step[k] == NS_READY ? 5 : 3);
-        Ps_Align(0);
+        {
+            f32 x0;
+            f32 in;
+
+            Ns_Inside(x, h, &x0, &in);
+            x0 += 4.0f; /* (the round ends close in at the top: the words keep off them a little more) */
+            in -= 8.0f;
+            Ps_Text(x0, Ps_TextTop(y + h * 0.24f, 0.4f), what, 0.4f, 68.0f, 0);
+            Ns_Choice(k, what);
+            Ps_Align(2);
+            Ps_Text(x0 + in, Ps_TextTop(y + h * 0.24f, big), what, big, in - 74.0f, sNs.step[k] == NS_READY ? 5 : 3);
+            Ps_Align(0);
+        }
     }
     if (sNs.allReady > 0) {
         Ps_MsgLines(NX(NX_STARTS), 40.0f, 343.0f, 380.0f, 3);

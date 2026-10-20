@@ -291,11 +291,15 @@ void Ps_Icon(s32 id, f32 cx, f32 cy, f32 height, s32 alpha) {
 
 
 /* A piece of the kit as a bar: its round ends keep their shape, its middle stretches. */
+/* How wide a bar's round end is at that height (what Ps_Pill draws it with). */
+f32 Ps_PillCap(s32 id, f32 height) {
+    return (f32)sTboSize[id][2] * height / Ps_PicH(id) * 0.857f;
+}
+
 void Ps_Pill(s32 id, f32 x0, f32 y0, f32 x1, f32 y1, s32 alpha) {
     f32 w = Ps_PicW(id);
-    f32 h = Ps_PicH(id);
     f32 c = (f32)sTboSize[id][2];
-    f32 cap = c * (y1 - y0) / h * 0.857f;
+    f32 cap = Ps_PillCap(id, y1 - y0);
     f32 cu = c / w;
 
     if (cap * 2.0f > x1 - x0) {

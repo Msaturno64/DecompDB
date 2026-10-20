@@ -52,6 +52,7 @@ f32 Ps_PicH(s32 id);
 void Ps_Stand(s32 id, f32 cx, f32 feet, f32 height, s32 alpha);
 void Ps_Icon(s32 id, f32 cx, f32 cy, f32 height, s32 alpha);
 void Ps_Pill(s32 id, f32 x0, f32 y0, f32 x1, f32 y1, s32 alpha);
+f32 Ps_PillCap(s32 id, f32 height); /* its round end's width at that height */
 void Ps_Panel(s32 id, f32 x0, f32 y0, f32 x1, f32 y1, s32 alpha);
 void Ps_Quad(f32 x0, f32 y0, f32 x1, f32 y1, f32 x2, f32 y2, f32 x3, f32 y3, u32 c0, u32 c1, u32 c2, u32 c3);
 void Ps_Rect(f32 x0, f32 y0, f32 x1, f32 y1, u32 top, u32 bottom);
