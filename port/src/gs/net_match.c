@@ -825,7 +825,7 @@ static int SDLCALL update_thread(void *arg) {
 
 void Match_UpdateAsk(void) {
     SDL_Thread *t;
-    if (SDL_GetAtomicInt(&sUpdBusy)) {
+    if (PORT_UPDATE_REPO[0] == '\0' || SDL_GetAtomicInt(&sUpdBusy)) { /* (a copy that publishes no releases) */
         return;
     }
     SDL_SetAtomicInt(&sUpdBusy, 1);
