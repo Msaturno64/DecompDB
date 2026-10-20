@@ -942,6 +942,15 @@ BtlAtkRecord *BtlAtk_GetRecordOf(BtlTechChr *chr, u32 id) {
 /* Damage changes by ability: ids 0..9 +10% (4) / -10% (5); ids 0x13..0x21 +10% (6) / -10% (7); ids 0x55, 0x56
    x2 (8) / halved (9). */
 s32 BtlAtk_ApplyAbilities(BtlTechChr *chr, s32 val, u32 id) {
+#ifdef PORT
+    extern s32 BtlChar_PortGiant(BtlTechChr *chr);
+
+    if (val > 0 && BtlChar_PortGiant(chr)) { /* (a giant hits 1.5 times as hard, Tag Team Mod) */
+        f32 big = (f32)val * 1.5f;
+
+        val = big < 1e7f ? (s32)big : 10000000;
+    }
+#endif
     if (id < 10) {
         if (BtlMember_HasAbility(chr, 4)) {
             val += val / 10;
@@ -1362,6 +1371,17 @@ s32 BtlParam_GetUnk0(BtlTechChr *chr) {
 s32 BtlParam_GetUnk2(BtlTechChr *chr) {
     return BtlChar_GetObj(chr)->param->unk2;
 }
+
+#ifdef PORT
+/* Giants of the Tag Team Mod (SPEC-escala.md): whether the fighter's current body is giant size (parameter byte 2
+   == 4, what the game's own giant rules test, so it follows transformations) while giants are big
+   (port/src/multi_fighter.c, set as the battle is set up). */
+s32 BtlChar_PortGiant(BtlTechChr *chr) {
+    extern int gPortGiants;
+
+    return gPortGiants && BtlParam_GetUnk2(chr) == 4;
+}
+#endif
 
 /* Parameter +0xAC: the transformation slot a neutral input picks. */
 s32 BtlParam_GetUnkAC(BtlTechChr *chr) {

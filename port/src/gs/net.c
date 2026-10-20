@@ -54,7 +54,7 @@ enum { T_HELLO = 1, T_HELLO_ACK = 2, T_INPUT = 3, T_BYE = 4, T_PING = 5, T_PONG 
 /* The version of what goes over the line. The greeting and its answer carry it, and two copies that differ do not
    start a match (the input packets changed with version 2: times for the ping were added; a copy that read them
    the old way took them for input). 1 was releases 0.1.8 and 0.1.9, which said no version. */
-enum { NET_VERSION_BASE = 6, IN_HEAD = 44 }; /* 3 (0.1.15): the host's battle rules travel with its choices.
+enum { NET_VERSION_BASE = 7, IN_HEAD = 44 }; /* 3 (0.1.15): the host's battle rules travel with its choices.
    4 (0.1.34): a session's start-up no longer follows the player's "Skip logos" / "Skip intro video" (0.1.32 and
    0.1.33 with either on computed another start-up than the other side and the two never agreed again: such a copy
    must not be let into a match); the input packets carry the sender's check value (sync_*, below), 12 bytes more
@@ -62,7 +62,8 @@ enum { NET_VERSION_BASE = 6, IN_HEAD = 44 }; /* 3 (0.1.15): the host's battle ru
    5 (multi-fighter): the rules word carries the host's "every member on the field" and each team's starting health
    (RULE_MULTI, below): a copy that did not read them would set up another battle than the host's.
    6 (N players, SPEC-netplay-n.md): up to ten in a match, the player's number in the input packets' type word, the
-   host's answers say each one's number and how many play; rooms for more than two (T_WAIT); kGone. */
+   host's answers say each one's number and how many play; rooms for more than two (T_WAIT); kGone.
+   7 (SPEC-escala.md): big giants and big stages, always on online. */
 static int sVersionBad; /* the other side answered with another version */
 extern int gPortBt4; /* plat_mem.c: the BT4 disc (PRIVATE) */
 /* BT4 computes another game: its copies meet only each other (0x400 apart, in the greeting and at the service). */

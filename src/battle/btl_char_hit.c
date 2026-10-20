@@ -1225,6 +1225,15 @@ void BtlHit_ApplyHit(HitChr *atk) {
             }
         }
         lvl -= BtlAtk_GetUnk2C(atk);
+#ifdef PORT
+        {
+            extern s32 BtlChar_PortGiant(HitChr *chr);
+
+            if (BtlChar_PortGiant(def)) { /* (a giant takes one armour level more, Tag Team Mod) */
+                lvl++;
+            }
+        }
+#endif
         if (lvl > 0 && (af & 4)) {
             react = 2;
             if (BtlParam_GetFlags(def) & 4) {

@@ -850,6 +850,45 @@ void BtlObjAnim_PlayModel(BobjObj *obj, s32 anim, s32 mode) {
     }
 }
 
+#ifdef PORT
+/* Giants of the Tag Team Mod (SPEC-escala.md): the fighter whose current object this is, when its body is giant size
+   and giants are big (BtlChar_PortGiant, btl_tech_a.c); NULL otherwise. Such an object is drawn and collides at
+   PORT_GIANT times its size around the fighter's feet, while the fighter's own motion stays the model's. */
+#define PORT_GIANT 2.0f
+extern void *BtlChar_FindByObjId(s32 objId);
+extern s32 BtlChar_PortGiant(void *chr);
+extern Vec4 *BtlChar_GetPos(void *chr);
+extern s32 BtlCharApi_GetAction(s32 objId);
+extern void Vec4_Add(Vec4 *dst, Vec4 *a, Vec4 *b);
+extern void Vec4_Sub(Vec4 *dst, Vec4 *a, Vec4 *b);
+extern void Vec4_Scale(Vec4 *dst, Vec4 *src, f32 s);
+
+static void *BtlObj_PortGiantChr(BobjObj *obj) {
+    void *chr;
+
+    if (obj->type != 0) {
+        return NULL;
+    }
+    chr = BtlChar_FindByObjId(obj->id);
+    if (chr == NULL || !BtlChar_PortGiant(chr)) {
+        return NULL;
+    }
+    return chr;
+}
+
+/* A giant's normal attacks (actions 55..179) play at 75 %; rushes, throws, clashes, transformations, intros and
+   ultimates keep their clock (their partner's animation runs with them). */
+static f32 BtlObjAnim_PortStep(BobjObj *obj) {
+    if (BtlObj_PortGiantChr(obj) != NULL && (u32)(BtlCharApi_GetAction(obj->id) - 55) < 125) {
+        return obj->anim.step * 0.75f;
+    }
+    return obj->anim.step;
+}
+#define BOBJ_STEP(obj) BtlObjAnim_PortStep(obj)
+#else
+#define BOBJ_STEP(obj) (obj)->anim.step
+#endif
+
 /* Advances the frame of a self-stepped object by anim.step: once (stops on the last frame) or looping. */
 void BtlObjAnim_Step(BobjObj *obj) {
     BobjAnimPlayer *ap = &obj->anim;
@@ -857,7 +896,7 @@ void BtlObjAnim_Step(BobjObj *obj) {
     switch (ap->mode) {
     case BOBJ_PLAY_ONCE:
         ap->prevFrame = ap->frame;
-        ap->frame = ap->frame + ap->step;
+        ap->frame = ap->frame + BOBJ_STEP(obj);
         if (ap->layer[0].length <= ap->frame) {
             ap->mode = BOBJ_PLAY_NONE;
             ap->frame = ap->layer[0].length;
@@ -868,7 +907,7 @@ void BtlObjAnim_Step(BobjObj *obj) {
         break;
     case BOBJ_PLAY_LOOP:
         ap->prevFrame = ap->frame;
-        ap->frame = ap->frame + ap->step;
+        ap->frame = ap->frame + BOBJ_STEP(obj);
         if (ap->layer[0].length <= ap->frame) {
             ap->frame = 0.0f;
             ap->prevFrame = 0.0f;
@@ -1117,6 +1156,12 @@ void BtlObjBody_UpdateParts(BobjBody *body) {
     Vec4 center;
     Mtx44 m;
     BobjBodyPart *part;
+#ifdef PORT
+    /* (a giant: the node matrices are scaled, so are the corners; the collision tests want unit axes and the half
+       sizes scaled instead, from the model's corner each time) */
+    f32 g = BtlObj_PortGiantChr((BobjObj *)((u8 *)body - 0xF50)) != NULL ? PORT_GIANT : 1.0f; /* (BtlObj + 0xF50) */
+    s32 k;
+#endif
 
     part = body->parts;
     StgAabb_SetEmpty(&body->box);
@@ -1127,6 +1172,18 @@ void BtlObjBody_UpdateParts(BobjBody *body) {
         Mtx_Copy(&m, &part->part->mtx);
         Vec4_Copy((Vec4 *)m.m[3], &center);
         BtlObjObb_SetMtx(&part->box, &m);
+#ifdef PORT
+        if (g != 1.0f) {
+            for (k = 0; k < 3; k++) {
+                part->box.axis[k].x /= g;
+                part->box.axis[k].y /= g;
+                part->box.axis[k].z /= g;
+            }
+            part->box.unk10.x = part->box.local[0].x * g;
+            part->box.unk10.y = part->box.local[0].y * g;
+            part->box.unk10.z = part->box.local[0].z * g;
+        }
+#endif
         BtlObjBody_SetCenter(&part->center, (Vec4 *)m.m[3]);
         ColBox_AddPoint(&body->box, &part->box.world[0]);
         ColBox_AddPoint(&body->box, &part->box.world[1]);
@@ -1245,6 +1302,13 @@ void BtlObjHit_BuildVolumes(BobjObj *obj) {
     BobjWork *work;
     s32 i;
     BobjPart *part;
+#ifdef PORT
+    f32 g = BtlObj_PortGiantChr(obj) != NULL ? PORT_GIANT : 1.0f; /* (a giant: radius and half sizes scaled, unit axes) */
+    s32 k;
+#define BOBJ_G(x) ((x) * g)
+#else
+#define BOBJ_G(x) (x)
+#endif
 
     hit = &obj->hit;
     work = obj->work;
@@ -1268,7 +1332,7 @@ void BtlObjHit_BuildVolumes(BobjObj *obj) {
                 offset.z = hit->z;
                 offset.w = 1.0f;
                 Mtx_MulVec4(&center, &part->mtx, &offset);
-                ColSphere_Set(&work->atkSphere[work->atkSphereCount], &center, hit->r0);
+                ColSphere_Set(&work->atkSphere[work->atkSphereCount], &center, BOBJ_G(hit->r0));
                 ColBounds_OfSphere(&box, &work->atkSphere[work->atkSphereCount]);
                 work->atkSphereCount++;
                 ColBox_AddPointKeepW(&work->atkBox, box.min);
@@ -1280,8 +1344,15 @@ void BtlObjHit_BuildVolumes(BobjObj *obj) {
                 offset.w = 1.0f;
                 Mtx_MulVec4(&center, &part->mtx, &offset);
                 Mtx_Copy(&m, &part->mtx);
+#ifdef PORT
+                for (k = 0; g != 1.0f && k < 3; k++) {
+                    m.m[k][0] /= g;
+                    m.m[k][1] /= g;
+                    m.m[k][2] /= g;
+                }
+#endif
                 Vec4_Copy((Vec4 *)m.m[3], &center);
-                ColObb_Init(&work->atkObb[work->atkObbCount], &center, hit->r0, hit->r1, hit->r2);
+                ColObb_Init(&work->atkObb[work->atkObbCount], &center, BOBJ_G(hit->r0), BOBJ_G(hit->r1), BOBJ_G(hit->r2));
                 ColObb_Update(&work->atkObb[work->atkObbCount], &m);
                 ColBounds_OfObb(&box, &work->atkObb[work->atkObbCount]);
                 work->atkObbCount++;
@@ -1339,9 +1410,52 @@ void BtlObjXf_Reset(BobjObj *obj) {
     Vec4_Copy(&obj->xf.rootPos, &xf->pos);
 }
 
+#ifdef PORT
+/* A giant's matrix: scale times PORT_GIANT, the position moved away from the fighter's feet (pose position + move)
+   as much, for this call only (pos and scale keep the game's values). Its body sizes become the model's times
+   PORT_GIANT (from the model each time, never compounded). Returns 1 when it did, keeping pos and scale. */
+static s32 BtlObjXf_PortGiant(BobjObj *obj, Vec4 *keepPos, f32 *keepScale) {
+    void *chr = BtlObj_PortGiantChr(obj);
+    BobjBody *body = &obj->body;
+    BobjMdl *mdl = &obj->mdl;
+    Vec4 *pose;
+    Vec4 anchor;
+    s32 i;
+
+    if (chr == NULL) {
+        return 0;
+    }
+    pose = BtlChar_GetPos(chr); /* [0] position, [2] move */
+    Vec4_Copy(keepPos, &obj->xf.pos);
+    *keepScale = obj->xf.scale;
+    Vec4_Add(&anchor, &pose[0], &pose[2]);
+    Vec4_Sub(&obj->xf.pos, &obj->xf.pos, &anchor);
+    Vec4_Scale(&obj->xf.pos, &obj->xf.pos, PORT_GIANT);
+    Vec4_Add(&obj->xf.pos, &obj->xf.pos, &anchor);
+    obj->xf.scale *= PORT_GIANT;
+    for (i = 0; i < 4; i++) {
+        body->size[i] = mdl->model->size[i] * PORT_GIANT;
+    }
+    if (BtlObjBody_Exists(obj)) {
+        body->unkA0 = mdl->body->unk04 * PORT_GIANT;
+    }
+    if (mdl->param->radius <= 0.0f) {
+        body->radius = body->size[3] + body->size[3];
+    } else {
+        body->radius = mdl->param->radius * PORT_GIANT;
+    }
+    return 1;
+}
+#endif
+
 /* Rebuilds the object's matrix and its inverse from pos / rot / scale. The model faces -Z, so the yaw is turned
    by pi. */
 void BtlObjXf_Update(BobjObj *obj) {
+#ifdef PORT
+    Vec4 keepPos;
+    f32 keepScale;
+    s32 giant = BtlObjXf_PortGiant(obj, &keepPos, &keepScale);
+#endif
     Vec4 *rot = &obj->xf.rot;
     BobjXf *xf = &obj->xf;
     Vec4 *mtxRot = &obj->xf.mtxRot;
@@ -1367,6 +1481,14 @@ void BtlObjXf_Update(BobjObj *obj) {
     Vu0Cur_StoreMtx(mtx);
     Mtx_InverseRT(&obj->xf.inv, mtx);
     obj->xf.same = ~changed;
+#ifdef PORT
+    if (giant) {
+        obj->xf.pos.x = keepPos.x;
+        obj->xf.pos.y = keepPos.y;
+        obj->xf.pos.z = keepPos.z;
+        obj->xf.scale = keepScale;
+    }
+#endif
 }
 
 /* Sets the object's matrix directly, and its inverse. */

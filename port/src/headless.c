@@ -520,3 +520,20 @@ void Port_SongDebug(int state, int idx, int px, int py, int cx, int cy) {
                 px + cx, py + cy);
     }
 }
+
+/* BT3_STAGE_DUMP=<folder> (tests): src/battle/stg_d_b.c writes a stage file there as big stages found it (<stage>_0.bin)
+   and as they left it (<stage>_1.bin), to compare with research/tests/stage_scale_check.py. */
+void Port_StageDump(int stage, int after, unsigned addr, int size) {
+    char name[1024];
+    FILE *fp;
+
+    if (getenv("BT3_STAGE_DUMP") == NULL) {
+        return;
+    }
+    snprintf(name, sizeof(name), "%s/%d_%d.bin", getenv("BT3_STAGE_DUMP"), stage, after);
+    fp = fopen(name, "wb");
+    if (fp != NULL) {
+        fwrite(Port_Ptr(addr), 1, (size_t)size, fp);
+        fclose(fp);
+    }
+}

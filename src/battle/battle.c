@@ -155,6 +155,10 @@ s32 Battle_Init(void) {
         BattleSetup_PortSpread();
         Battle_Load();
         StgFx_Init();
+        {
+            extern void BtlStage_PortBig(s32 change); /* stg_d_b.c: big stages (Tag Team Mod) */
+            BtlStage_PortBig(0);
+        }
         StgModel_InitStage();
         BtlChar_AllocAll(BattleSide_GetCount()); /* one fighter per side record: 2 unless every member is on the field */
     }

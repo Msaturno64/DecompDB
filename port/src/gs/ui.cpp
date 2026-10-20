@@ -79,6 +79,8 @@ int PortMulti_HandicapSetting(int team);       // multi_fighter.c: a team's star
 int PortMulti_FfaSetting(void);                // multi_fighter.c: every fighter on its own (free for all)
 void PortMulti_FfaSettingSet(int on);
 void PortMulti_HandicapSet(int team, int percent);
+int PortScale_Setting(int which);              // multi_fighter.c: 0 big giants, 1 big stages (Tag Team Mod)
+void PortScale_SettingSet(int which, int on);
 extern int gsInterp;                           // gs_draw.c: in-between pictures on (1) / off (0); -1 before the first frame
 void Port_SettingsWrite(void);
 int Port_LobbyStart(int host, const char *address, int port); // gs/net.c
@@ -1456,6 +1458,20 @@ static void misc_tab(void) {
                                       "100%% gives it more). For uneven teams: for example 200%% for the one fighting 1 against 2.");
             }
         }
+    }
+    {
+        bool giants = PortScale_Setting(0) != 0, stages = PortScale_Setting(1) != 0;
+        if (ImGui::Checkbox("Big giants", &giants)) {
+            PortScale_SettingSet(0, giants);
+        }
+        ImGui::SetItemTooltip("As in the Tag Team Mod: the giants (Hildegarn, the Great Apes...) are twice their size,\n"
+                              "their normal attacks are slower and hit harder, they take less stagger and the camera\n"
+                              "follows them from further away. Online it is always on. Applies from the next battle.");
+        if (ImGui::Checkbox("Big stages", &stages)) {
+            PortScale_SettingSet(1, stages);
+        }
+        ImGui::SetItemTooltip("As in the Tag Team Mod: every stage is twice its size (stages with moving scenery stay\n"
+                              "as they are). Online it is always on. Applies from the next battle.");
     }
     {
         bool chk = sUpdCheck != 0;

@@ -180,6 +180,11 @@ void BtlLoad_BeginStageSwap(void) {
 
 /* Brings them back up on the new stage. */
 void BtlLoad_EndStageSwap(void) {
+#ifdef PORT
+    extern void BtlStage_PortBig(s32 change); /* stg_d_b.c: big stages (Tag Team Mod), as the stage before */
+
+    BtlStage_PortBig(1);
+#endif
     StgModel_InitStage();
     BtlChars_OnStageLoaded();
     StgNav_Rebind();

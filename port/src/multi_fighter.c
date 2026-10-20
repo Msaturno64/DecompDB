@@ -1187,6 +1187,44 @@ void PortMulti_FfaSettingSet(int on) {
     Port_SettingsWrite();
 }
 
+/* "Big giants" / "Big stages" (settings scale_giants / scale_stages, on unless set), as in the Tag Team Mod
+   (SPEC-escala.md). Online both are always on, so every copy plays the same; BT3_SCALE=<0|1> (tests) sets both.
+   Latched as a battle is set up (PortMulti_WantAll): gPortGiants is read by the game's own code (bobj_a.c and the
+   others that test BtlChar_PortGiant), gPortBigStages by the stage load. */
+int gPortGiants, gPortBigStages;
+PORT_HOST static int sScale[2] = {-1, -1};
+
+int PortScale_Setting(int which) {
+    static const char *const kName[2] = {"scale_giants", "scale_stages"};
+
+    if (sScale[which] < 0) {
+        sScale[which] = Port_Setting(kName[which], 1) != 0;
+    }
+    return sScale[which];
+}
+
+void PortScale_SettingSet(int which, int on) {
+    static const char *const kName[2] = {"scale_giants", "scale_stages"};
+
+    sScale[which] = on != 0;
+    Port_SettingSave(kName[which], sScale[which]);
+    Port_SettingsWrite();
+}
+
+static void scale_latch(void) {
+    extern int Port_NetActive(void); /* gs/net.c */
+    const char *test = getenv("BT3_SCALE");
+
+    if (test != NULL) {
+        gPortGiants = gPortBigStages = atoi(test) != 0;
+    } else if (Port_NetActive()) {
+        gPortGiants = gPortBigStages = 1;
+    } else {
+        gPortGiants = PortScale_Setting(0);
+        gPortBigStages = PortScale_Setting(1);
+    }
+}
+
 /* "Starting health" of each team (settings multi_hp0 / multi_hp1, percent, 100 unless set): every member of the
    team starts with that share of its health, over 100 too (BtlMember_LoadParams raises the maximum with it), for
    uneven teams (multi-fighter T1.9: no automatic handicap, it is a setting). Read when a battle is set up. */
@@ -1245,6 +1283,7 @@ int PortMulti_WantAll(void) {
     extern int Battle_GetMode(void); /* src/battle/battle_work.c: BTL_MODE_*, 0 versus */
     extern int Port_NetActive(void); /* gs/net.c */
 
+    scale_latch();
     if (getenv("BT3_TEAMS") == NULL) {
         extern int Port_NetMultiAll(void); /* gs/net.c: the host's, from its rules word (both copies the same) */
 
@@ -1363,6 +1402,11 @@ void PortMulti_DemoTeams(const char *teams) {
     if (getenv("BT3_TEAMS_TIME") != NULL) {
         extern int GAME_PTR Battle_GetSetup(void); /* src/battle/battle_work.c */
         Battle_GetSetup()[4] = atoi(getenv("BT3_TEAMS_TIME"));
+    }
+    /* BT3_TEAMS_STAGE=<n> (tests): the stage (BattleRule.stage and curStage, setup + 0x1C / + 0x28) */
+    if (getenv("BT3_TEAMS_STAGE") != NULL) {
+        extern int GAME_PTR Battle_GetSetup(void); /* src/battle/battle_work.c */
+        Battle_GetSetup()[7] = Battle_GetSetup()[10] = atoi(getenv("BT3_TEAMS_STAGE"));
     }
     BattleSetup_Finish();
     gPortMultiAll = 1;

@@ -77,6 +77,19 @@ void BtlChar_ObjToPose(BtlCtlChr *chr) {
     BtlCtlNode *node;
     Quat q;
 
+#ifdef PORT
+    extern s32 BtlChar_PortGiant(BtlCtlChr *chr);
+
+    if (BtlChar_PortGiant(chr)) { /* (a giant is drawn twice as big around its feet, bobj_a.c BtlObjXf_Update: the
+                                     pose takes the model's own root motion, half of what the drawing moved) */
+        Vec4 d;
+
+        Vec4_Add(&d, &pose->pos, &pose->move);
+        Vec4_Sub(&d, &obj->outPos, &d);
+        Vec4_Scale(&d, &d, 0.5f);
+        Vec4_Add(&pose->pos, &pose->pos, &d);
+    } else
+#endif
     Vec4_Sub(&pose->pos, &obj->outPos, &pose->move);
     Vec4_Copy(&pose->rot, &obj->rot);
     node = BtlObj_GetNode(obj, 0);

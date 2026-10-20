@@ -1,6 +1,21 @@
 #include "common.h"
 #include "battle/btl_char_cam_int.h"
 
+#ifdef PORT
+/* Giants of the Tag Team Mod (SPEC-escala.md): the follow camera of a giant sits 1.5 times as far from what it looks
+   at (before the smoothing, the arena limit and the terrain test of ChrCam_Update). */
+static void ChrCam_PortGiantFar(ChrCamChr *chr, Vec4 *eye, Vec4 *target) {
+    extern s32 BtlChar_PortGiant(ChrCamChr *chr);
+    Vec4 d;
+
+    if (BtlChar_PortGiant(chr)) {
+        Vec4_Sub(&d, eye, target);
+        Vec4_Scale(&d, &d, 1.5f);
+        Vec4_Add(eye, target, &d);
+    }
+}
+#endif
+
 /* The fighter camera's modes, per-frame update and cut control, 0x1C5840-0x1C7B30: the last part of
  * btl_char_cam.c (see the note at the top of that file). */
 
@@ -261,6 +276,9 @@ void ChrCam_CalcLockOn(ChrCamChr *chr, Vec4 *eye, Vec4 *rot, Vec4 *target) {
     rot->z = 0.0f;
     rot->w = 0.0f;
     eye->y += ChrCam_GetBob(chr);
+#ifdef PORT
+    ChrCam_PortGiantFar(chr, eye, target);
+#endif
 }
 
 /* Free (no lock-on) camera: behind the fighter at cam->yaw, at the preset distance. */
@@ -303,6 +321,9 @@ void ChrCam_CalcFree(ChrCamChr *chr, Vec4 *eye, Vec4 *rot, Vec4 *target) {
     rot->z = 0.0f;
     rot->w = 0.0f;
     eye->y += ChrCam_GetBob(chr);
+#ifdef PORT
+    ChrCam_PortGiantFar(chr, eye, target);
+#endif
 }
 
 /* Pushes the eye back onto a vertical plane behind model node 0x30 so the camera never passes it. */
