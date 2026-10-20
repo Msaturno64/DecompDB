@@ -8,11 +8,14 @@
 // code, the two player names, the addresses each game reported, and the host's address as Cloudflare saw it.
 //
 // Requests are JSON over POST:
-//   /v1/host   {v, name, addrs}        -> {code, key, you, turn?}
+//   /v1/host   {v, name, addrs, players?}  -> {code, key, you, turn?}   (players: 2 .. 10, 2 if not said)
 //   /v1/addrs  {code, key, addrs}      -> {}       (the host, once it has more addresses: its relay address)
-//   /v1/join   {v, code, name, addrs}  -> {key, you, peer: {name, addrs}}
-//   /v1/poll   {code, key}             -> {peer: {name, addrs} | null}     (the host asks until someone has joined)
-//   /v1/leave  {code, key}             -> {}
+//   /v1/join   {v, code, name, addrs}  -> {key, you, peer: {name, addrs}, seat?, size?}   (seat: in a room for more
+//       than two, this player's number, 1 .. size - 1)
+//   /v1/poll   {code, key}             -> {peer: {name, addrs} | null}     (the host asks until someone has joined;
+//       the host of a room for more than two also gets {seats, size}, and in peer every seat's addresses in one list)
+//   /v1/leave  {code, key}             -> {}       (a seat of a room for more than two: that seat only)
+//   (a room for more than two gets no relay: its players must reach the host directly)
 //   /v1/relay  {code, key}             -> {turn} | {noRelay}   (the host, once someone has joined and the two did not
 //       reach each other directly: a relay login, asked for only then. A game that sends `rel` >= 129 gets none
 //       with its room; an older one does, as before. The one who joined learns the relay address by its poll.)
@@ -342,14 +345,47 @@ async function joinRoom(env, room, ip, addrs, name) {
     return { key, you: ip, peer: { name: room.host_name, addrs: shown(hostAddrs, same) } };
 }
 
-// Makes a room (queue: null for one with a code to hand on). null if no code could be found for it.
-async function makeRoom(env, ip, now, v, name, addrs, queue, who, wantRelay) {
+// A room for more than two: puts a player into its first free seat (1 .. size - 1). null if it is full.
+async function joinSeat(env, room, ip, addrs, name) {
+    const key = randomText(24, ALPHABET);
+    const hostAddrs = JSON.parse(room.host_addrs);
+    const same = sameNetwork(ip, addrs, room.ip, hostAddrs);
+    const kept = shown(addrs, same);
+    if (/^[0-9.]{7,15}$/.test(ip)) {
+        kept.push("seen=" + ip);
+    }
+    if (same) {
+        kept.push("same=1");
+    }
+    for (let attempt = 0; attempt < 5; attempt++) {
+        const taken = await env.DB.prepare("SELECT seat FROM seats WHERE code = ?").bind(room.code).all();
+        const used = ((taken && taken.results) || []).map((r) => r.seat);
+        let seat = 1;
+        while (used.includes(seat)) {
+            seat++;
+        }
+        if (seat >= room.size) {
+            return null;
+        }
+        try {
+            await env.DB.prepare("INSERT INTO seats (code, seat, key, name, addrs) VALUES (?, ?, ?, ?, ?)").bind(room.code, seat, key, cleanName(name), JSON.stringify(kept)).run();
+            return { key, you: ip, seat, size: room.size, peer: { name: room.host_name, addrs: shown(hostAddrs, same) } };
+        } catch (e) {
+            // someone else took that seat in the same moment: the next one
+        }
+    }
+    return null;
+}
+
+// Makes a room (queue: null for one with a code to hand on; size: how many play, 2 .. 10). null if no code could be
+// found for it.
+async function makeRoom(env, ip, now, v, name, addrs, queue, who, wantRelay, size = 2) {
     const key = randomText(24, ALPHABET);
     for (let attempt = 0; attempt < 5; attempt++) {
         const code = randomText(6, ALPHABET);
         try {
-            await env.DB.prepare("INSERT INTO rooms (code, made, version, ip, host_key, host_name, host_addrs, queue, who) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-                .bind(code, now, v, ip, key, cleanName(name), JSON.stringify(addrs), queue, who).run();
+            await env.DB.prepare("INSERT INTO rooms (code, made, version, ip, host_key, host_name, host_addrs, queue, who, size) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+                .bind(code, now, v, ip, key, cleanName(name), JSON.stringify(addrs), queue, who, size).run();
             if (!wantRelay) {
                 return { code, key, you: ip };
             }
@@ -524,11 +560,13 @@ export default {
             if ((await countUse(env, "host:" + ip, now - (now % 3600))) > HOSTS_PER_HOUR) {
                 return reply({ error: "busy" }, 429);
             }
-            if (now % 50 === 0) { // now and then: counts of past days are thrown away
+            if (now % 50 === 0) { // now and then: counts of past days are thrown away (and the seats of rooms gone)
                 await env.DB.prepare("DELETE FROM used WHERE slot < ? AND slot > 0 AND what != 'relayoff'").bind(now - 2 * 86400).run().catch(() => {});
                 await env.DB.prepare("DELETE FROM used WHERE slot = 0 AND what LIKE 'ended:%' AND n < ?").bind(now - 2 * 86400).run().catch(() => {});
+                await env.DB.prepare("DELETE FROM seats WHERE code NOT IN (SELECT code FROM rooms)").run().catch(() => {});
             }
-            const made = await makeRoom(env, ip, now, body.v, body.name, addrs, null, null, !asksLater(body));
+            const size = Number.isInteger(body.players) ? Math.min(10, Math.max(2, body.players)) : 2;
+            const made = await makeRoom(env, ip, now, body.v, body.name, addrs, null, null, !asksLater(body) && size === 2, size);
             return made ? reply(made) : reply({ error: "busy" }, 503);
         }
         if (what === "queues") { // how many wait in each queue (for the window)
@@ -615,15 +653,23 @@ export default {
             if (body.v !== room.version) {
                 return reply({ error: "version" }, 409);
             }
-            const joined = await joinRoom(env, room, ip, addrs, body.name);
+            const joined = (room.size ?? 2) > 2 ? await joinSeat(env, room, ip, addrs, body.name) : await joinRoom(env, room, ip, addrs, body.name);
             return joined ? reply(joined) : reply({ error: "full" }, 409);
         }
 
         const isHost = body.key === room.host_key, isJoin = room.join_key !== null && body.key === room.join_key;
-        if (!isHost && !isJoin) {
+        const seat = !isHost && !isJoin && (room.size ?? 2) > 2 ? await env.DB.prepare("SELECT * FROM seats WHERE code = ? AND key = ?").bind(code, String(body.key ?? "")).first() : null;
+        if (!isHost && !isJoin && !seat) {
             return reply({ error: "no room" }, 404);
         }
         if (what === "poll") {
+            if (seat) { // one of a room for more than two: the host, as for the one who joins a room for two
+                return reply({ peer: { name: room.host_name, addrs: shown(JSON.parse(room.host_addrs), JSON.parse(seat.addrs).includes("same=1")) } });
+            }
+            if (isHost && (room.size ?? 2) > 2) { // the host of a room for more: everyone who has joined, all addresses in one list
+                const rows = ((await env.DB.prepare("SELECT * FROM seats WHERE code = ? ORDER BY seat").bind(code).all()).results) || [];
+                return reply({ seats: rows.length, size: room.size, peer: rows.length > 0 ? { name: rows[0].name, addrs: rows.flatMap((r) => shown(JSON.parse(r.addrs), true)) } : null });
+            }
             if (isHost) {
                 return reply({ peer: room.join_key !== null ? { name: room.join_name, addrs: shown(JSON.parse(room.join_addrs), true) } : null });
             }
@@ -646,7 +692,12 @@ export default {
             return reply({});
         }
         if (what === "leave") {
+            if (seat) { // (one of the players of a room for more than two: their seat only)
+                await env.DB.prepare("DELETE FROM seats WHERE code = ? AND seat = ?").bind(code, seat.seat).run();
+                return reply({});
+            }
             await env.DB.prepare("DELETE FROM rooms WHERE code = ?").bind(code).run();
+            await env.DB.prepare("DELETE FROM seats WHERE code = ?").bind(code).run().catch(() => {});
             return reply({});
         }
         return reply({ error: "bad request" }, 404);

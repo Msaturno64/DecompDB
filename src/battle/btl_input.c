@@ -571,6 +571,14 @@ void BtlInput_Sample(BtlInputChr *chr) {
             in->rawStickX = 0x7F;
             in->rawStickY = 0x7F;
         }
+        /* A player who left an online match of more than two (gs/net.c, NET_GONE): the host goes on sending their
+           pad with a mark in its last pressure byte, and from the blank the mark arrives the computer plays their
+           fighter, on every copy at the same blank. */
+        if (Port_NetActive() && pad->data[17] == 0x47 && !chr->injectOn) {
+            extern void Port_NetCpuTakes(int pad);
+            chr->injectOn = 1;
+            Port_NetCpuTakes(chr->pad);
+        }
     }
 #endif
     BtlInput_BuildRecord(chr);

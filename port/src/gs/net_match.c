@@ -45,7 +45,7 @@ static struct {
     SDL_AtomicInt cancel, gen; /* gen: which search is the current one (a thread of an earlier one writes nothing) */
     SDL_AtomicInt sockBusy;    /* the thread is talking to the relay on the match's socket: the lobby keeps off it */
     MatchStatus st;
-    int role, sock, localPort, version;
+    int role, sock, localPort, version, players;
     char code[8], name[20]; /* (role 3, a quick match: `code` is the queue's name until the service gives a room) */
     char queue[8];
 } sM;
@@ -451,7 +451,7 @@ static int lan_address(int localPort, char *out, size_t size) {
 /* ---- the thread ---- */
 
 static int SDLCALL match_thread(void *arg) {
-    char pub[64] = "", lan[64] = "", addrs[160], body[512], answer[1024], key[40] = "", you[64] = "", name[20], relayAddr[64] = "";
+    char pub[64] = "", lan[64] = "", addrs[160], body[512], answer[4096], key[40] = "", you[64] = "", name[20], relayAddr[64] = "";
     int i, n = 0, hosting, searches = 0;
 
     SDL_SetTLS(&sMine, arg, NULL);
@@ -519,7 +519,7 @@ again:
     }
     if (hosting) {
         if (sM.role == 1) {
-            SDL_snprintf(body, sizeof(body), "{\"v\":%d,\"rel\":%d,\"name\":\"%s\",\"addrs\":[%s]}", sM.version, PORT_RELEASE, name, addrs);
+            SDL_snprintf(body, sizeof(body), "{\"v\":%d,\"rel\":%d,\"name\":\"%s\",\"addrs\":[%s],\"players\":%d}", sM.version, PORT_RELEASE, name, addrs, sM.players);
             if (!http_post("host", body, answer, sizeof(answer))) {
                 set_state(-1, "The matchmaking service could not be reached (is the network up?).");
                 return 0;
@@ -580,6 +580,22 @@ again:
                 if (json_peer(answer, &st)) {
                     if (STOPPED()) {
                         break;
+                    }
+                    if (sM.players > 2) {
+                        /* A room for more than two: everyone who has joined so far, all their addresses (the lobby
+                           knocks at each). It is asked on until the lobby ends the search: when all are there. */
+                        const char *seats = SDL_strstr(answer, "\"seats\":");
+                        SDL_LockMutex(sM.lock);
+                        if (st.peerCount != sM.st.peerCount || SDL_memcmp(st.peerAddr, sM.st.peerAddr, sizeof(st.peerAddr)) != 0) {
+                            SDL_strlcpy(sM.st.peerName, st.peerName, sizeof(sM.st.peerName));
+                            SDL_memcpy(sM.st.peerAddr, st.peerAddr, sizeof(st.peerAddr));
+                            sM.st.peerCount = st.peerCount;
+                            sM.st.addrGen += sM.st.state == 3;
+                            sM.st.state = 3;
+                        }
+                        sM.st.seats = seats != NULL ? SDL_atoi(seats + 8) : 0;
+                        SDL_UnlockMutex(sM.lock);
+                        continue;
                     }
                     SDL_LockMutex(sM.lock);
                     SDL_strlcpy(sM.st.peerName, st.peerName, sizeof(sM.st.peerName));
@@ -717,7 +733,7 @@ joined:
 
 /* Starts looking: role 1 makes a room, role 2 joins room `code`. `sock` is the match's own UDP socket (not blocking),
    bound to `localPort`. */
-void Match_Begin(int role, int sock, int localPort, const char *code, const char *name, int version) {
+void Match_Begin(int role, int sock, int localPort, const char *code, const char *name, int version, int players) {
     int i, n = 0;
 
     if (sM.lock == NULL) {
@@ -735,6 +751,7 @@ void Match_Begin(int role, int sock, int localPort, const char *code, const char
     sM.sock = sock;
     sM.localPort = localPort;
     sM.version = version;
+    sM.players = role == 1 && players > 2 && players <= 10 ? players : 2;
     sM.code[0] = '\0';
     for (i = 0; code != NULL && code[i] != '\0' && n < 6; i++) { /* letters and digits, capitals */
         char c = code[i];

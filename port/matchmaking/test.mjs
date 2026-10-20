@@ -3,16 +3,19 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import nodeCrypto from "node:crypto";
 const src = fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8").replace("export default", "const worker =") + "\nexport { worker, network, isPrivate, sameNetwork, shown };";
 const copy = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "worker-test-")), "worker.mjs");
 fs.writeFileSync(copy, src);
-const { worker, network, sameNetwork } = await import(copy);
-const rooms = new Map(), used = new Map();
+const { worker, network, sameNetwork } = await import(pathToFileURL(copy).href);
+const rooms = new Map(), used = new Map(), seats = new Map();
 let rowids = 0;
 const DB = { prepare(sql) { return { args: [], bind(...a) { this.args = a; return this; },
     async all() { const a = this.args;
         if (sql.startsWith("SELECT queue, COUNT")) { const m = new Map(); for (const r of rooms.values()) { if (r.queue !== null && r.version === a[0] && r.join_key === null && r.made >= a[1]) m.set(r.queue, (m.get(r.queue) ?? 0) + 1); } return { results: [...m].map(([queue, n]) => ({ queue, n })) }; }
+        if (sql.startsWith("SELECT seat FROM seats")) { return { results: [...seats.values()].filter((r) => r.code === a[0]).map((r) => ({ seat: r.seat })) }; }
+        if (sql.startsWith("SELECT * FROM seats WHERE code = ? ORDER BY seat")) { return { results: [...seats.values()].filter((r) => r.code === a[0]).sort((x, y) => x.seat - y.seat) }; }
         throw new Error("all: " + sql); },
     async first() { const a = this.args;
         if (sql.startsWith("SELECT COUNT(*) AS n FROM rooms WHERE queue") && sql.includes("rowid <")) { const mine = rooms.get(a[3]); return { n: [...rooms.values()].filter((r) => r.queue === a[0] && r.version === a[1] && r.join_key === null && r.made >= a[2] && mine && r.rowid < mine.rowid).length }; }
@@ -20,6 +23,7 @@ const DB = { prepare(sql) { return { args: [], bind(...a) { this.args = a; retur
         if (sql.startsWith("SELECT * FROM rooms WHERE queue")) { const l = [...rooms.values()].filter((r) => r.queue === a[0] && r.version === a[1] && r.join_key === null && r.made >= a[2]).sort((x, y) => x.rowid - y.rowid); return l[0] ?? null; }
         if (sql.startsWith("SELECT COUNT")) { return { n: [...rooms.values()].filter((r) => r.ip === a[0]).length }; }
         if (sql.startsWith("SELECT * FROM rooms")) { const r = rooms.get(a[0]); return r && r.made >= a[1] ? r : null; }
+        if (sql.startsWith("SELECT * FROM seats WHERE code = ? AND key")) { return [...seats.values()].find((r) => r.code === a[0] && r.key === a[1]) ?? null; }
         if (sql.startsWith("SELECT n FROM used")) { const n = used.get(a[0] + "|" + a[1]); return n ? { n } : null; }
         if (sql.startsWith("INSERT INTO used")) { const k = a[0] + "|" + a[1]; used.set(k, (used.get(k) ?? 0) + 1); return { n: used.get(k) }; }
         throw new Error("first: " + sql); },
@@ -27,7 +31,11 @@ const DB = { prepare(sql) { return { args: [], bind(...a) { this.args = a; retur
         if (sql.startsWith("DELETE FROM rooms WHERE made")) { for (const [k, r] of rooms) { if (r.made < a[0]) rooms.delete(k); } return {}; }
         if (sql.startsWith("DELETE FROM used")) { return {}; }
         if (sql.startsWith("INSERT INTO used")) { used.set(a[0] + "|" + a[1], a[2]); return {}; }
-        if (sql.startsWith("INSERT INTO rooms")) { if (rooms.has(a[0])) throw new Error("taken"); rooms.set(a[0], { code: a[0], made: a[1], version: a[2], ip: a[3], host_key: a[4], join_key: null, host_name: a[5], join_name: null, host_addrs: a[6], join_addrs: null, queue: a[7] ?? null, who: a[8] ?? null, rowid: ++rowids }); return {}; }
+        if (sql.startsWith("INSERT INTO rooms")) { if (rooms.has(a[0])) throw new Error("taken"); rooms.set(a[0], { code: a[0], made: a[1], version: a[2], ip: a[3], host_key: a[4], join_key: null, host_name: a[5], join_name: null, host_addrs: a[6], join_addrs: null, queue: a[7] ?? null, who: a[8] ?? null, size: a[9] ?? null, rowid: ++rowids }); return {}; }
+        if (sql.startsWith("INSERT INTO seats")) { const k = a[0] + "|" + a[1]; if (seats.has(k)) throw new Error("taken"); seats.set(k, { code: a[0], seat: a[1], key: a[2], name: a[3], addrs: a[4] }); return {}; }
+        if (sql.startsWith("DELETE FROM seats WHERE code = ? AND seat")) { seats.delete(a[0] + "|" + a[1]); return {}; }
+        if (sql.startsWith("DELETE FROM seats WHERE code = ?")) { for (const [k, r] of seats) { if (r.code === a[0]) seats.delete(k); } return {}; }
+        if (sql.startsWith("DELETE FROM seats WHERE code NOT IN")) { return {}; }
         if (sql.startsWith("DELETE FROM rooms WHERE who")) { for (const [k, r] of rooms) { if (r.who === a[0] && r.queue !== null && r.join_key === null) rooms.delete(k); } return {}; }
         if (sql.startsWith("DELETE FROM rooms WHERE code = ? AND join_key IS NULL")) { const r = rooms.get(a[0]); if (r && r.join_key === null) { rooms.delete(a[0]); return { meta: { changes: 1 } }; } return { meta: { changes: 0 } }; }
         if (sql.startsWith("UPDATE rooms SET join_key")) { const r = rooms.get(a[3]); if (!r || r.join_key !== null) return { meta: { changes: 0 } }; r.join_key = a[0]; r.join_name = a[1]; r.join_addrs = a[2]; return { meta: { changes: 1 } }; }
@@ -62,6 +70,21 @@ h = await post("host", "2001:db8:1:2::10", { v: 3, name: "H", addrs: ["198.51.10
 j = await post("join", "198.51.100.1", { v: 3, code: h.code, name: "J", addrs: ["198.51.100.1:8000", "192.168.1.11:8000"] });
 check("IPv6 and IPv4 of one household: local address handed over", j.peer.addrs.includes("192.168.1.10:7000"));
 check("sameNetwork: two IPv6 of one network", sameNetwork("2001:db8:1:2::10", [], "2001:db8:1:2:5::1", []));
+// a room for three: two seats, then full; the host sees both players' addresses; a seat given up is free again
+h = await post("host", "198.51.100.40", { v: 3, name: "H", addrs: ["198.51.100.40:7000"], players: 3 });
+let s1 = await post("join", "203.0.113.41", { v: 3, code: h.code, name: "A", addrs: ["203.0.113.41:8000"] });
+let s2 = await post("join", "203.0.113.42", { v: 3, code: h.code, name: "B", addrs: ["203.0.113.42:8000"] });
+let s3 = await post("join", "203.0.113.43", { v: 3, code: h.code, name: "C", addrs: ["203.0.113.43:8000"] });
+check("room for three: seats 1 and 2, then full", s1.seat === 1 && s2.seat === 2 && s1.size === 3 && s3.error === "full");
+check("room for three: each seat is told the host", JSON.stringify(s2.peer.addrs) === JSON.stringify(["198.51.100.40:7000"]));
+p = await post("poll", "198.51.100.40", { code: h.code, key: h.key });
+check("room for three: the host is told both players", p.seats === 2 && p.size === 3 && JSON.stringify(p.peer.addrs) === JSON.stringify(["203.0.113.41:8000", "seen=203.0.113.41", "203.0.113.42:8000", "seen=203.0.113.42"]));
+p = await post("poll", "203.0.113.42", { code: h.code, key: s2.key });
+check("room for three: a seat's poll gives the host", JSON.stringify(p.peer.addrs) === JSON.stringify(["198.51.100.40:7000"]));
+await post("leave", "203.0.113.41", { code: h.code, key: s1.key });
+s3 = await post("join", "203.0.113.43", { v: 3, code: h.code, name: "C", addrs: ["203.0.113.43:8000"] });
+check("room for three: a seat given up is taken again, the room stays", s3.seat === 1 && (await post("poll", "198.51.100.40", { code: h.code, key: h.key })).seats === 2);
+check("room for two still as always: no seat", (await post("join", "203.0.113.44", { v: 3, code: (await post("host", "198.51.100.45", { v: 3, name: "H", addrs: ["198.51.100.45:7000"] })).code, name: "D", addrs: ["203.0.113.44:8000"] })).seat === undefined);
 // wrong codes
 let last;
 for (let i = 0; i < 31; i++) { last = await post("join", "192.0.2.77", { v: 3, code: "ZZZZZ" + "23456789ABCDEFGHJKMNPQRSTUVWXYZ"[i], name: "X", addrs: ["192.0.2.77:1"] }); }

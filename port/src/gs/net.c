@@ -48,7 +48,9 @@ enum { PAD = 18, RING = 4096, REDUNDANT = 16, MAGIC = 0x4E335442 /* "BT3N" */ };
 enum { T_HELLO = 1, T_HELLO_ACK = 2, T_INPUT = 3, T_BYE = 4, T_PING = 5, T_PONG = 6, T_CONFIG = 7, T_CONFIG_ACK = 8,
        T_PUNCH = 9 /* nothing to read: sent so that the sender's router lets the other side's packets in (room codes) */,
        T_CHAT = 10 /* a line of text between the players (net_chat.c): its number, its length, its bytes. Not part of
-                      the game: a copy without the chat ignores it, so NET_VERSION stays */ };
+                      the game: a copy without the chat ignores it, so NET_VERSION stays */,
+       T_WAIT = 11 /* the host's lobby to a player who greeted it while the room is not full yet: how many are there,
+                      of how many (Port_LobbyPoll) */ };
 /* The version of what goes over the line. The greeting and its answer carry it, and two copies that differ do not
    start a match (the input packets changed with version 2: times for the ping were added; a copy that read them
    the old way took them for input). 1 was releases 0.1.8 and 0.1.9, which said no version. */
@@ -345,6 +347,7 @@ static int auto_delay(int rttMs) {
    others learn it, and their own player number, from the host's answer to their greeting. */
 enum { NMAX = 10 };
 static int sCount = 2;
+static int sLobbyPlayers = 2; /* the host's lobby: how many are to play (Port_LobbyPlayersSet) */
 static int sMode = -1; /* 0 off, 1 host, 2 join */
 static int sSock = -1, sMe, sDelay = 2, sConnected, sLoss, sLagMs;
 static struct sockaddr_in sPeer;            /* the host for the others; for the host, player 1 */
@@ -357,6 +360,10 @@ static FILE *sScript;
 static uint64_t sWaitNs, sWaits;
 
 static const uint8_t kIdle[PAD] = {0xFF, 0xFF, 0x80, 0x80, 0x80, 0x80};
+/* NET_GONE: the pad of a player who left a match of more than two (left_fill): idle, with a mark in the last
+   pressure byte that makes the computer play their fighter (src/battle/btl_input.c, BtlInput_Sample). */
+static const uint8_t kGone[PAD] = {0xFF, 0xFF, 0x80, 0x80, 0x80, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x47};
+static uint32_t sLeft; /* the host of more than two: the players who have left (bit k) */
 
 /* rollback (roll_tick) */
 extern int Port_RollCan(void), Port_RollSave(void); /* gs/state.c */
@@ -564,11 +571,11 @@ static uint32_t have_others(void) {
     return least;
 }
 
-static void send_inputs(void) {
+static void send_pad(int who) {
     uint8_t pkt[IN_HEAD + REDUNDANT * PAD];
     uint32_t tsend = now_ms(), techo, thold;
     /* (the type word's top half says whose input it is: the host passes the others' on as they came) */
-    uint32_t magic = MAGIC, type = T_INPUT | (uint32_t)sMe << 16, n = sHave[sMe] < REDUNDANT ? sHave[sMe] : REDUNDANT, base = sHave[sMe] - n, i;
+    uint32_t magic = MAGIC, type = T_INPUT | (uint32_t)who << 16, n = sHave[who] < REDUNDANT ? sHave[who] : REDUNDANT, base = sHave[who] - n, i;
     int32_t ahead = (int32_t)sTick - (int32_t)have_others(); /* how far this copy is beyond the input it has from the others */
 
     memcpy(pkt, &magic, 4);
@@ -581,17 +588,52 @@ static void send_inputs(void) {
     memcpy(pkt + 32, &sSyncOutTick, 4); /* the check: the newest blank this copy is sure of, */
     memcpy(pkt + 36, &sSyncOutValue, 8); /* and what the game was at it (Port_NetDigest) */
     for (i = 0; i < n; i++) {
-        memcpy(pkt + IN_HEAD + i * PAD, sIn[sMe][(base + i) % RING], PAD);
+        memcpy(pkt + IN_HEAD + i * PAD, sIn[who][(base + i) % RING], PAD);
     }
-    {   /* to the host, or from the host to each other player: with that one's own echo */
+    {   /* to the host, or from the host to each other player still there: with that one's own echo */
         int k = sMode == 1 ? 1 : 0;
         do {
             techo = sEchoTs[k];
             thold = techo != 0 ? tsend - sEchoAtMs[k] : 0;
             memcpy(pkt + 24, &techo, 4); /* the other side's last such time that arrived here, */
             memcpy(pkt + 28, &thold, 4); /* and how long ago that was */
-            send_to(sMode == 1 ? peer_of(k) : &sPeer, pkt, (int)(IN_HEAD + n * PAD));
+            if (!(sLeft >> k & 1)) {
+                send_to(sMode == 1 ? peer_of(k) : &sPeer, pkt, (int)(IN_HEAD + n * PAD));
+            }
         } while (sMode == 1 && ++k < sCount);
+    }
+}
+
+static void send_inputs(void) {
+    int k;
+
+    send_pad(sMe);
+    for (k = 1; k < sCount; k++) {
+        if (sLeft >> k & 1) {
+            send_pad(k); /* (the host, for a player who left: their NET_GONE pads, so that every copy has them) */
+        }
+    }
+}
+
+/* The host: the pads of the players who left, from where their input stopped up to the host's own (kGone). */
+static void left_fill(void) {
+    int k;
+
+    for (k = 1; k < sCount; k++) {
+        while (sLeft >> k & 1 && sHave[k] < sHave[sMe]) {
+            memcpy(sIn[k][sHave[k] % RING], kGone, PAD);
+            sHave[k]++;
+        }
+    }
+}
+
+/* The host of more than two: player k has left (said goodbye, or went quiet); the match goes on without them. */
+static void player_left(int k, const char *how) {
+    if (k > 0 && k < sCount && !(sLeft >> k & 1)) {
+        sLeft |= 1u << k;
+        fprintf(stderr, "bt3: net: player %d %s at blank %u (their input stops at %u); the computer plays their fighter\n", k + 1, how, (unsigned)sTick,
+                (unsigned)sHave[k]);
+        left_fill();
     }
 }
 
@@ -716,7 +758,11 @@ static int receive(void) {
             if (n >= 12) {
                 memcpy(&why, pkt + 8, 4);
             }
-            sGone = why == BYE_APART ? 2 : 1;
+            if (sMode == 1 && sCount > 2 && why != BYE_APART) {
+                player_left(player_at(&from), "left");
+            } else {
+                sGone = why == BYE_APART ? 2 : 1;
+            }
         } else if (type == T_HELLO && sMode == 1 && !(n >= 12 && version_is(pkt + 8))) {
             static int said;
             if (!said++) {
@@ -812,8 +858,8 @@ static int receive(void) {
                     sJoined = 1;
                     k = 1;
                 }
-                if (k < 0 || other != (uint32_t)k) {
-                    continue; /* a player puts in its own input only */
+                if (k < 0 || other != (uint32_t)k || sLeft >> k & 1) {
+                    continue; /* a player puts in its own input only (and not after it left: the host plays it) */
                 }
                 own = 1;
             } else {
@@ -981,6 +1027,7 @@ static void net_start(int role, const char *host, const char *join) {
     if (sDelay > 30) { sDelay = 30; }
     sCfgGot = 0;
     sGone = 0;
+    sLeft = 0;
     sVersionBad = 0;
     memset(sEchoTs, 0, sizeof(sEchoTs));
     sPingMs = -1;
@@ -1290,7 +1337,21 @@ static void gone(unsigned tick) {
     ended(sGone == 2 ? "The two games no longer agree (desync): the match has ended." : "The other player left the match.", tick);
 }
 
+/* Waited QUIET_FOR for input. The host of more than two goes on without whoever it waits for (and decides that
+   before the others would give up waiting for them, QUIET_NS); otherwise the match is over. */
+#define QUIET_FOR (sMode == 1 && sCount > 2 ? QUIET_NS / 2 : QUIET_NS)
 static void gone_quiet(unsigned tick) {
+    uint32_t least = have_others();
+    int k;
+
+    if (sMode == 1 && sCount > 2) {
+        for (k = 1; k < sCount; k++) {
+            if (sHave[k] == least) {
+                player_left(k, "went quiet");
+            }
+        }
+        return;
+    }
     ended("The connection to the other player was lost.", tick);
 }
 
@@ -1317,6 +1378,7 @@ static void roll_tick(unsigned tick) {
     if (!sResim) {
         Port_TestSlow(2, 0);
         sample_local(tick);
+        left_fill();
         send_inputs();
         receive();
         if (sGone) {
@@ -1339,8 +1401,9 @@ static void roll_tick(unsigned tick) {
             if (sGone) {
                 gone(tick);
             }
-            if (now - t0 > QUIET_NS) {
+            if (now - t0 > QUIET_FOR) {
                 gone_quiet(tick);
+                t0 = now;
             }
         }
         {   /* (see sTheirAhead) */
@@ -1418,11 +1481,17 @@ void Port_NetBeginTick(unsigned tick) {
         return;
     }
     sTick = tick;
+    if (sMode == 2 && getenv("BT3_TEST_LEAVE") != NULL && tick == (unsigned)atoi(getenv("BT3_TEST_LEAVE"))) {
+        uint32_t bye[3] = {MAGIC, T_BYE, 0}; /* testing: this copy says goodbye at that blank and stops */
+        net_send(bye, sizeof(bye), &sPeer);
+        exit(0);
+    }
     if (sRollMax > 0) {
         roll_tick(tick);
         return;
     }
     sample_local(tick);
+    left_fill();
     if (sLagMs != 0) {
         SDL_Delay((Uint32)sLagMs); /* (a crude stand-in for a slow line: everything this copy sends is late) */
     }
@@ -1441,8 +1510,9 @@ void Port_NetBeginTick(unsigned tick) {
         if (sGone) {
             gone(tick);
         }
-        if (now - t0 > QUIET_NS) {
+        if (now - t0 > QUIET_FOR) {
             gone_quiet(tick);
+            t0 = now;
         }
     }
     sWaitNs += SDL_GetTicksNS() - t0;
@@ -1476,6 +1546,13 @@ void Port_NetInput(int player, unsigned char *data) {
         return;
     }
     memcpy(data, player >= 0 && player < sCount && sTick < sHave[player] ? sIn[player][sTick % RING] : kIdle, PAD);
+}
+
+/* The game: the computer now plays the fighter of pad `pad`, whose player left (kGone; for the log). */
+void Port_NetCpuTakes(int pad) {
+    if (!sResim) {
+        fprintf(stderr, "bt3: net: blank %u: the computer plays the fighter of pad %d\n", (unsigned)sTick, pad + 1);
+    }
 }
 
 /* How many play in the match this copy is in (2 when it is in none). */
@@ -1721,6 +1798,13 @@ void Port_NetLeave(void) {
 static int sLobby; /* 0 idle, 1 waiting, 2 found, -1 failed */
 static int sLobbyRole, sLobbyPort;
 static char sLobbyAddr[128];
+/* A room for more than two: the host's lobby takes greetings until everyone is there, and answers the ones who are
+   there already with T_WAIT; then it answers them all at once and every copy begins its session. */
+static struct sockaddr_in sGreeted[NMAX];
+static uint32_t sGreetedId[NMAX]; /* (each copy's lobby greets with a number of its own: one player may come in by
+                                     two ways, the home network's address and the public one, and counts once) */
+static uint32_t sLobbyId;
+static int sGreetedN, sWaitHave, sWaitOf;
 static uint64_t sLobbyLast;
 
 /* Room codes (net_match.c, port/matchmaking): the lobby's states 3 (asking the matchmaking service; the host's code
@@ -1775,6 +1859,8 @@ int Port_LobbyStart(int host, const char *address, int port) {
     sLobby = 1;
     sLobbyOther = 0;
     sLobbyLast = 0;
+    sGreetedN = sWaitHave = sWaitOf = 0;
+    sLobbyId = (uint32_t)SDL_GetPerformanceCounter() * 2654435761u ^ (uint32_t)SDL_GetTicksNS();
     if (host) {
         memset(&local, 0, sizeof(local));
         local.sin_family = AF_INET;
@@ -1822,7 +1908,8 @@ int Port_LobbyStartCode(int host, const char *code) {
     sLobby = 3;
     Relay_Close(-1);
     sCodeVia = 0;
-    Match_Begin(sQuickQueue >= 0 ? 3 : sLobbyRole, sSock, sCodeLocalPort, sQuickQueue >= 0 ? kMatchQueues[sQuickQueue] : code, sMyName, NET_VERSION);
+    Match_Begin(sQuickQueue >= 0 ? 3 : sLobbyRole, sSock, sCodeLocalPort, sQuickQueue >= 0 ? kMatchQueues[sQuickQueue] : code, sMyName, NET_VERSION,
+                sQuickQueue >= 0 ? 2 : sLobbyPlayers);
     return sLobby;
 }
 
@@ -1948,9 +2035,16 @@ int Port_LobbyPoll(void) {
             return sLobby; /* (the search's thread is getting a relay address on this socket: not touched meanwhile) */
         }
         Match_Poll(&st);
-        if (st.state == 3 && st.addrGen != sCodeGen) { /* the host's relay address has come: knocked at from now on */
+        if (st.state == 3 && st.addrGen != sCodeGen) { /* the host's relay address has come: knocked at from now on (the
+                                                           host of a room for more: one more player has joined) */
             sCodeGen = st.addrGen;
             lobby_take_addrs(&st);
+            if (sLobbyRole == 1) {
+                sCodeSince = now;
+            }
+        }
+        if (sLobbyRole == 1 && sLobbyPlayers > 2 && st.seats <= sGreetedN) {
+            sCodeSince = now; /* (a room for more: no time limit while nobody who has joined it is still knocking) */
         }
         if (st.state == 3 && st.relayGen != sCodeRelayGen) { /* this side has a relay address now */
             sCodeRelayGen = st.relayGen;
@@ -1959,7 +2053,7 @@ int Port_LobbyPoll(void) {
     }
     if (sCodeMode && now - sLobbyLast > 200000000ull) {
         /* to every address the other player may be reached at: the one who joins greets, the host only knocks */
-        uint32_t hello[3] = {MAGIC, T_HELLO, NET_VERSION}, punch[2] = {MAGIC, T_PUNCH};
+        uint32_t hello[4] = {MAGIC, T_HELLO, NET_VERSION, sLobbyId}, punch[2] = {MAGIC, T_PUNCH};
         int i;
         for (i = 0; i < sCodeAddrs; i++) {
             if (i == sCodeRelay ? now - sCodeSince < 3000000000ull && getenv("BT3_RELAY_ONLY") == NULL : getenv("BT3_RELAY_ONLY") != NULL) {
@@ -1979,7 +2073,7 @@ int Port_LobbyPoll(void) {
             return sLobby;
         }
     } else if (!sCodeMode && sLobbyRole == 2 && now - sLobbyLast > 200000000ull) {
-        uint32_t hello[3] = {MAGIC, T_HELLO, NET_VERSION};
+        uint32_t hello[4] = {MAGIC, T_HELLO, NET_VERSION, sLobbyId};
         net_send(hello, sizeof(hello), &sPeer);
         sLobbyLast = now;
     }
@@ -1994,9 +2088,30 @@ int Port_LobbyPoll(void) {
             sLobbyOther = 1; /* someone with another release is trying: the window says so, and goes on waiting */
         } else if (sLobbyRole == 1 && type == T_HELLO) {
             uint32_t ack[3] = {MAGIC, T_HELLO_ACK, NET_VERSION};
-            int k;
+            uint32_t id = from.sin_addr.s_addr ^ from.sin_port; /* (a lobby that says no number: its address) */
+            int k, g;
+            if (n >= 16) {
+                memcpy(&id, pkt + 12, 4);
+            }
+            for (g = 0; g < sGreetedN && sGreetedId[g] != id; g++) {
+            }
+            if (g == sGreetedN) {
+                if (sGreetedN + 1 >= sLobbyPlayers) {
+                    continue; /* the room is full: not one of its players */
+                }
+                sGreetedId[sGreetedN] = id;
+                sGreeted[sGreetedN++] = from;
+                sCodeSince = now; /* (the knocking goes on for whoever is still to come) */
+            }
+            if (sGreetedN + 1 < sLobbyPlayers) {
+                uint32_t wait[4] = {MAGIC, T_WAIT, (uint32_t)sGreetedN + 1, (uint32_t)sLobbyPlayers};
+                net_send(wait, sizeof(wait), &from);
+                continue;
+            }
             for (k = 0; k < 3; k++) {
-                net_send(ack, sizeof(ack), &from);
+                for (g = 0; g < sGreetedN; g++) {
+                    net_send(ack, sizeof(ack), &sGreeted[g]);
+                }
             }
             if (sCodeMode) { /* where the session goes on knocking, so that the greeting of the session gets in */
                 sCodePunch = from;
@@ -2004,6 +2119,10 @@ int Port_LobbyPoll(void) {
                 sCodeVia = Relay_IsPeer(&from);
             }
             sLobby = 2;
+        } else if (sLobbyRole == 2 && type == T_WAIT && n >= 16) {
+            memcpy(&sWaitHave, pkt + 8, 4);
+            memcpy(&sWaitOf, pkt + 12, 4);
+            sCodeSince = now; /* (the host is there: the knocking goes on while its room fills) */
         } else if (sLobbyRole == 2 && type == T_HELLO_ACK) {
             sLobby = n >= 12 && version_is(pkt + 8) ? 2 : -2; /* -2: the host is another release */
             if (sCodeMode && sLobby == 2) { /* the address that answered is the one the session joins */
@@ -2017,6 +2136,8 @@ int Port_LobbyPoll(void) {
 }
 
 void Port_LobbyLaunch(void);
+void Port_LobbyPlayersSet(int n);
+int Port_LobbyCount(int *of);
 
 /* BT3_LOBBY=host or BT3_LOBBY=join:CODE: the room-code lobby driven without its window, once a blank (tests; the
    code and each change of state are written to the log). BT3_RELAY_ONLY=1: the one who joins tries nothing but the
@@ -2033,6 +2154,9 @@ void Port_LobbyAuto(void) {
     }
     if (!begun) {
         begun = 1;
+        if (getenv("BT3_NET_PLAYERS") != NULL) {
+            Port_LobbyPlayersSet(atoi(getenv("BT3_NET_PLAYERS")));
+        }
         if (strncmp(what, "quick:", 6) == 0) { /* BT3_LOBBY=quick:<queue>: a quick match (S, T, D10, D15, D20) */
             int q, type, dp;
             for (q = 0; q < MATCH_QUEUES && strcmp(what + 6, kMatchQueues[q]) != 0; q++) {
@@ -2050,6 +2174,14 @@ void Port_LobbyAuto(void) {
         }
     }
     now = Port_LobbyPoll();
+    {
+        static int was;
+        int of, here = Port_LobbyCount(&of);
+        if (here != was && of > 2) {
+            was = here;
+            fprintf(stderr, "bt3: lobby: %d of %d players are here\n", here, of);
+        }
+    }
     if (now != state || (!coded && Port_LobbyCode()[0] != '\0')) {
         state = now;
         coded = Port_LobbyCode()[0] != '\0';
@@ -2064,8 +2196,25 @@ void Port_LobbyAuto(void) {
     }
 }
 
+/* How many are to play in the match this copy hosts (2..NMAX; set before the lobby starts). */
+void Port_LobbyPlayersSet(int n) {
+    sLobbyPlayers = n < 2 ? 2 : n > NMAX ? NMAX : n;
+}
+
+/* A room for more than two: how many are there so far (the host counts itself), of how many (*of). */
+int Port_LobbyCount(int *of) {
+    *of = sLobbyRole == 1 ? sLobbyPlayers : sWaitOf;
+    return sLobbyRole == 1 ? sGreetedN + 1 : sWaitHave;
+}
+
 /* The other player is there: start the session. */
 void Port_LobbyLaunch(void) {
+    if (sLobbyRole == 1) { /* (the session's host takes the number of players from here, also across a restart) */
+        char value[8];
+        snprintf(value, sizeof(value), "%d", sLobbyPlayers);
+        put_env("BT3_NET_PLAYERS", sLobbyPlayers > 2 ? value : NULL);
+        sCount = sLobbyPlayers;
+    }
     if (sCodeMode && Port_SessionCan()) {
         sHandSock = sSock; /* the session goes on with this socket (see sHandSock) */
     } else {
