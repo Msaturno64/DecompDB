@@ -340,6 +340,25 @@ static int pair_partner(int f) {
     return -1;
 }
 
+/* SPEC-cinematicas.md C7 / C8 (the user, 2026-10-20: as DBZ Tag Team on the PSP, the game goes on during another's
+   technique): btl_char_mgr.c, BtlChars_UpdateFreeze, for the fighter v that fighter i's technique start (flag 0x125)
+   would hold. Held only when the two are a pair (a rush's or a throw's: their animations go together); otherwise v
+   plays on, and i keeps turning to it while the hold lasts, so that the shot, which takes its aim as it leaves
+   (eft_j.c, EftShotTech_CalcDir: more than 60 degrees off the facing it fires straight ahead), goes where v is. */
+#define TECH_TRACK_STEP 0.12f /* radians a frame, yaw and pitch (about 7 degrees) */
+int PortMulti_TechHolds(int i, int v) {
+    extern void BtlMove_TurnToPoint(void GAME_PTR chr, float *target, float yawStep, float pitchStep); /* btl_char_move.c */
+    extern void BtlCharApi_GetPos(int objId, float *out); /* src/battle/btl_capi_a.c */
+    float p[4] __attribute__((aligned(16)));
+
+    if (pair_partner(i) == v || pair_partner(v) == i) {
+        return 1;
+    }
+    BtlCharApi_GetPos(BattleSide_GetObjId(v), p);
+    BtlMove_TurnToPoint((void GAME_PTR)BtlChar_Get(i), p, TECH_TRACK_STEP, TECH_TRACK_STEP);
+    return 0;
+}
+
 int PortMulti_CanContact(int attacker, int victim) {
     extern int BtlChange_PortHasChara(int player); /* src/battle/btl_char_ctl_b.c */
     int on, owner, p, q;
