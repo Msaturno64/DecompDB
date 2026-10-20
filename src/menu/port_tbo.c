@@ -233,6 +233,9 @@ extern s32 sceGsSyncPath(s32 mode, u16 timeout);
 /* port/src/gs/net.c, state.c, plat_settings.c */
 extern void Port_NetOptions(int rollback, int delay);
 extern void Port_NetRulesSet(int type, int dp, int time);
+extern void Port_NetPlayersRules(int ffa);    /* a room for more than two: every fighter on the field */
+extern void Port_LobbyPlayersSet(int n);      /* how many the room this copy opens is for */
+extern int Port_LobbyCount(int *of);          /* a room for more than two: how many are in it so far, of how many */
 extern const char *Port_NetNameGet(void);
 extern void Port_NetNameSave(const char *name);
 extern int Port_LobbyStartCode(int host, const char *code);
@@ -291,11 +294,12 @@ extern void Port_SettingsWrite(void);
 
 /* Create Room's rows */
 #define CR_BATTLE 0
-#define CR_TIME 1
-#define CR_DELAY 2
-#define CR_ROLL 3
-#define CR_OPEN 4
-#define CR_COUNT 5
+#define CR_PLAYERS 1
+#define CR_TIME 2
+#define CR_DELAY 3
+#define CR_ROLL 4
+#define CR_OPEN 5
+#define CR_COUNT 6
 
 /* Profile's rows */
 /* (the input delay and the rollback are the room's: Create Room sets them; a joiner gets the host's, a quick match
@@ -319,6 +323,8 @@ typedef struct TboScreen {
     f32 hubY;           /* where the hub's cursor plate is drawn: it glides */
     /* the host's choices (kept in the settings) */
     s32 battle;         /* 0 one on one, 1 teams of up to five */
+    s32 players;        /* how many play: 2 .. 10 (more than two: every fighter on the field, one per player) */
+    s32 ffa;            /* more than two: free for all instead of two teams */
     s32 time;           /* 0..4: 60, 90, 180, 240 seconds, no limit */
     s32 delay;          /* -1 automatic, else frames */
     s32 roll;           /* 0 off, else frames (2..8) */
@@ -411,6 +417,8 @@ static void Tb_SetMode(s32 mode) {
 
 static void Tb_SaveChoices(void) {
     Port_SettingSave("tbo_battle", sTb->battle);
+    Port_SettingSave("tbo_players", sTb->players);
+    Port_SettingSave("tbo_ffa", sTb->ffa);
     Port_SettingSave("tbo_time", sTb->time);
     Port_SettingSave("net_delay2", sTb->delay);
     Port_SettingSave("net_rollback2", sTb->roll);
@@ -419,6 +427,11 @@ static void Tb_SaveChoices(void) {
 
 static void Tb_LoadChoices(void) {
     sTb->battle = Port_Setting("tbo_battle", 0);
+    sTb->players = Port_Setting("tbo_players", 2);
+    sTb->ffa = Port_Setting("tbo_ffa", 0) == 1;
+    if (sTb->players < 2 || sTb->players > 10) {
+        sTb->players = 2;
+    }
     sTb->time = Port_Setting("tbo_time", 3);
     sTb->delay = Port_Setting("net_delay2", -1);
     sTb->roll = Port_RollCan() ? Port_Setting("net_rollback2", 8) : 0;
@@ -507,7 +520,11 @@ static void Tb_BeginSearch(s32 host) {
     }
     if (host) {
         Port_NetOptions(sTb->roll, sTb->delay < 0 ? -2 : sTb->delay);
-        Port_NetRulesSet(sTb->battle, 0, sTb->time);
+        Port_NetRulesSet(sTb->players > 2 ? 1 : sTb->battle, 0, sTb->time);
+        if (sTb->players > 2) {
+            Port_NetPlayersRules(sTb->ffa);
+        }
+        Port_LobbyPlayersSet(sTb->players);
         Tb_SaveChoices();
     } else {
         Port_NetOptions(-1, -1); /* joining: the host's choices arrive with its answer */
@@ -785,7 +802,14 @@ static void Tb_CreateUpdate(s32 live) {
     if (side != 0) {
         switch (sTb->crCur) {
         case CR_BATTLE:
-            sTb->battle = !sTb->battle;
+            if (sTb->players > 2) {
+                sTb->ffa = !sTb->ffa;
+            } else {
+                sTb->battle = !sTb->battle;
+            }
+            break;
+        case CR_PLAYERS:
+            sTb->players = Ps_Wrap(sTb->players + side, 2, 10);
             break;
         case CR_TIME:
             sTb->time = Ps_Wrap(sTb->time + side, 0, 4);
@@ -1272,10 +1296,11 @@ static void Tb_DrawCreate(void) {
 
 static void Tb_DrawCreateText(void) {
     static char value[CR_COUNT][32];
-    static char *label[CR_COUNT] = {"Battle", "Time Limit", "Input Delay", "Rollback", "Open Room"};
+    static char *label[CR_COUNT] = {"Battle", "Players", "Time Limit", "Input Delay", "Rollback", "Open Room"};
     s32 i;
 
-    sprintf(value[CR_BATTLE], sTb->battle ? "TEAMS (UP TO 5)" : "ONE ON ONE");
+    sprintf(value[CR_BATTLE], sTb->players > 2 ? (sTb->ffa ? "FREE FOR ALL" : "TEAMS") : sTb->battle ? "TEAMS (UP TO 5)" : "ONE ON ONE");
+    sprintf(value[CR_PLAYERS], "%d", (int)sTb->players);
     Ps_Copy(value[CR_TIME], sTbTime[sTb->time], 32);
     Tb_DelayText(value[CR_DELAY], sTb->delay);
     Tb_RollText(value[CR_ROLL], sTb->roll);
@@ -1359,17 +1384,30 @@ static void Tb_DrawWaitText(void) {
         }
         Ps_Align(0);
         Ps_Text(22.0f, 172.0f, code[0] != 0 ? "GIVE THIS CODE TO" : "ASKING THE", 0.46f, 150.0f, 0);
-        Ps_Text(22.0f, 190.0f, code[0] != 0 ? "YOUR RIVAL" : "MATCHMAKING SERVICE", 0.46f, 150.0f, 0);
+        Ps_Text(22.0f, 190.0f, code[0] != 0 ? (sTb->players > 2 ? "YOUR RIVALS" : "YOUR RIVAL") : "MATCHMAKING SERVICE", 0.46f, 150.0f, 0);
+        if (sTb->players > 2 && code[0] != 0) {
+            s32 of, here = Port_LobbyCount(&of);
+            sprintf(line, "%d OF %d PLAYERS HERE", (int)here, (int)of);
+            Ps_Text(22.0f, 214.0f, line, 0.42f, 150.0f, 5);
+        }
         if (Port_LobbyOther()) {
             Ps_Text(22.0f, 214.0f, "ANOTHER VERSION TRIED", 0.42f, 150.0f, 3);
         }
     } else {
+        s32 of, here;
+
         Ps_Text(22.0f, 94.0f, "JOINING ROOM", 0.56f, 0.0f, 0);
         Ps_Align(1);
         Ps_Text(95.0f, 120.0f, sTb->code, 1.2f, 156.0f, 0);
         Ps_Align(0);
-        Ps_Text(22.0f, 172.0f, "LOOKING FOR", 0.46f, 150.0f, 0);
-        Ps_Text(22.0f, 190.0f, "THE HOST...", 0.46f, 150.0f, 0);
+        here = Port_LobbyCount(&of);
+        Ps_Text(22.0f, 172.0f, of > 2 ? "IN THE ROOM:" : "LOOKING FOR", 0.46f, 150.0f, 0);
+        if (of > 2) {
+            sprintf(line, "%d OF %d PLAYERS", (int)here, (int)of);
+            Ps_Text(22.0f, 190.0f, line, 0.46f, 150.0f, 5);
+        } else {
+            Ps_Text(22.0f, 190.0f, "THE HOST...", 0.46f, 150.0f, 0);
+        }
     }
     Ps_Align(1);
     if (sTb->found) {
@@ -1520,7 +1558,8 @@ static char *Tb_Help(void) {
     case TB_HUB:
         return sTbHubSay[sTb->hubCur];
     case TB_CREATE:
-        return sTb->crCur == CR_DELAY ? "How late your moves come out. Automatic measures the line when the match starts."
+        return sTb->crCur == CR_PLAYERS ? "How many play, 2 to 10. With more than two, everyone fights at once: in teams, or free for all."
+               : sTb->crCur == CR_DELAY ? "How late your moves come out. Automatic measures the line when the match starts."
                : sTb->crCur == CR_ROLL ? "Your moves come out at once and the game corrects itself. More frames cope with a slower line."
                : "Set the rules of your tournament! Then your rival joins with the room code.";
     case TB_JOIN:
@@ -1607,12 +1646,14 @@ static void Tb_Speak(void) {
         }
         break;
     case TB_CREATE: {
-        static char *label[CR_COUNT] = {"Battle", "Time Limit", "Input Delay", "Rollback", "Open Room"};
+        static char *label[CR_COUNT] = {"Battle", "Players", "Time Limit", "Input Delay", "Rollback", "Open Room"};
 
         Ps_Copy(focus, label[sTb->crCur], 160);
         part[0] = 0;
         if (sTb->crCur == CR_BATTLE) {
-            Ps_Copy(part, sTb->battle ? "Teams, up to 5" : "One on one", 64);
+            Ps_Copy(part, sTb->players > 2 ? (sTb->ffa ? "Free for all" : "Teams") : sTb->battle ? "Teams, up to 5" : "One on one", 64);
+        } else if (sTb->crCur == CR_PLAYERS) {
+            sprintf(part, "%d", (int)sTb->players);
         } else if (sTb->crCur == CR_TIME) {
             Ps_Copy(part, sTbTime[sTb->time], 64);
         } else if (sTb->crCur == CR_DELAY) {

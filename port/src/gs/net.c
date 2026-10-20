@@ -54,13 +54,15 @@ enum { T_HELLO = 1, T_HELLO_ACK = 2, T_INPUT = 3, T_BYE = 4, T_PING = 5, T_PONG 
 /* The version of what goes over the line. The greeting and its answer carry it, and two copies that differ do not
    start a match (the input packets changed with version 2: times for the ping were added; a copy that read them
    the old way took them for input). 1 was releases 0.1.8 and 0.1.9, which said no version. */
-enum { NET_VERSION_BASE = 5, IN_HEAD = 44 }; /* 3 (0.1.15): the host's battle rules travel with its choices.
+enum { NET_VERSION_BASE = 6, IN_HEAD = 44 }; /* 3 (0.1.15): the host's battle rules travel with its choices.
    4 (0.1.34): a session's start-up no longer follows the player's "Skip logos" / "Skip intro video" (0.1.32 and
    0.1.33 with either on computed another start-up than the other side and the two never agreed again: such a copy
    must not be let into a match); the input packets carry the sender's check value (sync_*, below), 12 bytes more
    in their head; the goodbye can say why.
    5 (multi-fighter): the rules word carries the host's "every member on the field" and each team's starting health
-   (RULE_MULTI, below): a copy that did not read them would set up another battle than the host's. */
+   (RULE_MULTI, below): a copy that did not read them would set up another battle than the host's.
+   6 (N players, SPEC-netplay-n.md): up to ten in a match, the player's number in the input packets' type word, the
+   host's answers say each one's number and how many play; rooms for more than two (T_WAIT); kGone. */
 static int sVersionBad; /* the other side answered with another version */
 extern int gPortBt4; /* plat_mem.c: the BT4 disc (PRIVATE) */
 /* BT4 computes another game: its copies meet only each other (0x400 apart, in the greeting and at the service). */
@@ -276,6 +278,12 @@ void Port_NetMultiRules(void) {
     sRules = (sRules & ~(RULE_MULTI | RULE_FFA | 0xFF000000u)) | (PortMulti_Setting() ? RULE_MULTI : 0) |
              (PortMulti_FfaSetting() ? RULE_FFA : 0) |
              health_bits(PortMulti_HandicapSetting(0)) << 24 | health_bits(PortMulti_HandicapSetting(1)) << 28;
+}
+
+/* A room for more than two (Tenkaichi Budokai Online's Create Room): every fighter on the field, one per player, in
+   two teams or free for all, each with full health. */
+void Port_NetPlayersRules(int ffa) {
+    sRules = (sRules & ~(RULE_MULTI | RULE_FFA | 0xFF000000u)) | RULE_MULTI | (ffa ? RULE_FFA : 0);
 }
 
 int Port_NetMultiAll(void) {
@@ -1920,6 +1928,7 @@ int Port_LobbyStartQuick(int queue) {
         return -1;
     }
     sQuickQueue = queue;
+    sLobbyPlayers = 2; /* (quick matches are for two) */
     Port_LobbyStartCode(1, "");
     sQuickQueue = -1;
     return sLobby;
@@ -1941,6 +1950,7 @@ void Port_LobbyCancel(void) {
         sSock = -1;
     }
     sLobby = 0;
+    sLobbyPlayers = 2; /* (the next room is for two unless its host says otherwise) */
 }
 
 /* The other player's addresses as the matchmaking service gave them: where to knock, which of them is the host's
@@ -2214,6 +2224,7 @@ void Port_LobbyLaunch(void) {
         snprintf(value, sizeof(value), "%d", sLobbyPlayers);
         put_env("BT3_NET_PLAYERS", sLobbyPlayers > 2 ? value : NULL);
         sCount = sLobbyPlayers;
+        sLobbyPlayers = 2;
     }
     if (sCodeMode && Port_SessionCan()) {
         sHandSock = sSock; /* the session goes on with this socket (see sHandSock) */
