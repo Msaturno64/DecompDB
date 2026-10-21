@@ -24,6 +24,11 @@ namespace {
 
 const char *kRomSha1 = "caee6c2269bba89fc51eea9e7beac3adbec9dc52";
 const char *kDbzpSha1 = "4f910969e05d9b25c83af7642b60da9949a4348b";
+// Budokai Tenkaichi 4 (TeamBT4's B14 REV2): its program and menu files, whole. Its disc is unpacked as
+// research/bt4/extract_bt4.py does: every file, and the archives without a header split by BIN/DBZ4.BIN's records.
+const char *kBt4ElfSha1 = "caea50ebcdab5ae80b47e12c6d4bf3247e50784f";
+const char *kBt4DbzpSha1 = "de91913f40bd675d70ee748aa16a42a96dff5919";
+bool sBt4;
 const Uint32 kRomBase = 0x100000, kRomEnd = 0x2FF180;
 #ifdef _WIN32
 const char *kGame = "Tenkaichi3Decomp.exe";
@@ -223,6 +228,27 @@ void copy_out(Iso &iso, Uint64 offset, Uint64 size, const std::string &path, std
 void step_disc(Iso &iso, const std::string &path) {
     say("@step 1 3 Disc image");
     iso.open(path);
+    sBt4 = false;
+    if (const IsoFile *bt4 = iso.find("SLUS_219.78")) {
+        const IsoFile *menu4 = iso.find("BIN/DBZP.BIN");
+        if (menu4 == NULL || iso.find("BIN/DBZ4.BIN") == NULL) {
+            throw Stop{"This Budokai Tenkaichi 4 image is incomplete (BIN/DBZP.BIN or BIN/DBZ4.BIN is missing)."};
+        }
+        say("@note checking");
+        std::vector<Uint8> elf4((size_t)bt4->size), menu((size_t)menu4->size);
+        iso.read(bt4->offset, elf4.data(), elf4.size());
+        iso.read(menu4->offset, menu.data(), menu.size());
+        Sha1 a, b;
+        a.add(elf4.data(), elf4.size());
+        b.add(menu.data(), menu.size());
+        if (a.hex() != kBt4ElfSha1 || b.hex() != kBt4DbzpSha1) {
+            throw Stop{"This is a Budokai Tenkaichi 4 image, but not the version the port supports.\n"
+                       "The port needs TeamBT4's B14 REV2 (SLUS_219.78.DBZBT4B14REV2)."};
+        }
+        sBt4 = true;
+        say("@ok Budokai Tenkaichi 4 (TeamBT4 B14 REV2), checksums match");
+        return;
+    }
     const IsoFile *slus = iso.find("SLUS_216.78"), *dbzp = iso.find("BIN/DBZP.BIN");
     if (slus == NULL || dbzp == NULL) {
         throw Stop{"This is not a disc image of the USA release of Budokai Tenkaichi 3 (no SLUS_216.78 on it).\n"
@@ -264,11 +290,11 @@ void step_data(Iso &iso, const std::string &root) {
         say("@skip already unpacked");
         return;
     }
-    std::vector<const IsoFile *> take;
+    std::vector<const IsoFile *> take, headerless;
     Uint64 total = 0, done = 0;
     for (auto &f : iso.files) {
         std::string u = upper(f.path);
-        if (u == "SLUS_216.78" || u.rfind("BIN/", 0) == 0 || u.rfind("DATA/", 0) == 0) {
+        if (sBt4 || u == "SLUS_216.78" || u.rfind("BIN/", 0) == 0 || u.rfind("DATA/", 0) == 0) { // (BT4: every file)
             take.push_back(&f);
             total += f.size;
         }
@@ -301,8 +327,12 @@ void step_data(Iso &iso, const std::string &root) {
         std::string stem = lower(u.substr(5, u.size() - 9)), dir = data + stem + "/";
         Uint8 head[8];
         Uint32 count;
-        SDL_CreateDirectory(dir.c_str());
         iso.read(f->offset, head, 8);
+        if (sBt4 && memcmp(head, "AFS\0", 4) != 0) { // (BT4's have no header: their tables are in BIN/DBZ4.BIN)
+            headerless.push_back(f);
+            continue;
+        }
+        SDL_CreateDirectory(dir.c_str());
         memcpy(&count, head + 4, 4);
         if (memcmp(head, "AFS\0", 4) != 0 || (Uint64)count * 8 + 8 > f->size) {
             throw Stop{"An archive on the disc (" + f->path + ") is damaged."};
@@ -323,6 +353,46 @@ void step_data(Iso &iso, const std::string &root) {
         }
         progress(f->size > inArchive ? f->size - inArchive : 0); // the archive's table and padding
     }
+    if (!headerless.empty()) {
+        // BIN/DBZ4.BIN: one record per archive (16-byte aligned): +4 its size, +8 the file count, +0x10 the archive's
+        // name, +0x11A one u16 per file, its size in 2048-byte sectors; the files lie one after another from sector 0
+        // and are written at their sector size (the game reads sectors only)
+        const IsoFile *t = iso.find("BIN/DBZ4.BIN");
+        std::vector<Uint8> tbl((size_t)t->size);
+        iso.read(t->offset, tbl.data(), tbl.size());
+        for (size_t off = 0; off + 0x11A <= tbl.size();) {
+            Uint32 size, count;
+            memcpy(&size, &tbl[off + 4], 4);
+            memcpy(&count, &tbl[off + 8], 4);
+            std::string name;
+            for (size_t i = off + 0x10; i < off + 0x11A && tbl[i] != 0; i++) {
+                name += (char)tbl[i];
+            }
+            name = upper(name);
+            const IsoFile *a = iso.find(("DATA/" + name).c_str());
+            if (a == NULL || size == 0 || off + 0x11A + (size_t)count * 2 > tbl.size() || name.size() < 5) {
+                throw Stop{"An archive table on the disc (BIN/DBZ4.BIN) is damaged."};
+            }
+            std::string dir = data + lower(name.substr(0, name.size() - 4)) + "/";
+            Uint64 at = 0;
+            SDL_CreateDirectory(dir.c_str());
+            for (Uint32 k = 0; k < count; k++) {
+                Uint16 sectors;
+                char fname[32];
+                memcpy(&sectors, &tbl[off + 0x11A + (size_t)k * 2], 2);
+                if (at + (Uint64)sectors * 2048 > a->size) {
+                    throw Stop{"An archive on the disc (" + a->path + ") is damaged."};
+                }
+                snprintf(fname, sizeof(fname), "%05u.bin", k);
+                copy_out(iso, a->offset + at, (Uint64)sectors * 2048, dir + fname, buf);
+                files++;
+                at += (Uint64)sectors * 2048;
+                progress((Uint64)sectors * 2048);
+            }
+            progress(a->size > at ? a->size - at : 0);
+            off = (off + size + 15) & ~(size_t)15;
+        }
+    }
     SDL_IOStream *m = SDL_IOFromFile(marker.c_str(), "wb");
     if (m != NULL) {
         SDL_CloseIO(m);
@@ -336,6 +406,10 @@ void step_test(const std::string &root) {
     std::string exe = root + kGame, saves = root + "gamedata/.selftest";
     const char *args[2] = {exe.c_str(), NULL};
     say("@step 3 3 Self-test");
+    if (sBt4) {
+        say("@skip Budokai Tenkaichi 4 has no demo fight to test with");
+        return;
+    }
     say("@note the game's demo fight, no window");
     SDL_Environment *env = SDL_CreateEnvironment(true);
     SDL_SetEnvironmentVariable(env, "BT3_DEMO", "1", true);

@@ -355,7 +355,8 @@ static void page_pick() {
     bool ok = file_exists(sIso);
 
     heading(GAME, "This sets the game up on your computer from your own PlayStation 2 disc.");
-    ImGui::TextWrapped("Choose your disc image of Dragon Ball Z: Budokai Tenkaichi 3, USA release (SLUS-21678), as an .iso file. "
+    ImGui::TextWrapped("Choose your disc image of Dragon Ball Z: Budokai Tenkaichi 3, USA release (SLUS-21678), or of "
+                       "Budokai Tenkaichi 4 (TeamBT4's B14 REV2), as an .iso file. "
                        "The game's data is taken from it and stays on this computer. %s",
                        sRelease ? "Nothing is downloaded." : "Nothing is downloaded except one small tool.");
     ImGui::Dummy(ImVec2(0.0f, 10.0f));
