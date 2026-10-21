@@ -972,8 +972,36 @@ s32 BtlSeqIntroTalk_Skip(BtlSeqTalkCtx *ctx) {
     return 1;
 }
 
+#ifdef PORT
+/* With more than two fighters the winner scene is its winner's, whoever it is (port/src/multi_fighter.c
+   PortMulti_WinFighter), on every copy: ctx->side[0] is then a fighter's number, its object for the camera and voice
+   player 0 for its line (there are two, the leads'). With two, as on the console. */
+extern s32 BattleSide_GetCount(void);
+extern s32 PortMulti_WinFighter(void);
+#define SEQ_MULTI (BattleSide_GetCount() > 2)
+#define SEQ_OBJ(side) (SEQ_MULTI ? BattleSide_GetObjId(side) : (side))
+#define SEQ_VOICE(side) ((side) > 1 ? 0 : (side))
+#else
+#define SEQ_MULTI 0
+#define SEQ_OBJ(side) (side)
+#define SEQ_VOICE(side) (side)
+#endif
+
 /* Chooses the speaker, line and announcement of the winner scene. */
 s32 BtlSeqWinTalk_Setup(BtlSeqTalkCtx *ctx) {
+#ifdef PORT
+    if (SEQ_MULTI) {
+        s32 k = PortMulti_WinFighter();
+
+        ctx->side[0] = k;
+        ctx->chara[0] = BtlCharApi_HasMemberUnk70(k) ? 0x56 : ((BtlSeqObj *)BtlObj_Get(BattleSide_GetObjId(k)))->chara;
+        ctx->line[0] = rand() % 2 + 3;
+        ctx->step = 0;
+        HudNotice_Show(6);
+        Ramp_Start(&ctx->timer, 10.0f, 0.0f, 1.0f);
+        return 1;
+    }
+#endif
     s32 winner = BattleResult_GetWinnerSide();
     s32 loser = winner == 0;
     BtlSeqObj *winObj = BtlObj_Get(BattleSide_GetObjId(winner));
@@ -1051,16 +1079,16 @@ s32 BtlSeqWinTalk_Enter(BtlSeqTalkCtx *ctx) {
 s32 BtlSeqWinTalk_PreUpdate(BtlSeqTalkCtx *ctx) {
     switch (ctx->step) {
     case 0:
-        if (BattleResult_IsPlayerWin()) {
+        if (SEQ_MULTI || BattleResult_IsPlayerWin()) {
             BtlCtrl_StartWinPose(ctx->side[0]);
-            DemoCam_PlayObjAnim(ctx->side[0], 1);
+            DemoCam_PlayObjAnim(SEQ_OBJ(ctx->side[0]), 1);
             DemoCam_SetScaleHeight(1);
         } else {
             BtlCtrl_StartLosePose(ctx->side[0]);
-            DemoCam_PlayObjAnim(ctx->side[0], 2);
+            DemoCam_PlayObjAnim(SEQ_OBJ(ctx->side[0]), 2);
         }
         Ramp_Start(&ctx->timer, 10.0f, 0.0f, 1.0f);
-        Voice_PlayChara(ctx->side[0], ctx->chara[0], ctx->line[0]);
+        Voice_PlayChara(SEQ_VOICE(ctx->side[0]), ctx->chara[0], ctx->line[0]);
         BtlObj_SetSubState(BtlObj_Get(BattleSide_GetObjId(ctx->side[0])), 2, ctx->line[0]);
         ctx->step++;
         break;
@@ -1080,7 +1108,7 @@ s32 BtlSeqWinTalk_Update(BtlSeqTalkCtx *ctx) {
     case 0:
     case 1:
         if (BtlCtrl_IsPoseReached(ctx->side[0])) {
-            if (Voice_IsStopped(ctx->side[0]) || Ramp_Step(&ctx->timer)) {
+            if (Voice_IsStopped(SEQ_VOICE(ctx->side[0])) || Ramp_Step(&ctx->timer)) {
                 ctx->step = 2;
             }
         }

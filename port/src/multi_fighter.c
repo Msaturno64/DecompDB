@@ -39,6 +39,35 @@ int PortMulti_Ffa(void) {
     return gPortMultiAll && gPortMultiFfa;
 }
 
+/* src/battle/btl_seq.c, the winner scene with more than two fighters (the user, 2026-10-20: the one who wins poses,
+   with its name, offline and online): free for all, the one left standing (on time, the one with the most health,
+   the first of equals); teams, the winning side's lead, or the first of its team still standing. Game state only. */
+int PortMulti_WinFighter(void) {
+    extern int BattleResult_GetWinnerSide(void); /* src/battle/battle_load.c: 0 or 1 */
+    extern int BtlCharApi_GetHp(int objId);       /* src/battle/btl_capi_a.c */
+    extern int BattleSide_GetCount(void), BattleSide_GetObjId(int side), BattleSide_GetTeam(int side); /* battle_load.c */
+    int n = BattleSide_GetCount(), side = BattleResult_GetWinnerSide(), best = -1, top = 0, i;
+
+    if (side < 0 || side > 1) {
+        side = 0;
+    }
+    if (!PortMulti_Ffa() && BtlCharApi_GetHp(BattleSide_GetObjId(side)) > 0) {
+        return side;
+    }
+    for (i = 0; i < n; i++) {
+        int hp = BtlCharApi_GetHp(BattleSide_GetObjId(i));
+
+        if (hp > top && (PortMulti_Ffa() || BattleSide_GetTeam(i) == BattleSide_GetTeam(side))) {
+            best = i;
+            top = hp;
+            if (!PortMulti_Ffa()) {
+                break;
+            }
+        }
+    }
+    return best >= 0 ? best : side;
+}
+
 /* Who plays a fighter past the two leads (src/battle/battle_load.c, BattleSetup_PortSpread): the pad of the person
    playing it, or -1 for the computer (as before). BT3_TEAMS_HUMAN=<i>,<j>... (tests): fighters i, j by their own
    pads i, j (pads 2..9, src/sys/pad.c). The online session's players come here too (SPEC-netplay-n.md). */
