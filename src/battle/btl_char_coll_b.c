@@ -1120,6 +1120,18 @@ s32 BtlColl_TryDodge(s32 objId, BtlCollHit *hit) {
     if (BtlChar_TestFlag(chr, 0x5A)) {
         return 0;
     }
+#ifdef PORT
+    {
+        extern s32 BtlClash_PortOutsider(s32 victim, s32 attacker); /* btl_char_flag_clash.c */
+        extern void BtlClash_PortAssist(s32 role);
+        s32 role = BtlClash_PortOutsider(chr->side, hit->ownerId);
+
+        if (role >= 0) { /* (an enemy's ki or technique on a beam struggler: it feeds the other's beam) */
+            BtlClash_PortAssist(role);
+            return 1;
+        }
+    }
+#endif
     if (BtlAct_IsTechniqueId(BtlAct_GetCurrent(chr))) {
         slot = BtlAct_GetCurrentClass(chr);
         if (slot >= 2 && slot < 5) {

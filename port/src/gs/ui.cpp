@@ -373,24 +373,66 @@ static void font_picker(const char *label, PanelFont &pf, const char *tip) {
 }
 
 // Several fighters on the field: a small health bar over each fighter that no HUD panel shows (multi_fighter.c
-// projects the heads in the game's draw; this only draws, over the picture). The fill goes green, yellow, red with
-// the health; the frame is blue for the HUD's own side, red for the other.
+// projects the heads in the game's draw; this only draws, over the picture), in the style of the game's own HUD:
+// BT3's a thin gold bar under the lock-on chevron (orange over an enemy, light blue over a teammate, as the user's
+// example), BT4's (PRIVATE) its green gauge in a steel frame.
+extern "C" int gPortBt4; // plat_mem.c
 static void multi_bars_draw(void) {
     PortMultiBar b[20];
     int n = PortMulti_ReadBars(b, 20);
     ImDrawList *dl = ImGui::GetBackgroundDrawList();
-    float w = (float)gUiPresentW * 0.07f, h = (float)gUiPresentH * 0.011f + 2.0f, lift = 0.0f; // (over the head already)
+    float w = (float)gUiPresentW * 0.07f, h = (float)gUiPresentH * 0.008f + 2.0f;
+    float cw = w * 0.16f, ch = cw * 0.9f; // the chevron, over the bar
+
+    if (PortMulti_ReadAssist()) { // a teammate joined this side's beam struggle (Tag Team Mod: "BEAM ASSIST X1.5")
+        const char *say = "BEAM ASSIST X1.5";
+        float size = (float)gUiPresentH * 0.045f;
+        ImVec2 at((float)gUiPresentX + (float)gUiPresentW * 0.03f, (float)gUiPresentY + (float)gUiPresentH * 0.38f);
+        for (int ox = -2; ox <= 2; ox += 2) {
+            for (int oy = -2; oy <= 2; oy += 2) {
+                dl->AddText(NULL, size, ImVec2(at.x + ox, at.y + oy), IM_COL32(20, 14, 6, 255), say);
+            }
+        }
+        dl->AddText(NULL, size, at, IM_COL32(255, 236, 120, 255), say);
+    }
 
     for (int i = 0; i < n; i++) {
-        float x = (float)gUiPresentX + b[i].x * (float)gUiPresentW, y = (float)gUiPresentY + b[i].y * (float)gUiPresentH - lift;
+        float x = (float)gUiPresentX + b[i].x * (float)gUiPresentW, y = (float)gUiPresentY + b[i].y * (float)gUiPresentH;
         float k = b[i].hpMax > 0 ? (float)b[i].hp / (float)b[i].hpMax : 0.0f;
         k = k < 0.0f ? 0.0f : k > 1.0f ? 1.0f : k;
-        ImU32 fill = k > 0.5f ? IM_COL32(60, 220, 70, 255) : k > 0.25f ? IM_COL32(240, 200, 40, 255) : IM_COL32(230, 50, 40, 255);
-        ImU32 edge = b[i].ally ? IM_COL32(70, 150, 255, 255) : IM_COL32(255, 70, 60, 255);
-        ImVec2 a(x - w * 0.5f, y - h * 0.5f), z(x + w * 0.5f, y + h * 0.5f);
-        dl->AddRectFilled(ImVec2(a.x - 1.0f, a.y - 1.0f), ImVec2(z.x + 1.0f, z.y + 1.0f), IM_COL32(0, 0, 0, 200));
-        dl->AddRectFilled(a, ImVec2(a.x + (z.x - a.x) * k, z.y), fill);
-        dl->AddRect(ImVec2(a.x - 1.0f, a.y - 1.0f), ImVec2(z.x + 1.0f, z.y + 1.0f), edge, 0.0f, 0, 1.5f);
+        ImVec2 a(x - w * 0.5f, y - h * 0.5f), z(x + w * 0.5f, y + h * 0.5f), f(a.x + (z.x - a.x) * k, z.y);
+        float mid = a.y + (z.y - a.y) * 0.45f;
+
+        if (gPortBt4) {
+            ImU32 edge = b[i].ally ? IM_COL32(110, 190, 255, 255) : IM_COL32(200, 205, 215, 255);
+            dl->AddRectFilled(ImVec2(a.x - 2.0f, a.y - 2.0f), ImVec2(z.x + 2.0f, z.y + 2.0f), IM_COL32(40, 44, 52, 230), 2.0f);
+            dl->AddRectFilled(a, z, IM_COL32(10, 30, 14, 220));
+            dl->AddRectFilledMultiColor(a, ImVec2(f.x, mid), IM_COL32(150, 255, 120, 255), IM_COL32(150, 255, 120, 255),
+                                        IM_COL32(40, 200, 40, 255), IM_COL32(40, 200, 40, 255));
+            dl->AddRectFilledMultiColor(ImVec2(a.x, mid), f, IM_COL32(40, 200, 40, 255), IM_COL32(40, 200, 40, 255),
+                                        IM_COL32(10, 120, 20, 255), IM_COL32(10, 120, 20, 255));
+            dl->AddRect(ImVec2(a.x - 2.0f, a.y - 2.0f), ImVec2(z.x + 2.0f, z.y + 2.0f), edge, 2.0f, 0, 1.5f);
+            continue;
+        }
+        // BT3: the bar, gold from a light top to an orange foot, in a dark brown line
+        dl->AddRectFilled(ImVec2(a.x - 1.5f, a.y - 1.5f), ImVec2(z.x + 1.5f, z.y + 1.5f), IM_COL32(60, 28, 6, 230), h * 0.5f);
+        dl->AddRectFilled(a, z, IM_COL32(45, 22, 6, 200), h * 0.4f);
+        dl->AddRectFilledMultiColor(a, ImVec2(f.x, mid), IM_COL32(255, 238, 150, 255), IM_COL32(255, 238, 150, 255),
+                                    IM_COL32(255, 196, 60, 255), IM_COL32(255, 196, 60, 255));
+        dl->AddRectFilledMultiColor(ImVec2(a.x, mid), f, IM_COL32(255, 196, 60, 255), IM_COL32(255, 196, 60, 255),
+                                    IM_COL32(220, 120, 20, 255), IM_COL32(220, 120, 20, 255));
+        // the chevron: two halves of a down arrowhead with a notch on top, the left one lit
+        {
+            float cy = a.y - ch * 1.3f;
+            ImVec2 l(x - cw, cy), r(x + cw, cy), notch(x, cy + ch * 0.38f), tip(x, cy + ch);
+            ImU32 lit = b[i].ally ? IM_COL32(170, 225, 255, 255) : IM_COL32(255, 214, 90, 255);
+            ImU32 dark = b[i].ally ? IM_COL32(60, 140, 230, 255) : IM_COL32(236, 128, 24, 255);
+            ImVec2 out[4] = {l, notch, r, tip};
+
+            dl->AddTriangleFilled(l, notch, tip, lit);
+            dl->AddTriangleFilled(notch, r, tip, dark);
+            dl->AddPolyline(out, 4, IM_COL32(70, 30, 6, 255), ImDrawFlags_Closed, 1.5f);
+        }
     }
 }
 

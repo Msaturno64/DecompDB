@@ -134,6 +134,14 @@ extern s32 BtlAtk_GetGuardKindE(HitChr *chr);
 extern s32 BtlAtk_GetGuardFlagSel(HitChr *chr);
 extern s32 BtlAtk_GetUnk2C(HitChr *chr);
 
+#ifdef PORT
+/* (more than two fighters: an outsider's blow reaches a beam struggler, btl_char_flag_clash.c BtlClash_PortOutsider) */
+extern s32 BtlClash_PortOutsider(s32 victim, s32 attacker);
+#define PORT_STRUGGLE_BLOW(a, b) (BtlClash_PortOutsider((b)->player, (a)->player) < 0)
+#else
+#define PORT_STRUGGLE_BLOW(a, b) 1
+#endif
+
 /* The fighter's parameter block (object + 0x91C). */
 extern s32 BtlParam_GetFlags(HitChr *chr);                           /* flags, + 0x10 */
 extern u32 BtlParam_GetFlags2(HitChr *chr);                           /* flags, + 0x14 */
@@ -323,7 +331,7 @@ s32 BtlHit_CheckNear(HitChr *a, HitChr *b) {
     Vec4 d;
     f32 range;
 
-    if (BtlChar_TestFlag(b, 0x42)) {
+    if (BtlChar_TestFlag(b, 0x42) && PORT_STRUGGLE_BLOW(a, b)) {
         return 0;
     }
     if (BtlChar_TestFlag(a, 0x4A)) {
@@ -442,7 +450,7 @@ s32 BtlHit_CheckTouch(HitChr *a, HitChr *b) {
     f32 dist;
     HitPose *pb;
 
-    if (BtlChar_TestFlag(b, 0x42)) {
+    if (BtlChar_TestFlag(b, 0x42) && PORT_STRUGGLE_BLOW(a, b)) {
         return 0;
     }
     if (!BtlChar_TestFlag(a, 0x4F)) {
@@ -1251,6 +1259,11 @@ void BtlHit_ApplyHit(HitChr *atk) {
             react = BtlAtk_GetReaction(atk);
         }
     }
+#ifdef PORT
+    if (BtlClash_PortOutsider(def->player, atk->player) >= 0) { /* (a beam struggler: the blow takes health, armour) */
+        react = 2;
+    }
+#endif
     if (react == 1) {
         BtlChar_SetHeldFlag(atk, 0x5C);
         return;

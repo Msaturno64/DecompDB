@@ -97,11 +97,6 @@ s32 BtlAct_QueueComboFinish(BtlActJChr *chr) {
     s32 col;
     s32 tech2;
     s32 tech3;
-#ifdef PORT
-    if (PortMulti_CinemaBusy(chr->player)) { /* (several fighters: one cinematic at a time) */
-        return 0;
-    }
-#endif
 
     if (!BtlChar_TestFlag(chr, 6)) {
         return 0;
@@ -567,11 +562,6 @@ s32 BtlAct_GetTechniqueAction(BtlActJChr *chr, s32 slot) {
  */
 s32 BtlAct_CanUseTechnique(BtlActJChr *chr, s32 slot) {
     s32 check;
-#ifdef PORT
-    if (PortMulti_CinemaBusy(chr->player)) { /* (several fighters: one cinematic at a time) */
-        return 0;
-    }
-#endif
 
     if ((u32)(slot - 2) >= 3) {
         return 0;
@@ -681,11 +671,6 @@ s32 BtlAct_GetSkillAction(BtlActJChr *chr, s32 slot) {
 s32 BtlAct_CanUseSkill(BtlActJChr *chr, u32 slot) {
     s32 flags;
     s32 stack;
-#ifdef PORT
-    if (PortMulti_CinemaBusy(chr->player)) { /* (several fighters: one cinematic at a time) */
-        return 0;
-    }
-#endif
 
     if (slot >= 2) {
         return 0;

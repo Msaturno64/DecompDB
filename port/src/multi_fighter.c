@@ -454,16 +454,21 @@ static int viewer(void) {
 
 /* btl_cam.c, BtlCam_UpdateOverride (as the Tag Team Mod's cinematic_camera_state / special_camera_arbitration):
    whether the screen shows a technique camera of `subject` (a view's priority, or the demo camera's cinematic): with
-   more than two fighters only when the player is in it, its owner or the owner's opponent; else the player keeps its
-   own camera and the technique plays on the stage. Unknown subject (a partner's, the stage's) or no single player:
-   shown, as on the console. */
+   more than two fighters only the one doing the technique sees it; the others, its target too, keep their own camera
+   and the technique plays on the stage (the user, 2026-10-20: "as DBZ Tag Team", the game goes on). A camera of no
+   fighter (the stage's, an object's, one a technique left running) is shown before the fight and not in it. No single
+   player, or two fighters: shown, as on the console. */
 int PortMulti_ViewerSees(int subject) {
+    extern int BtlSeq_IsFighting(void); /* src/battle/btl_seq.c */
     int v = viewer();
 
-    if (BattleSide_GetCount() <= 2 || v < 0 || subject < 0 || subject >= BattleSide_GetCount()) {
+    if (BattleSide_GetCount() <= 2 || v < 0) {
         return 1;
     }
-    return subject == v || PortMulti_TargetOf(subject) == v;
+    if (subject < 0 || subject >= BattleSide_GetCount()) {
+        return !BtlSeq_IsFighting();
+    }
+    return subject == v;
 }
 
 /* What BtlCam_UpdateOverride chose this frame, for BT3_MFLOG: the view drawn, a cinematic on, and shown. */
@@ -485,10 +490,11 @@ int PortMulti_CinemaOwner(void) {
     return on ? owner : -1;
 }
 
-/* btl_act_j.c, at the start of BtlAct_CanUseTechnique, CanUseSkill, QueueComboFinish, CanFuse, QueueFusion and
-   QueueSwitch (as the Tag Team Mod's cinematic_admission): with more than two fighters and a cinematic on, a fighter
-   that takes no part in it (its owner and the owner's opponent) starts none of them until it ends. One cinematic at a
-   time: the demo camera is one, and the fight goes on around it (C1), so a second one took the first's over. */
+/* btl_act_j.c, at the start of BtlAct_CanFuse, QueueFusion and QueueSwitch (as the Tag Team Mod's
+   cinematic_admission): with more than two fighters and a cinematic on, a fighter that takes no part in it (its owner
+   and the owner's opponent) fuses or switches only after it ends (their model loads). Techniques are not held
+   (SPEC-cinematicas.md C9, the user: "o hacer otra técnica yo"): a second one takes the demo camera over, which only
+   its owner sees; no fight logic waits on that camera (only which effects are drawn). */
 int PortMulti_CinemaBusy(int fighter) {
     int on, owner;
 
@@ -499,7 +505,7 @@ int PortMulti_CinemaBusy(int fighter) {
     if (!on) {
         return 0;
     }
-    return owner < 0 || (fighter != owner && fighter != PortMulti_TargetOf(owner));
+    return owner >= 0 && fighter != owner && fighter != PortMulti_TargetOf(owner); /* (one of no fighter holds nobody) */
 }
 
 /* BTL_TIME_STOPPED_FOR (battle/btl_multi.h): whether a model change stops this fighter's input, gauges, timers and
@@ -821,6 +827,7 @@ static void bar_project(const float *m, const float *v, int *s) {
 }
 PORT_HOST static int sBarBuilt, sBarCount;
 PORT_HOST static unsigned sBarSeq;
+PORT_HOST static int sAssistBuild, sAssistShown; /* a beam assist helps the HUD's own side (ui.cpp: its words) */
 
 void PortMulti_ProjectBars(int view, int last) {
     extern void Vu0Screen_StoreMtx(float *dst);                        /* the view's world-to-screen matrix */
@@ -838,7 +845,13 @@ void PortMulti_ProjectBars(int view, int last) {
         return;
     }
     if (view == 0) {
+        extern int BtlClash_PortAssistBand(void); /* src/battle/btl_char_flag_clash.c */
+        int band = n > 2 ? BtlClash_PortAssistBand() : -1;
+
         sBarBuilt = 0;
+        sHudPass = 1;
+        sAssistBuild = band >= 0 && band == BattleSide_GetBand(PortMulti_HudFighter(0));
+        sHudPass = 0;
     }
     if (n > 2 && gBtlCamView != NULL && gHud != NULL && (*(unsigned GAME_PTR)(gHud + 0x30) & 1)) {
         x0 = *(int GAME_PTR)(gBtlCamView + 0x200); /* BtlCamView.scissorX0 .. scissorY1 (battle/btl_cam.h) */
@@ -892,6 +905,7 @@ void PortMulti_ProjectBars(int view, int last) {
         __atomic_add_fetch(&sBarSeq, 1, __ATOMIC_ACQ_REL);
         memcpy(sBarShown, sBarBuild, sizeof(sBarShown));
         sBarCount = sBarBuilt;
+        sAssistShown = sAssistBuild;
         __atomic_add_fetch(&sBarSeq, 1, __ATOMIC_ACQ_REL);
     }
 }
@@ -900,13 +914,22 @@ void PortMulti_ProjectBars(int view, int last) {
    a while: a fight left halfway (to the main menu) publishes no more, and its last bars stayed over the menus. */
 #define BAR_STALE_READS 30 /* (the window is drawn once or a few times a game frame) */
 
+PORT_HOST static unsigned sBarSameReads;
+
+/* Whether the last drawn frame had a beam assist for the HUD's own side (ui.cpp, with the bars). */
+int PortMulti_ReadAssist(void) {
+    return sBarSameReads <= BAR_STALE_READS && __atomic_load_n(&sAssistShown, __ATOMIC_ACQUIRE);
+}
+
 int PortMulti_ReadBars(PortMultiBar *out, int max) {
-    static unsigned lastSeq, sameReads;
+    static unsigned lastSeq;
+    unsigned sameReads = sBarSameReads;
     unsigned a, b;
     int tries, c;
 
     a = __atomic_load_n(&sBarSeq, __ATOMIC_ACQUIRE);
     sameReads = a == lastSeq ? sameReads + 1 : 0;
+    sBarSameReads = sameReads;
     lastSeq = a;
     if (sameReads > BAR_STALE_READS) {
         return 0;
@@ -1123,6 +1146,33 @@ void PortMulti_Trace(unsigned vblank, int battle) {
         extern void PortMulti_NoteFrozen(void);
         PortMulti_NoteFrozen();
     }
+    /* BT3_TEST_TECH=<fighter>:<kind>:<blank>,... (tests): that fighter uses a technique at that blank, as a story
+       script makes one (src/battle/btl_capi_b.c BtlCtrl_UseTechnique: kind 0 / 1 a Blast 1, 2..4 a Blast 2 or the
+       ultimate). Two at once, facing each other: a beam struggle. */
+    if (battle && getenv("BT3_TEST_TECH") != NULL) {
+        extern int BtlCtrl_UseTechnique(int player, int kind);
+        const char *e = getenv("BT3_TEST_TECH");
+
+        while (*e != '\0') {
+            int f = atoi(e), k;
+            unsigned at;
+
+            if ((e = strchr(e, ':')) == NULL) {
+                break;
+            }
+            k = atoi(++e);
+            if ((e = strchr(e, ':')) == NULL) {
+                break;
+            }
+            at = (unsigned)atoi(++e);
+            if (vblank == at && f >= 0 && f < BattleSide_GetCount()) {
+                printf("bt3: test: fighter %d uses technique %d at blank %u\n", f, k, vblank);
+                BtlCtrl_UseTechnique(f, k);
+            }
+            e += strcspn(e, ",");
+            e += *e == ',';
+        }
+    }
     if (fp == NULL || !battle) {
         return;
     }
@@ -1130,8 +1180,17 @@ void PortMulti_Trace(unsigned vblank, int battle) {
         extern int BtlChars_IsTimeStopped(void);  /* src/battle/btl_char_ctl_b.c */
         extern int BtlCam_GetPriorityView(void);  /* src/battle/btl_cam.c: -1 none */
 
+        extern char GAME_PTR gDemoCam;            /* src/battle/btl_demo_cam.c: fixed +0x32C, anim +0x2C0, flags +0x308 */
+
         fprintf(fp, "%u ts %d pv %d sv %d cin %d/%d", vblank, BtlChars_IsTimeStopped() != 0, BtlCam_GetPriorityView(),
                 sShownView, sShownCinema, sShownCinemaSeen);
+        if (gDemoCam != NULL) {
+            extern int BtlClash_BothInClashA(void), BtlClash_PortId(int role); /* btl_char_flag_clash.c */
+
+            fprintf(fp, " dc %d %d %X own %d cl %d %d %d", *(int GAME_PTR)(gDemoCam + 0x32C),
+                    *(int GAME_PTR)(gDemoCam + 0x2C0) != 0, *(int GAME_PTR)(gDemoCam + 0x308), PortMulti_CinemaOwner(),
+                    BtlClash_BothInClashA(), BtlClash_PortId(0), BtlClash_PortId(1));
+        }
     }
     for (i = 0; i < BattleSide_GetCount(); i++) {
         obj = BattleSide_GetObjId(i);
@@ -1141,8 +1200,8 @@ void PortMulti_Trace(unsigned vblank, int battle) {
             extern int BtlCharApi_GetAction(int objId); /* src/battle/btl_capi_b.c */
             extern int BtlCharApi_IsInSkill(int objId); /* src/battle/btl_capi_a.c */
 
-            fprintf(fp, " | %d %d %08x %08x %08x %d %X %d", BattleSide_GetBand(i), BtlCharApi_GetHp(obj), u[0], u[1], u[2],
-                    PortMulti_TargetOf(i), BtlCharApi_GetAction(obj), BtlCharApi_IsInSkill(obj));
+            fprintf(fp, " | %d %d %08x %08x %08x %d %X %d%s", BattleSide_GetBand(i), BtlCharApi_GetHp(obj), u[0], u[1], u[2],
+                    PortMulti_TargetOf(i), BtlCharApi_GetAction(obj), BtlCharApi_IsInSkill(obj), PortMulti_Frozen(i) ? " F" : "");
         }
     }
     fputc('\n', fp);
@@ -1188,7 +1247,7 @@ void PortMulti_FfaSettingSet(int on) {
 }
 
 /* "Big giants" / "Big stages" (settings scale_giants / scale_stages, on unless set), as in the Tag Team Mod
-   (SPEC-escala.md). Online both are always on, so every copy plays the same; BT3_SCALE=<0|1> (tests) sets both.
+   (SPEC-escala.md). Online both are always on, so every copy plays the same; BT3_BIG=<0|1> (tests) sets both.
    Latched as a battle is set up (PortMulti_WantAll): gPortGiants is read by the game's own code (bobj_a.c and the
    others that test BtlChar_PortGiant), gPortBigStages by the stage load. */
 int gPortGiants, gPortBigStages;
@@ -1213,7 +1272,7 @@ void PortScale_SettingSet(int which, int on) {
 
 static void scale_latch(void) {
     extern int Port_NetActive(void); /* gs/net.c */
-    const char *test = getenv("BT3_SCALE");
+    const char *test = getenv("BT3_BIG");
 
     if (test != NULL) {
         gPortGiants = gPortBigStages = atoi(test) != 0;
@@ -1223,6 +1282,17 @@ static void scale_latch(void) {
         gPortGiants = PortScale_Setting(0);
         gPortBigStages = PortScale_Setting(1);
     }
+}
+
+/* btl_char_flag_clash.c: how near a struggling teammate one has to come to join its beam (beam assist): 120, or
+   BT3_TEST_ASSIST_RANGE (tests: from anywhere). */
+float PortMulti_AssistRange(void) {
+    PORT_HOST static float range = -1.0f;
+
+    if (range < 0.0f) {
+        range = getenv("BT3_TEST_ASSIST_RANGE") != NULL ? (float)atof(getenv("BT3_TEST_ASSIST_RANGE")) : 120.0f;
+    }
+    return range;
 }
 
 /* "Starting health" of each team (settings multi_hp0 / multi_hp1, percent, 100 unless set): every member of the

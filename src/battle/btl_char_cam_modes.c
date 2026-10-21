@@ -591,18 +591,31 @@ void ChrCam_AddShake(ChrCamChr *chr, f32 strength, f32 time) {
 
 /* Fighter flags 0xDA / 0xD7 / 0xD8 / 0xD9: stop the scripted camera / play one of the character's three camera animations. */
 void ChrCam_UpdateDemo(ChrCamChr *chr) {
+#ifdef PORT
+    /* (the original passes the fighter's number as its object's: the same with two fighters; with more, a
+       transformation or an effect's object between them made another's object the camera's: someone else's
+       cinematic, on another fighter, SPEC-cinematicas.md) */
+    extern s32 BattleSide_GetCount(void);
+    s32 obj = BattleSide_GetCount() > 2 ? chr->objId : chr->side;
+#else
+#define obj chr->side
+#endif
+
     if (BtlChar_TestFlag(chr, 0xDA)) {
         DemoCam_Stop();
     }
     if (BtlChar_TestFlag(chr, 0xD7)) {
-        DemoCam_PlayCharAnim0(chr->side);
+        DemoCam_PlayCharAnim0(obj);
     }
     if (BtlChar_TestFlag(chr, 0xD8)) {
-        DemoCam_PlayCharAnim1(chr->side);
+        DemoCam_PlayCharAnim1(obj);
     }
     if (BtlChar_TestFlag(chr, 0xD9)) {
-        DemoCam_PlayCharAnim2(chr->side);
+        DemoCam_PlayCharAnim2(obj);
     }
+#ifndef PORT
+#undef obj
+#endif
 }
 
 /* Starts a camera cut from explicit (start, delta) pairs. */

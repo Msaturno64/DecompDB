@@ -74,6 +74,139 @@ static s32 sClash[2] = {0, 1};
 s32 BtlClash_PortId(s32 role) {
     return sClash[role];
 }
+
+/* Beam struggle assists (the user, 2026-10-20, as the Tag Team Mod's author showed them): with more than two
+   fighters, a struggle (clash A) is not the two's alone. An enemy of one of them who is not in it may hit that one:
+   a blow takes health and does not move it (btl_char_hit.c: armour), a ki attack or a technique feeds the other's
+   beam (btl_char_coll_b.c, BtlColl_TryDodge): from then that one's score counts 1.5 times (btl_act_f.c), and what it
+   has at once. sAssist: the role so helped, game state as sClash; cleared while no clash runs. */
+static s32 sAssist[2];
+s32 BtlClash_BothInClashA(void);
+
+/* `victim`'s role (0 / 1) in a running struggle when `attacker` is an enemy of it from outside, else -1. */
+s32 BtlClash_PortOutsider(s32 victim, s32 attacker) {
+    s32 n = BattleSide_GetCount();
+    s32 role;
+
+    if (n <= 2 || gBtlChars == NULL || gBtlChars->clashState < 1 || gBtlChars->clashState > 5 || !BtlClash_BothInClashA()) {
+        return -1;
+    }
+    if (victim == sClash[0]) {
+        role = 0;
+    } else if (victim == sClash[1]) {
+        role = 1;
+    } else {
+        return -1;
+    }
+    if (attacker < 0 || attacker >= n || attacker == sClash[0] || attacker == sClash[1] ||
+        BattleSide_GetBand(attacker) == BattleSide_GetBand(victim)) {
+        return -1;
+    }
+    return role;
+}
+
+/* An outsider's energy attack on the struggler of `role`: the other one is helped. */
+void BtlClash_PortAssist(s32 role) {
+    s32 helped = role ^ 1;
+
+    if (!sAssist[helped]) {
+        BtlFlagChr *chr = CLASH_CHR(helped);
+
+        sAssist[helped] = 1;
+        chr->clashCountA += chr->clashCountA / 2;
+    }
+}
+
+/* Beam assist (as the Tag Team Mod's author's video: "BEAM ASSIST X1.5"): a teammate of a struggler who comes within
+   ASSIST_RANGE of it while it struggles joins in beside it: it turns to the other struggler and holds the beam pose of
+   the struggle (action 0x130, btl_act_f.c; let go with everyone when it ends), and its teammate is helped as above.
+   A computer teammate that is free as the struggle starts (before its lead is counted, from frame 60 of state 2) goes
+   there at once, at the struggler's side. sAssister: a bit per fighter so held (game state). */
+#define ASSIST_RANGE PortMulti_AssistRange()
+extern f32 PortMulti_AssistRange(void); /* port/src/multi_fighter.c: 120, or BT3_TEST_ASSIST_RANGE (tests) */
+static u32 sAssister;
+
+static void BtlClash_PortJoin(void) {
+    extern void BtlCharApi_GetPos(s32 objId, Vec4 *out);
+    extern s32 BtlCharApi_GetHp(s32 objId);
+    extern s32 BtlChar_IsFrozen(BtlFlagChr *chr);
+    extern void BtlAct_Request(BtlFlagChr *chr, s32 action);
+    extern void BtlMove_TurnToPoint(BtlFlagChr *chr, Vec4 *target, f32 yawStep, f32 pitchStep);
+    extern s32 BattleSide_GetControl(s32 side); /* battle_load.c: 2 the computer */
+    s32 n = BattleSide_GetCount();
+    s32 early = gBtlChars->clashState == 2 && gBtlChars->clashA.timer < 20;
+    s32 k;
+    s32 role;
+
+    for (k = 0; k < n && k < 32; k++) {
+        s32 act = BtlAct_GetCurrent(BtlChar_Get(k));
+
+        /* (free: alive, not held, standing or moving: the neutral state 0xB and the moves 0xC..0x35) */
+        if (k == sClash[0] || k == sClash[1] || ((sAssister >> k) & 1) || BtlCharApi_GetHp(BtlChar_Get(k)->objId) <= 0 ||
+            BtlChar_IsFrozen(BtlChar_Get(k)) || act < 0xB || act > 0x35) {
+            continue;
+        }
+        for (role = 0; role < 2; role++) {
+            Vec4 me;
+            Vec4 ally;
+            Vec4 foe;
+            f32 dx;
+            f32 dy;
+            f32 dz;
+
+            if (BattleSide_GetBand(k) != BattleSide_GetBand(sClash[role]) ||
+                BattleSide_GetBand(k) == BattleSide_GetBand(sClash[role ^ 1])) {
+                continue;
+            }
+            BtlCharApi_GetPos(BtlChar_Get(k)->objId, &me);
+            BtlCharApi_GetPos(CLASH_CHR(role)->objId, &ally);
+            dx = me.x - ally.x;
+            dy = me.y - ally.y;
+            dz = me.z - ally.z;
+            BtlCharApi_GetPos(CLASH_CHR(role ^ 1)->objId, &foe);
+            if (BattleSide_GetControl(k) == 2 && early) { /* (the computer: beside the struggler, a little behind) */
+                Vec4 *at = &BtlChar_GetPos(BtlChar_Get(k))->pos;
+                f32 fx = foe.x - ally.x;
+                f32 fz = foe.z - ally.z;
+                f32 len = __builtin_sqrtf(fx * fx + fz * fz);
+
+                if (len > 1.0f) {
+                    fx /= len;
+                    fz /= len;
+                }
+                at->x = ally.x - fz * 35.0f - fx * 12.0f;
+                at->y = ally.y;
+                at->z = ally.z + fx * 35.0f - fz * 12.0f;
+            } else if (dx * dx + dy * dy + dz * dz >= ASSIST_RANGE * ASSIST_RANGE) {
+                continue;
+            }
+            sAssister |= 1u << k;
+            BtlClash_PortAssist(role ^ 1); /* (the struggler of `role` is helped) */
+            BtlMove_TurnToPoint(BtlChar_Get(k), &foe, 3.14159265f, 3.14159265f);
+            BtlAct_Request(BtlChar_Get(k), 0x130);
+            break;
+        }
+    }
+}
+
+/* Whether the fighter holds the beam pose beside a struggling teammate. */
+s32 BtlClash_PortAssister(s32 fighter) {
+    return BattleSide_GetCount() > 2 && fighter >= 0 && fighter < 32 && ((sAssister >> fighter) & 1);
+}
+
+/* The band of the struggler that is helped while a struggle runs (gs/ui.cpp writes "BEAM ASSIST X1.5" for it), or
+   -1. */
+s32 BtlClash_PortAssistBand(void) {
+    if (BattleSide_GetCount() <= 2 || gBtlChars == NULL || gBtlChars->clashState < 1 || gBtlChars->clashState > 5) {
+        return -1;
+    }
+    return sAssist[0] ? BattleSide_GetBand(sClash[0]) : sAssist[1] ? BattleSide_GetBand(sClash[1]) : -1;
+}
+
+/* Whether the fighter's struggle score counts 1.5 times. */
+s32 BtlClash_PortAssisted(s32 fighter) {
+    return BattleSide_GetCount() > 2 && ((fighter == sClash[0] && sAssist[0]) || (fighter == sClash[1] && sAssist[1]));
+}
 #else
 #define CLASH_ID(role) (role)
 #define CLASH_CHR(role) BtlChar_Get(role)
@@ -370,6 +503,11 @@ s32 BtlClash_UpdateA(s32 state) {
             } else {
                 damage = BtlSuper_GetDamage(winner, cls, 0, 1);
                 damage += BtlSuper_GetDamage(loser, loserCls, 0, 1) / 2;
+#ifdef PORT
+                if (BtlClash_PortAssisted(winner->player)) { /* (beam assist: the beam that wins hits 1.5 times as hard) */
+                    damage += damage / 2;
+                }
+#endif
                 switch (cls) {
                 case 2:
                     flags = 0x800000;
@@ -597,15 +735,31 @@ static s32 BtlClash_PortFindPair(void) {
     s32 i;
     s32 j;
 
+    sAssist[0] = sAssist[1] = 0;
+    for (i = 0; i < n && i < 32; i++) { /* (one who assisted is so until out of the pose: never a new struggle's two) */
+        if (!BtlCharApi_IsInClashA(BtlChar_Get(i)->objId)) {
+            sAssister &= ~(1u << i);
+        }
+    }
+
     for (i = 0; i < n; i++) {
         for (j = i + 1; j < n; j++) {
             if (PortMulti_TargetOf(i) != j || PortMulti_TargetOf(j) != i || BattleSide_GetBand(i) == BattleSide_GetBand(j) ||
-                PortMulti_InPair(i) || PortMulti_InPair(j)) {
+                PortMulti_InPair(i) || PortMulti_InPair(j) || (i < 32 && ((sAssister >> i) & 1)) ||
+                (j < 32 && ((sAssister >> j) & 1))) {
                 continue;
             }
             sClash[0] = i;
             sClash[1] = j;
             if (BtlClash_BothInClashA() || BtlClash_BothInActionFA() || BtlClash_BothInActionFB()) {
+                s32 k;
+
+                for (k = 0; k < n && k < 32; k++) { /* (a last struggle's assisters let go: not this one's) */
+                    if ((sAssister >> k) & 1) {
+                        BtlChar_SetHeldFlag(BtlChar_Get(k), 0xC3);
+                    }
+                }
+                sAssister = 0;
                 return 1;
             }
         }
@@ -667,6 +821,11 @@ void BtlClash_Update(void) {
     case 4:
     case 5:
         *state = BtlClash_UpdateA(*state);
+#ifdef PORT
+        if (BattleSide_GetCount() > 2 && *state >= 2 && *state <= 4) {
+            BtlClash_PortJoin();
+        }
+#endif
         if (!BtlClash_BothInClashA()) {
             BtlClash_HoldClashA(0);
             BtlClash_HoldClashA(1);

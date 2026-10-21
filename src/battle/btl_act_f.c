@@ -2994,6 +2994,15 @@ void BtlAct_ClashStruggleHandler(ActGChr *chr, s32 phase) {
         if (BtlSuper_GetHitDirKind(chr, slot) == 1) {
             anim = 0x16C;
         }
+#ifdef PORT
+        {
+            extern s32 BtlClash_PortAssister(s32 fighter); /* btl_char_flag_clash.c: beside a struggling teammate */
+
+            if (BtlClash_PortAssister(chr->player)) {
+                anim = 0x16C; /* (the beam pose, whatever its own technique is) */
+            }
+        }
+#endif
         BtlAnim_Play(chr, anim, 0.15f);
         BtlChar_ClearFlag(chr, 0xAA);
         BtlChar_ClearFlagRange(chr, 0xBF, 0xC3);
@@ -3052,6 +3061,15 @@ void BtlAct_ClashStruggleHandler(ActGChr *chr, s32 phase) {
         BtlChar_SetFlag(chr, 0x134);
         if (chr->actionFrame >= 0x10 && BtlInput_TestAction(chr, PORT_BT4(0x33, 0x50), 1)) { /* (BT4: REA, 0x1FB9B8) */
             chr->clashPower += PORT_BT4(1, 3); /* (BT4: REA, 0x1FB9D0) */
+#ifdef PORT
+            {
+                extern s32 BtlClash_PortAssisted(s32 fighter); /* btl_char_flag_clash.c: a teammate helps */
+
+                if ((chr->actionFrame & 1) && BtlClash_PortAssisted(chr->player)) {
+                    chr->clashPower += PORT_BT4(1, 3); /* (every other frame: 1.5 times) */
+                }
+            }
+#endif
 #ifdef PORT /* PC build: BT3_CLASH_LOG=1 says what a clash counts (testing the Square option) */
             Port_ClashLog(chr->player, "beam clash", 1, chr->clashPower, chr->actionFrame);
 #endif

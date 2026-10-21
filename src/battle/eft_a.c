@@ -984,6 +984,10 @@ void EftCam_Clear(void) {
     }
 }
 
+#ifdef PORT
+static s32 sEftCamIdle; /* frames the cut's fighter has been out of its technique (game state) */
+#endif
+
 /* Starts a camera cut: plays arg->anim on the demo camera, timed by fighter arg->objId's technique timer if any. */
 void EftCam_Start(EftCamArg *arg) {
     gEftCam->arg = *arg;
@@ -998,6 +1002,9 @@ void EftCam_Start(EftCamArg *arg) {
     gEftCam->objId = arg->objId;
     gEftCam->active = 1;
     gEftCam->hold = 0;
+#ifdef PORT
+    sEftCamIdle = 0;
+#endif
 }
 
 /* Sets whether the cut holds its last frame instead of ending. */
@@ -1045,8 +1052,20 @@ void EftCam_Update(void) {
     }
     if (gEftCam->objId != -1) {
         if (!BtlCharApi_IsInTechnique(gEftCam->objId)) {
+#ifdef PORT
+            extern s32 BattleSide_GetCount(void);
+
+            /* (several fighters: another can end the owner's technique, as two cannot; the cut stopped there and
+               held the demo camera for good. A second out of the technique ends it) */
+            if (BattleSide_GetCount() > 2 && ++sEftCamIdle > 60) {
+                EftCam_Stop();
+            }
+#endif
             return;
         }
+#ifdef PORT
+        sEftCamIdle = 0;
+#endif
         time = BtlCharApi_GetChargedUnkC78(gEftCam->objId);
     } else {
         time = DemoCam_GetTime() + 2.0f;

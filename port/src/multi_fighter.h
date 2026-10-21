@@ -17,6 +17,9 @@ typedef struct PortMultiBar {
 /* The render thread's copy of the last drawn frame's bars; returns how many (at most max). */
 int PortMulti_ReadBars(PortMultiBar *out, int max);
 
+/* Whether a beam assist helps the HUD's own side in the last drawn frame ("BEAM ASSIST X1.5"). */
+int PortMulti_ReadAssist(void);
+
 #ifdef __cplusplus
 }
 #endif
