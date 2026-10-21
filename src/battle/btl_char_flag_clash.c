@@ -132,7 +132,7 @@ static void BtlClash_PortJoin(void) {
     extern s32 BtlChar_IsFrozen(BtlFlagChr *chr);
     extern void BtlAct_Request(BtlFlagChr *chr, s32 action);
     extern void BtlMove_TurnToPoint(BtlFlagChr *chr, Vec4 *target, f32 yawStep, f32 pitchStep);
-    extern s32 BattleSide_GetControl(s32 side); /* battle_load.c: 2 the computer */
+    extern s32 BtlCharApi_IsInputInjected(s32 objId); /* btl_char_api.c: the computer plays it */
     s32 n = BattleSide_GetCount();
     s32 early = gBtlChars->clashState == 2 && gBtlChars->clashA.timer < 20;
     s32 k;
@@ -164,7 +164,8 @@ static void BtlClash_PortJoin(void) {
             dy = me.y - ally.y;
             dz = me.z - ally.z;
             BtlCharApi_GetPos(CLASH_CHR(role ^ 1)->objId, &foe);
-            if (BattleSide_GetControl(k) == 2 && early) { /* (the computer: beside the struggler, a little behind) */
+            if (BtlCharApi_IsInputInjected(BtlChar_Get(k)->objId) && early) {
+                /* (the computer, or a player it took over online: beside the struggler, a little behind) */
                 Vec4 *at = &BtlChar_GetPos(BtlChar_Get(k))->pos;
                 f32 fx = foe.x - ally.x;
                 f32 fz = foe.z - ally.z;
