@@ -20,6 +20,9 @@ int PortMulti_ReadBars(PortMultiBar *out, int max);
 /* Whether a beam assist helps the HUD's own side in the last drawn frame ("BEAM ASSIST X1.5"). */
 int PortMulti_ReadAssist(void);
 
+/* The fighter the player watches while its own is down and the fight goes on (L3: the next one), -1 otherwise. */
+int PortMulti_ReadWatch(void);
+
 #ifdef __cplusplus
 }
 #endif

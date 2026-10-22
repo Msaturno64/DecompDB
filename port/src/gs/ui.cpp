@@ -378,6 +378,7 @@ static void font_picker(const char *label, PanelFont &pf, const char *tip) {
 // BT3's a thin gold bar under the lock-on chevron (orange over an enemy, light blue over a teammate, as the user's
 // example), BT4's (PRIVATE) its green gauge in a steel frame.
 extern "C" int gPortBt4; // plat_mem.c
+extern "C" int Port_MenuLang(void); // (below)
 static void multi_bars_draw(void) {
     PortMultiBar b[20];
     int n = PortMulti_ReadBars(b, 20);
@@ -395,6 +396,28 @@ static void multi_bars_draw(void) {
             }
         }
         dl->AddText(NULL, size, at, IM_COL32(255, 236, 120, 255), say);
+    }
+
+    int watch = PortMulti_ReadWatch();
+    if (watch >= 0) { // the player's fighter is down and the fight goes on: whom this screen follows (L3: the next one)
+        char say[96], who[40];
+        const char *name = Port_NetName(PortNsel_PlaceOf(watch));
+        float size = (float)gUiPresentH * 0.04f;
+
+        if (name[0] != '\0') {
+            snprintf(who, sizeof(who), "%s", name);
+        } else {
+            snprintf(who, sizeof(who), "%s %d", Port_MenuLang() == 1 ? "LUCHADOR" : "FIGHTER", watch + 1);
+        }
+        snprintf(say, sizeof(say), Port_MenuLang() == 1 ? "ESPECTADOR: %s   (L3: cambiar)" : "SPECTATING: %s   (L3: next)", who);
+        ImVec2 ts = ImGui::GetFont()->CalcTextSizeA(size, FLT_MAX, 0.0f, say);
+        ImVec2 at((float)gUiPresentX + ((float)gUiPresentW - ts.x) * 0.5f, (float)gUiPresentY + (float)gUiPresentH * 0.16f);
+        for (int ox = -2; ox <= 2; ox += 2) {
+            for (int oy = -2; oy <= 2; oy += 2) {
+                dl->AddText(NULL, size, ImVec2(at.x + ox, at.y + oy), IM_COL32(10, 10, 20, 255), say);
+            }
+        }
+        dl->AddText(NULL, size, at, IM_COL32(170, 225, 255, 255), say);
     }
 
     for (int i = 0; i < n; i++) {
@@ -2473,9 +2496,10 @@ static bool frame_build(void) {
         chat_close();
     }
     bool chat = online && (sChat || chat_recent());
+    bool watching = sReady && PortMulti_ReadWatch() >= 0; // (spectating: multi_bars_draw says whom)
     meter_count();
     sBuilt = false;
-    if (!sReady || (!sOpen && !sQuit && !notice && !overlay && !meter && !names && !bars && !chat)) {
+    if (!sReady || (!sOpen && !sQuit && !notice && !overlay && !meter && !names && !bars && !chat && !watching)) {
         return false;
     }
     if (sPadHold && sCapKind != 2) { // a binding was taken: the controller works the window again once nothing is held

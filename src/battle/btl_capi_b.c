@@ -407,6 +407,17 @@ s32 BtlCharApi_GetHp(s32 objId) {
     return 0;
 }
 
+#ifdef PORT
+/* ... set (tests: port/src/multi_fighter.c, BT3_TEST_HP). */
+void BtlCharApi_PortSetHp(s32 objId, s32 hp) {
+    BtlCapiBChr *chr = BtlChar_FindByObjId(objId);
+
+    if (chr != NULL) {
+        BtlMember_GetActiveGauge(chr)->hp = hp;
+    }
+}
+#endif
+
 /* Its maximum. */
 s32 BtlCharApi_GetHpMax(s32 objId) {
     BtlCapiBChr *chr = BtlChar_FindByObjId(objId);

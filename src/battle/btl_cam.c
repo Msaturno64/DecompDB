@@ -366,19 +366,13 @@ void BtlCam_UpdateView(s32 side) {
 #ifdef PORT
     {
         /* several fighters on the field: the side's view is its lead's camera, never a teammate's technique or
-           throw camera (the user, 2026-10-22, 2v2 online: "no somos bots, necesitamos ver lo que hacemos") */
+           throw camera (the user, 2026-10-22, 2v2 online: "no somos bots, necesitamos ver lo que hacemos"); the
+           player's own view is its fighter's camera, or while that one is down the one it watches (spectating) */
         extern void PortMulti_NoteViewSubject(s32 view, s32 fighter); /* port/src/multi_fighter.c */
-        s32 who = side;
+        extern s32 PortMulti_ViewFighter(s32 side);
+        s32 who = PortMulti_ViewFighter(side);
 
-        {
-            extern int Port_NetViewFighter(void); /* port/src/gs/net.c: this copy's player, beyond the two leads */
-            s32 mine = Port_NetViewFighter();
-
-            if (mine >= 2 && side == 0) { /* (online: this copy's view 0 is its own player's fighter's camera) */
-                objId = BattleSide_GetObjId(mine);
-                who = mine;
-            }
-        }
+        objId = BattleSide_GetObjId(who);
         PortMulti_NoteViewSubject(side, who); /* (whose technique camera this view is: BtlCam_UpdateOverride) */
     }
 #endif

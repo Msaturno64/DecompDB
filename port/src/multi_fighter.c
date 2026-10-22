@@ -202,6 +202,9 @@ extern int BtlCharApi_GetAction(int objId);            /* src/battle/btl_capi_b.
    back with the fighters. -1: none yet. */
 static int sTarget[FIGHTER_MAX];
 static int sTargetFrame, sL3Prev[FIGHTER_MAX], sHpPrev[FIGHTER_MAX]; /* (see PortMulti_UpdateTargets) */
+/* A player's fighter that is down while the fight goes on: the fighter its player watches (camera, HUD panels; L3
+   the next one), -1 while it can fight. Game state, as the targets. */
+static int sWatch[FIGHTER_MAX] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
 /* While one hit between two fighters is tested or applied (btl_char_hit.c), each one's opponent is the other one,
    whoever its target is; -1: none. Set and cleared within one call, so it is never left over in a saved state. */
 static int sOverride[FIGHTER_MAX] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
@@ -466,9 +469,9 @@ void PortMulti_NoteViewSubject(int view, int fighter) {
     }
 }
 
-/* The fighter whose camera the screen is: the local player's online (its view), else the one player's fighter when
-   one side is a player's and the other the computer's; -1 with two players on one screen or none (the demo). */
-static int viewer(void) {
+/* The local player's fighter: online its own (its view), else the one player's fighter when one side is a player's
+   and the other the computer's; -1 with two players on one screen or none (the demo). */
+static int player(void) {
     extern int BattleSide_GetControl(int side); /* src/battle/battle_load.c: 0 a pad, 2 the computer */
     extern int Port_NetActive(void), Port_NetView(void), Port_NetViewFighter(void); /* gs/net.c */
 
@@ -483,6 +486,27 @@ static int viewer(void) {
     }
     return -1;
 }
+
+/* The fighter whose camera the screen is: the player's, or the one it watches while its own is down (sWatch). */
+static int viewer(void) {
+    int v = player();
+
+    return v >= 0 && v < FIGHTER_MAX && sWatch[v] >= 0 ? sWatch[v] : v;
+}
+
+/* btl_cam.c, BtlCam_UpdateView: the fighter whose camera view `side` is. The view the player sees (online its view,
+   0 for a fighter past the leads) is the viewer's; the other one its side's lead (and so with two fighters). */
+int PortMulti_ViewFighter(int side) {
+    int me = player();
+
+    if (BattleSide_GetCount() <= 2 || me < 0) {
+        return side;
+    }
+    return side == (me < 2 ? me : 0) ? viewer() : side;
+}
+
+/* ui.cpp: the fighter the player watches while its own is down, -1 otherwise (published with the bars). */
+PORT_HOST static int sWatchShown = -1;
 
 /* btl_cam.c, BtlCam_UpdateOverride (as the Tag Team Mod's cinematic_camera_state / special_camera_arbitration):
    whether the screen shows a technique camera of `subject` (a view's priority, or the demo camera's cinematic): with
@@ -668,8 +692,29 @@ void PortMulti_ResetTargets(void) {
         sHpPrev[i] = 0x7FFFFFFF;
         sThreat[i] = -1;
         sVictim[i] = -1;
+        sWatch[i] = -1;
     }
     sTargetFrame = 0;
+}
+
+/* The fighter after `from` (round to the start) that fighter i, down, can watch: one still up, a teammate first while
+   it watches nobody yet (from -1); -1 when none is up. */
+static int next_watch(int i, int n, int from) {
+    int s, k;
+
+    for (s = 1; from < 0 && s <= n; s++) {
+        k = (i + s) % n;
+        if (BattleSide_GetBand(k) == BattleSide_GetBand(i) && !BtlChar_IsDead(BtlChar_Get(k))) {
+            return k;
+        }
+    }
+    for (s = 1; s <= n; s++) {
+        k = ((from < 0 ? i : from) + s) % n;
+        if (k != i && !BtlChar_IsDead(BtlChar_Get(k))) {
+            return k;
+        }
+    }
+    return -1;
 }
 
 /* The enemy of fighter i that can fight and is nearest to it (the lowest index of equally near ones, so both
@@ -721,6 +766,7 @@ int PortMulti_NextEnemyAfter(int fighter, int skip, int prev) {
 }
 
 #define PAD_L3_BIT 0x2         /* PAD_L3, include/sys/pad.h */
+#define PAD_HELD 0x148          /* Pad.held, include/sys/pad.h */
 #define CHR_RAW_HELD 0x570      /* the fighter's input block: rawHeld, its pad as it was read (battle/btl_input.h) */
 #define CPU_REPICK_FRAMES 90    /* a computer fighter looks again for the nearest enemy every 3 seconds */
 
@@ -770,7 +816,23 @@ void PortMulti_UpdateTargets(void) {
             k = nearest_enemy(i, n, p);
         }
         hp = BtlCharApi_GetHp(BattleSide_GetObjId(i));
-        if (BattleSide_GetControl(i) == 0) {
+        if (BattleSide_GetControl(i) == 0 && BtlChar_IsDead(BtlChar_Get(i))) {
+            /* down while the fight goes on: its player watches another fighter, L3 the next one (the pad itself, as
+               the game has it on every copy: a fighter that is down may read it no more) */
+            extern void GAME_PTR Pad_At(int pad); /* src/sys/pad.c */
+            extern int BattleSide_GetPad(int side); /* src/battle/battle_load.c */
+            int w = sWatch[i];
+
+            l3 = (*(unsigned GAME_PTR)((char GAME_PTR)Pad_At(BattleSide_GetPad(i)) + PAD_HELD) & PAD_L3_BIT) != 0;
+            if (w < 0 || w >= n || BtlChar_IsDead(BtlChar_Get(w))) {
+                w = next_watch(i, n, -1);
+            } else if (l3 && !sL3Prev[i]) {
+                w = next_watch(i, n, w);
+            }
+            sWatch[i] = w;
+            sL3Prev[i] = l3;
+        } else if (BattleSide_GetControl(i) == 0) {
+            sWatch[i] = -1;
             l3 = (*(unsigned GAME_PTR)((char GAME_PTR)BtlChar_Get(i) + CHR_RAW_HELD) & PAD_L3_BIT) != 0;
             if (l3 && !sL3Prev[i]) {
                 int next = next_enemy(i, n, k);
@@ -876,6 +938,10 @@ static int hud_fighter(int side) {
         me = h = 1;
     } else {
         return side;
+    }
+    if (me >= 0 && me < FIGHTER_MAX && sWatch[me] >= 0) { /* down: the panels of the one it watches and its target */
+        me = sWatch[me];
+        h = me < 2 ? me : BattleSide_GetTeam(me);
     }
     if (side == h) {
         return me;
@@ -991,6 +1057,7 @@ void PortMulti_ProjectBars(int view, int last) {
         memcpy(sBarShown, sBarBuild, sizeof(sBarShown));
         sBarCount = sBarBuilt;
         sAssistShown = sAssistBuild;
+        sWatchShown = n > 2 && player() >= 0 && viewer() != player() ? viewer() : -1;
         __atomic_add_fetch(&sBarSeq, 1, __ATOMIC_ACQ_REL);
     }
 }
@@ -1004,6 +1071,11 @@ PORT_HOST static unsigned sBarSameReads;
 /* Whether the last drawn frame had a beam assist for the HUD's own side (ui.cpp, with the bars). */
 int PortMulti_ReadAssist(void) {
     return sBarSameReads <= BAR_STALE_READS && __atomic_load_n(&sAssistShown, __ATOMIC_ACQUIRE);
+}
+
+/* ... and the fighter the player watches while its own is down (spectating), -1 */
+int PortMulti_ReadWatch(void) {
+    return sBarSameReads <= BAR_STALE_READS ? __atomic_load_n(&sWatchShown, __ATOMIC_ACQUIRE) : -1;
 }
 
 int PortMulti_ReadBars(PortMultiBar *out, int max) {
@@ -1258,6 +1330,30 @@ void PortMulti_Trace(unsigned vblank, int battle) {
             e += *e == ',';
         }
     }
+    /* BT3_TEST_HP=<fighter>:<health>:<blank>,... (tests): that fighter's health set at that blank (one blow then
+       takes it down: a spectating test) */
+    if (battle && getenv("BT3_TEST_HP") != NULL) {
+        extern void BtlCharApi_PortSetHp(int objId, int hp); /* src/battle/btl_capi_b.c */
+        const char *e = getenv("BT3_TEST_HP");
+        int f, hp;
+
+        while (*e != '\0') {
+            f = atoi(e);
+            if ((e = strchr(e, ':')) == NULL) {
+                break;
+            }
+            hp = atoi(++e);
+            if ((e = strchr(e, ':')) == NULL) {
+                break;
+            }
+            if (vblank == (unsigned)atoi(++e) && f >= 0 && f < BattleSide_GetCount()) {
+                printf("bt3: test: fighter %d health %d at blank %u\n", f, hp, vblank);
+                BtlCharApi_PortSetHp(BattleSide_GetObjId(f), hp);
+            }
+            e += strcspn(e, ",");
+            e += *e == ',';
+        }
+    }
     if (fp == NULL || !battle) {
         return;
     }
@@ -1267,8 +1363,8 @@ void PortMulti_Trace(unsigned vblank, int battle) {
 
         extern char GAME_PTR gDemoCam;            /* src/battle/btl_demo_cam.c: fixed +0x32C, anim +0x2C0, flags +0x308 */
 
-        fprintf(fp, "%u ts %d pv %d sv %d cin %d/%d fl %d/%d", vblank, BtlChars_IsTimeStopped() != 0, BtlCam_GetPriorityView(),
-                sShownView, sShownCinema, sShownCinemaSeen, sFlashObj, sFlashSeen);
+        fprintf(fp, "%u ts %d pv %d sv %d cin %d/%d fl %d/%d eye %d/%d", vblank, BtlChars_IsTimeStopped() != 0,
+                BtlCam_GetPriorityView(), sShownView, sShownCinema, sShownCinemaSeen, sFlashObj, sFlashSeen, player(), viewer());
         sFlashObj = -2;
         if (gDemoCam != NULL) {
             extern int BtlClash_BothInClashA(void), BtlClash_PortId(int role); /* btl_char_flag_clash.c */
