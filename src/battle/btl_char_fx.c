@@ -731,7 +731,23 @@ void BtlFx_UpdateScreenFilter(FxChr *chr) {
     b = chr->filter * 32.0f;
     c = chr->filter * 128.0f;
 #ifdef PORT
-    if (chr->side >= 2) { /* the filter is the fighter's view's: a fighter beyond the two has no view (multi-fighter) */
+    {
+        /* the filter is the view's that is this fighter's camera (multi-fighter: none, or view 0 online for a
+           fighter past the leads; never a teammate's screen) */
+        extern s32 PortMulti_FilterView(s32 side, s32 objId); /* port/src/multi_fighter.c */
+        s32 view = PortMulti_FilterView(chr->side, chr->objId);
+
+        if (view < 0) {
+            return;
+        }
+        StgBlur_SetPasses(view, 3);
+        StgBlur_SetColor3Rgba(view, 0x80, 0x80, 0x80, 0x40);
+        StgBlur_SetColor0Rgba(view, 0x80, 0x80, 0x80, a);
+        StgBlur_SetColor1Rgba(view, 0x80, 0x80, 0x80, b);
+        StgBlur_SetColor2Rgba(view, 0x80, 0x80, 0x80, c);
+        if (BtlChar_TestFxBit(chr, 9)) {
+            StgBlur_SetCenter(view, &BtlChar_GetPos(chr)->unk80, 0);
+        }
         return;
     }
 #endif

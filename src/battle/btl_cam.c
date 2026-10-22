@@ -365,24 +365,11 @@ void BtlCam_UpdateView(s32 side) {
 
 #ifdef PORT
     {
-        /* several fighters on the field: the side's view shows the camera of the fighter of its team whose camera
-           has the highest priority (a technique's cut of a fighter beyond the two is seen there, which has no view
-           of its own); the lead's when none is higher (with two fighters, as ever, the side's own) */
-        extern s32 BattleSide_GetCount(void);
-        extern s32 BattleSide_GetTeam(s32 side);
-extern s32 BattleSide_GetBand(s32 side); /* battle_load.c: who fights with whom (free for all) */
+        /* several fighters on the field: the side's view is its lead's camera, never a teammate's technique or
+           throw camera (the user, 2026-10-22, 2v2 online: "no somos bots, necesitamos ver lo que hacemos") */
         extern void PortMulti_NoteViewSubject(s32 view, s32 fighter); /* port/src/multi_fighter.c */
-        s32 k;
         s32 who = side;
-        s32 best = BtlCharApi_HasCamPriority(objId);
 
-        for (k = 2; k < BattleSide_GetCount(); k++) {
-            if (BattleSide_GetBand(k) == side && BtlCharApi_HasCamPriority(BattleSide_GetObjId(k)) > best) {
-                best = BtlCharApi_HasCamPriority(BattleSide_GetObjId(k));
-                objId = BattleSide_GetObjId(k);
-                who = k;
-            }
-        }
         {
             extern int Port_NetViewFighter(void); /* port/src/gs/net.c: this copy's player, beyond the two leads */
             s32 mine = Port_NetViewFighter();

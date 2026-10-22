@@ -54,7 +54,7 @@ enum { T_HELLO = 1, T_HELLO_ACK = 2, T_INPUT = 3, T_BYE = 4, T_PING = 5, T_PONG 
 /* The version of what goes over the line. The greeting and its answer carry it, and two copies that differ do not
    start a match (the input packets changed with version 2: times for the ping were added; a copy that read them
    the old way took them for input). 1 was releases 0.1.8 and 0.1.9, which said no version. */
-enum { NET_VERSION_BASE = 7, IN_HEAD = 44 }; /* 3 (0.1.15): the host's battle rules travel with its choices.
+enum { NET_VERSION_BASE = 8, IN_HEAD = 44 }; /* 3 (0.1.15): the host's battle rules travel with its choices.
    4 (0.1.34): a session's start-up no longer follows the player's "Skip logos" / "Skip intro video" (0.1.32 and
    0.1.33 with either on computed another start-up than the other side and the two never agreed again: such a copy
    must not be let into a match); the input packets carry the sender's check value (sync_*, below), 12 bytes more
@@ -63,7 +63,9 @@ enum { NET_VERSION_BASE = 7, IN_HEAD = 44 }; /* 3 (0.1.15): the host's battle ru
    (RULE_MULTI, below): a copy that did not read them would set up another battle than the host's.
    6 (N players, SPEC-netplay-n.md): up to ten in a match, the player's number in the input packets' type word, the
    host's answers say each one's number and how many play; rooms for more than two (T_WAIT); kGone.
-   7 (SPEC-escala.md): big giants and big stages, always on online. */
+   7 (SPEC-escala.md): big giants and big stages, always on online.
+   8: the select of more than two has each player choose a team first (src/menu/port_nsel.c), and a technique's
+   white flash keeps its own time with more than two fighters (eft_q.c). */
 static int sVersionBad; /* the other side answered with another version */
 extern int gPortBt4; /* plat_mem.c: the BT4 disc (PRIVATE) */
 /* BT4 computes another game: its copies meet only each other (0x400 apart, in the greeting and at the service). */
@@ -1298,6 +1300,14 @@ const char *Port_NetName(int player) {
     return Port_NetActive() && player >= 0 && player < sCount ? sNames[player] : "";
 }
 
+/* The fighter this copy's player plays: their place's, as the select of more than two ordered them by team
+   (src/menu/port_nsel.c); with two, the player's own number. */
+int Port_NetMyFighter(void) {
+    extern int PortNsel_FighterOf(int place);
+
+    return PortNsel_FighterOf(sMe);
+}
+
 /* Whether this copy shows the two sides of the fight's HUD in each other's places: the player who joined is side 1,
    and with this their own gauges are on the left, as the host's are for the host. Setting net_hud_own (on by
    default); BT3_HUD_SWAP=1 the same without a connection, for looking at it. Only this copy's picture changes. */
@@ -1311,9 +1321,9 @@ int Port_HudSwap(void) {
     if (forced || !pref || !Port_NetActive()) {
         return forced;
     }
-    {   /* (the player's own panel is side 1's: the one who joined, or a fighter of side 1's team beyond the leads) */
+    {   /* (the player's own panel is side 1's: its lead, or a fighter of side 1's team beyond the leads) */
         extern int BattleSide_GetTeam(int side); /* src/battle/battle_load.c */
-        return sMe == 1 || (sMe >= 2 && BattleSide_GetTeam(sMe) == 1);
+        return BattleSide_GetTeam(Port_NetMyFighter()) == 1;
     }
 }
 
@@ -1657,14 +1667,14 @@ int Port_NetView(void) {
     if (sViewForced >= 0) {
         return sViewForced & 1;
     }
-    return Port_NetActive() ? (sMe < 2 ? sMe : 0) : -1; /* (a third player on: view 0, which follows their fighter) */
+    return Port_NetActive() ? (Port_NetMyFighter() < 2 ? Port_NetMyFighter() : 0) : -1; /* (a fighter past the leads: view 0, which follows it) */
 }
 
 /* A match of more than two: the fighter of this copy's player when it is beyond the two leads. This copy's view 0
    then follows that fighter's camera (btl_cam.c, BtlCam_UpdateView): each player has a screen of their own, as with
    two. -1 otherwise, and when a view is forced (BT3_VIEW: tests that compare everything between the copies). */
 int Port_NetViewFighter(void) {
-    return Port_NetView() >= 0 && sViewForced < 0 && sMe >= 2 ? sMe : -1;
+    return Port_NetView() >= 0 && sViewForced < 0 && Port_NetMyFighter() >= 2 ? Port_NetMyFighter() : -1;
 }
 
 /* This copy shows its own player's screen (online, no view forced): its camera, and the HUD's panels of its own

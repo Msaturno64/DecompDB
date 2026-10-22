@@ -62,6 +62,9 @@ extern void EftStage_SetDrawOn(s32 on);
 extern void EftStage_UpdateSprite(void);
 extern void EftStage_DrawSprite(EftAbVec *pos);
 extern void StgTint_Start(u32 slot, s32 dir, f32 seconds);
+#ifdef PORT
+extern void StgTint_PortSetOwner(s32 slot, s32 objId); /* stg_c.c */
+#endif
 extern s32 ScrWarp_Spawn(s32 view, EftAbVec *pos, f32 seconds, f32 radius, f32 width, f32 speed, f32 jitter);
 
 /* Steps every emitter of the set and spawns its particles at the task's position. */
@@ -296,6 +299,9 @@ void EftTransform_Update(EftAbTask *task) {
                 EftTransform_OnFlash(task, arg->kind);
                 EftStage_SetDrawOn(0);
                 StgTint_Start(1, 0, 0.0f);
+#ifdef PORT
+                StgTint_PortSetOwner(1, arg->objId); /* (the white is the transforming fighter's screen's) */
+#endif
                 w->flags |= EFT_TF_TINT;
                 BtlCharApi_ObjSetMaskBit3(arg->objId);
                 task->step++;

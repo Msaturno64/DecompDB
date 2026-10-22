@@ -2036,6 +2036,9 @@ extern void EftObj_Destroy(s32 handle);
 #define BtlTask_SetOwnerTag ((void (*)(EftTask *task, s32 flag))BtlTask_SetOwnerTag)
 #define BtlTask_GetParent ((EftTask *(*)(EftTask *task))BtlTask_GetParent)
 extern void StgTint_Start(s32 a0, s32 a1, f32 time);
+#ifdef PORT
+extern void StgTint_PortSetOwner(s32 slot, s32 objId); /* stg_c.c */
+#endif
 extern void StgBlur_SetCenter(s32 a0, Vec4 *pos, s32 a2);
 extern void StgBlur_SetColor0Rgba(s32 a0, s32 r, s32 g, s32 b, s32 a);
 extern void StgBlur_SetColor1Rgba(s32 a0, s32 r, s32 g, s32 b, s32 a);
@@ -2330,6 +2333,9 @@ void EftRushShot_Update(EftTask *task) {
         EftTechEvt_RequestStop(arg->objId);
         w->flags = (w->flags & ~EFT_RUSHSHOT_FIRED) | EFT_RUSHSHOT_ATTACHED;
         StgTint_Start(0, 0, 0.2f);
+#ifdef PORT
+        StgTint_PortSetOwner(0, arg->objId); /* (the darker stage is the rush's owner's screen's) */
+#endif
         w->flags |= EFT_RUSHSHOT_CONNECTED;
     }
     if (!(w->flags & EFT_RUSHSHOT_SENT)) {

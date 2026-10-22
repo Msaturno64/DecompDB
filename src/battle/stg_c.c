@@ -714,6 +714,17 @@ void StgTint_CalcColor(StgTint *tint) {
     tint->color.w = tint->from.w + t * tint->delta.w;
 }
 
+#ifdef PORT
+/* The fighter a slot was started for (the transforming one's white, a rush's darker stage), -1 none: with more than
+   two fighters a slot is drawn only on the screens of those in it (port/src/multi_fighter.c PortMulti_TintSeen). */
+static s32 sPortTintOwner[STG_TINT_COUNT] = { -1, -1, -1, -1 };
+extern s32 PortMulti_TintSeen(s32 slot, s32 owner);
+
+void StgTint_PortSetOwner(s32 slot, s32 objId) {
+    sPortTintOwner[slot] = objId;
+}
+#endif
+
 /* Turns every slot off. */
 void StgTint_Reset(void) {
     StgTintWork *work = &gStgTint;
@@ -725,6 +736,9 @@ void StgTint_Reset(void) {
 
         tint->flags = 0;
         Ramp_Stop(&tint->ramp);
+#ifdef PORT
+        sPortTintOwner[i] = -1;
+#endif
     }
 }
 
@@ -771,7 +785,11 @@ void StgTint_Release(void) {
 void StgTint_DrawBack(void) {
     StgTint *tint = &gStgTint.slot[0];
 
+#ifdef PORT
+    if ((tint->flags & STG_TINT_ON) && PortMulti_TintSeen(0, sPortTintOwner[0])) {
+#else
     if (tint->flags & STG_TINT_ON) {
+#endif
         StgTint_CalcColor(tint);
         GfxPost_DrawTintRect(0x44, &tint->color);
         gStgTintColor0[0] = tint->color.x;
@@ -785,7 +803,11 @@ void StgTint_DrawBack(void) {
         gStgTintColor0[3] = 0;
     }
     tint = &gStgTint.slot[1];
+#ifdef PORT
+    if ((tint->flags & STG_TINT_ON) && PortMulti_TintSeen(1, sPortTintOwner[1])) {
+#else
     if (tint->flags & STG_TINT_ON) {
+#endif
         StgTint_CalcColor(tint);
         GfxPost_DrawTintRect(0x44, &tint->color);
     }

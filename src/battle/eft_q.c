@@ -4,6 +4,8 @@ extern u32 BtlTask_PortOwnerTag(s32 chr); /* eft_ae.c: 0x800 / 0x1000, or a bit 
 #endif
 #ifdef PORT
 extern s32 BtlScene_PortCharReset(s32 chr); /* btl_scene.c: the BtlScene_Reset mode of one character's tasks */
+extern s32 BattleSide_GetCount(void);   /* battle_load.c: fighters on the field */
+extern int PortMulti_FlashSeen(int objId); /* port/src/multi_fighter.c: this screen shows that fighter's flash */
 #endif
 #include "battle/eft_q.h"
 #include "sys/gfx_ot.h"
@@ -1008,7 +1010,9 @@ s32 EftFlash_GetRushState(void);
 
 /* Starts a flash that belongs to nobody (the owner in the argument is overwritten). Technique modules call it. */
 EftQTask *EftFlash_Start(EftFlashArg *arg) {
+#ifndef PORT /* (the port keeps the owner, which nothing else reads, for EftFlash_Draw) */
     arg->objId = -1;
+#endif
     return BtlTaskList_AddTail(gEftFlash->list, gEftFlashClass, arg);
 }
 
@@ -1071,6 +1075,9 @@ void EftFlashMgr_Update(EftQTask *task) {
         if (BtlCharApi_IsFlag8Action104(i)) {
             EftFlashArg arg = { { 255.0f, 255.0f, 255.0f, 128.0f }, 0.5f, 1.0f, 0.5f, -1, 0 };
 
+#ifdef PORT
+            arg.objId = i;
+#endif
             if (!(gEftFlash->flags & 1)) {
                 EftFlash_Start(&arg);
                 if (i == 0) {
@@ -1153,7 +1160,13 @@ void EftFlash_Update(EftQTask *task) {
                 task->step = 2;
                 break;
             }
-        } else {
+        } else
+#ifdef PORT
+        /* (more than two fighters: these waits read fighters 0 and 1 whoever did it, and another pair's rush, up to
+           the 180 frames of white; the flash keeps its own hold time) */
+        if (BattleSide_GetCount() <= 2)
+#endif
+        {
             if (gEftFlash->rushState != 0 && gEftFlash->rushState != 2) {
                 break;
             }
@@ -1196,6 +1209,11 @@ void EftFlash_Draw(EftQTask *task) {
     EftQSpritePkt *p;
     OtEntry *e;
 
+#ifdef PORT
+    if (!PortMulti_FlashSeen(w->arg.objId)) { /* (with more than two fighters only its owner's screen goes white) */
+        return;
+    }
+#endif
     Vec4_Lerp((Vec4 *)&col, (Vec4 *)&clear, (Vec4 *)&w->arg.color, w->fade);
     p = (EftQSpritePkt *)gOtCur;
     gOtCur = (u32 *)(p + 1);

@@ -564,9 +564,9 @@ void Port_ClashSquareSet(int on) {
 static void clash_square(int socket, unsigned *btn, unsigned char *lx, unsigned char *ly) {
     extern void *BtlChar_FindByObjId(int objId); /* the game: the fighter of a side, NULL outside a fight */
     extern int BtlAct_GetCurrent(void *chr);     /* its action */
-    extern int Port_NetActive(void), Port_NetMe(void);
+    extern int Port_NetActive(void), Port_NetMyFighter(void);
     static int dir[2], was[2], credit[2]; /* (credit: quarters of a point owed beyond the press's own) */
-    int side = Port_NetActive() ? Port_NetMe() : socket, in = 0, down = (*btn & B_SQUARE) != 0, extra = 0;
+    int side = Port_NetActive() ? Port_NetMyFighter() : socket, in = 0, down = (*btn & B_SQUARE) != 0, extra = 0;
     void *chr;
 
     if (!Port_ClashSquare()) {

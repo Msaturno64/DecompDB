@@ -1885,6 +1885,15 @@ void EftShotTech_UpdateBlur(EftJTask *task) {
         }
     }
     t = w->blur;
+#ifdef PORT
+    {
+        extern int PortMulti_ObjSeen(int objId); /* port/src/multi_fighter.c */
+
+        if (!PortMulti_ObjSeen(src->objId)) { /* (more than two fighters: view 0 is this copy's player's, any one) */
+            t = 0.0f;
+        }
+    }
+#endif
     a = t * 8.0f;
     b = t * 32.0f;
     c = t * 128.0f;

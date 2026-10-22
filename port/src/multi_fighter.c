@@ -75,8 +75,11 @@ int PortMulti_PadOf(int fighter) {
     extern int Port_NetActive(void), Port_NetPlayers(void); /* gs/net.c: online, and how many play */
     const char *e = getenv("BT3_TEAMS_HUMAN");
 
-    if (Port_NetActive()) { /* online: player k plays fighter k with pad k; the fighters past the players: the computer */
-        return fighter < Port_NetPlayers() ? fighter : -1;
+    if (Port_NetActive()) { /* online: the player of its place, with their pad; the computer's places: the computer */
+        extern int PortNsel_PlaceOf(int fighter); /* src/menu/port_nsel.c: the select's order by team */
+        int place = PortNsel_PlaceOf(fighter);
+
+        return place < Port_NetPlayers() ? place : -1;
     }
 
     while (e != NULL && *e != '\0') {
@@ -500,6 +503,42 @@ int PortMulti_ViewerSees(int subject) {
     return subject == v;
 }
 
+/* A screen effect of fighter objId's technique (a flash of no fighter: -1), as its camera above: eft_j.c's beam blur */
+int PortMulti_ObjSeen(int objId) {
+    int n = BattleSide_GetCount(), k = 0;
+
+    while (k < n && BattleSide_GetObjId(k) != objId) {
+        k++;
+    }
+    return PortMulti_ViewerSees(k < n ? k : -1);
+}
+
+/* eft_q.c, EftFlash_Draw: the full-screen white flash of a technique, the same (BT3_MFLOG says the last one) */
+PORT_HOST static int sFlashObj = -2, sFlashSeen;
+
+int PortMulti_FlashSeen(int objId) {
+    sFlashObj = objId;
+    sFlashSeen = PortMulti_ObjSeen(objId);
+    return sFlashSeen;
+}
+
+/* stg_c.c, StgTint_DrawBack: the stage's tints of a technique, slot 0 darker while a fighter's technique or rush
+   asks for it, slot 1 white while one transforms (owner: the rush's or the transforming fighter's objId, else -1).
+   With more than two fighters a tint is drawn only on the screen of a fighter in it: the one it was started for, or
+   for slot 0 one asking for it now (btl_char_fx_c.c). The others keep seeing the fight (the user, 2026-10-22). */
+int PortMulti_TintSeen(int slot, int owner) {
+    extern int BtlFx_PortWantsStageFx(int objId);
+    int v = viewer();
+
+    if (BattleSide_GetCount() <= 2 || v < 0) {
+        return 1;
+    }
+    if (owner >= 0 && BattleSide_GetObjId(v) == owner) {
+        return 1;
+    }
+    return slot == 0 && BtlFx_PortWantsStageFx(BattleSide_GetObjId(v));
+}
+
 /* What BtlCam_UpdateOverride chose this frame, for BT3_MFLOG: the view drawn, a cinematic on, and shown. */
 PORT_HOST static int sShownView = -1, sShownCinema, sShownCinemaSeen;
 
@@ -511,6 +550,23 @@ void PortMulti_NoteShown(int view, int cinema, int shown) {
 
 int PortMulti_ViewSubject(int view) {
     return view >= 0 && view < 2 ? sViewSubject[view] : -1;
+}
+
+/* btl_char_fx.c, BtlFx_UpdateScreenFilter: the view whose screen filter fighter objId of side `side` drives. With two
+   fighters its side's; with more, the view that is its camera, or -1 (this copy's view 0 can be a fighter past the
+   leads, whose filter it then is, not its lead's). */
+int PortMulti_FilterView(int side, int objId) {
+    int v;
+
+    if (BattleSide_GetCount() <= 2) {
+        return side;
+    }
+    for (v = 0; v < 2; v++) {
+        if (sViewSubject[v] >= 0 && sViewSubject[v] < BattleSide_GetCount() && BattleSide_GetObjId(sViewSubject[v]) == objId) {
+            return v;
+        }
+    }
+    return -1;
 }
 
 int PortMulti_CinemaOwner(void) {
@@ -800,7 +856,7 @@ static int hud_fighter(int side) {
     extern int BattleSide_GetControl(int side); /* src/battle/battle_load.c: 0 a pad, 2 the computer */
     int n = BattleSide_GetCount(), h, me, t;
 
-    extern int Port_NetActive(void), Port_NetOwnScreen(void), Port_NetMe(void); /* gs/net.c */
+    extern int Port_NetActive(void), Port_NetOwnScreen(void), Port_NetMyFighter(void); /* gs/net.c */
 
     if (!sHudPass || n <= 2 || side < 0 || side > 1) {
         return side;
@@ -812,7 +868,7 @@ static int hud_fighter(int side) {
         if (!Port_NetOwnScreen()) {
             return side;
         }
-        me = Port_NetMe();
+        me = Port_NetMyFighter();
         h = me < 2 ? me : BattleSide_GetTeam(me);
     } else if (BattleSide_GetControl(0) == 0 && BattleSide_GetControl(1) != 0) {
         me = h = 0;
@@ -1211,8 +1267,9 @@ void PortMulti_Trace(unsigned vblank, int battle) {
 
         extern char GAME_PTR gDemoCam;            /* src/battle/btl_demo_cam.c: fixed +0x32C, anim +0x2C0, flags +0x308 */
 
-        fprintf(fp, "%u ts %d pv %d sv %d cin %d/%d", vblank, BtlChars_IsTimeStopped() != 0, BtlCam_GetPriorityView(),
-                sShownView, sShownCinema, sShownCinemaSeen);
+        fprintf(fp, "%u ts %d pv %d sv %d cin %d/%d fl %d/%d", vblank, BtlChars_IsTimeStopped() != 0, BtlCam_GetPriorityView(),
+                sShownView, sShownCinema, sShownCinemaSeen, sFlashObj, sFlashSeen);
+        sFlashObj = -2;
         if (gDemoCam != NULL) {
             extern int BtlClash_BothInClashA(void), BtlClash_PortId(int role); /* btl_char_flag_clash.c */
 
@@ -1358,10 +1415,20 @@ int PortMulti_Handicap(int team);
 
 void PortMulti_NoteSpread(int fighters) {
     extern int gPortResim; /* gs/state.c */
+    extern int Port_NetActive(void);
 
     if (!gPortResim) {
         printf("bt3: team battle: %d fighters on the field%s (team 1: %d%%, team 2: %d%% starting health)\n", fighters,
                PortMulti_Ffa() ? ", free for all" : "", PortMulti_Handicap(0), PortMulti_Handicap(1));
+        if (Port_NetActive()) { /* (who plays each fighter, as the select ordered the teams; 0 the computer) */
+            int f;
+
+            printf("bt3: team battle: the fighters' players:");
+            for (f = 0; f < fighters; f++) {
+                printf(" %d", PortMulti_PadOf(f) + 1);
+            }
+            printf("\n");
+        }
         fflush(stdout);
     }
 }

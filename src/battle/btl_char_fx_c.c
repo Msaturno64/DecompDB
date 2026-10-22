@@ -71,6 +71,9 @@ extern void BtlObj_CopyLipTables(FxObj *obj, FxObj *owner);
 extern void BtlObj_AddPush(FxObj *obj, Vec4 *v, f32 arg);
 extern void BtlObj_AddSway(FxObj *obj, f32 a, f32 b);
 extern void StgTint_Start(s32 a, s32 b, f32 time);
+#ifdef PORT
+extern void StgTint_PortSetOwner(s32 slot, s32 objId); /* stg_c.c */
+#endif
 extern void BtlChar_SpawnFxBits3C(FxChr *chr);
 extern void BtlChar_SpawnFxBits0(FxChr *chr);
 extern void BtlChar_SpawnHitFx(FxChr *chr);
@@ -547,11 +550,28 @@ void BtlFx_UpdateStageFx(void) {
     }
     if (now && !prev) {
         StgTint_Start(0, 0, 0.2f);
+#ifdef PORT
+        StgTint_PortSetOwner(0, -1); /* (the fighters asking for it: BtlFx_PortWantsStageFx) */
+#endif
     }
     if (!now && prev) {
         StgTint_Start(0, 1, 0.2f);
     }
 }
+
+#ifdef PORT
+/* stg_c.c via PortMulti_TintSeen: whether fighter objId asks for the darker stage (request 0x12) this frame. */
+s32 BtlFx_PortWantsStageFx(s32 objId) {
+    s32 i;
+
+    for (i = 0; i < BtlChar_GetCount(); i++) {
+        if (BtlChar_Get(i)->objId == objId) {
+            return BtlChar_TestFxBit(BtlChar_Get(i), 0x12);
+        }
+    }
+    return 0;
+}
+#endif
 
 /* Manager step between the roster passes. */
 void BtlFx_UpdateRoster(void) {
