@@ -1375,6 +1375,23 @@ void BtlRes_Reload(s32 number, s32 model, s32 anim0, s32 anim1) {
             for (k = 1; k < 3; k++) {
                 DemoCam_PortForget(slot->file[k].buf, slot->file[k].size);
             }
+            { /* (a file larger than its buffer is never read: the change waits for ever; say so) */
+                extern void PortA11y_LogLine(const char *what, int n, const char *text);
+                s32 kCap[3];
+                s32 ids[3];
+
+                kCap[0] = BTL_RES_MODEL_SIZE; /* (BT4's sizes are known when it runs) */
+                kCap[1] = BTL_RES_ANIM0_SIZE;
+                kCap[2] = BTL_RES_ANIM1_SIZE;
+                ids[0] = model;
+                ids[1] = anim0;
+                ids[2] = anim1;
+                for (k = 0; k < 3; k++) {
+                    if (ids[k] >= 0 && File_GetSize(ids[k]) > kCap[k]) {
+                        PortA11y_LogLine("res: a file larger than its buffer, id", ids[k], k == 0 ? "(model)" : "(animations)");
+                    }
+                }
+            }
         }
 #endif
         if (slot != NULL) {

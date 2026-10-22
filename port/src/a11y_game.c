@@ -1297,8 +1297,9 @@ static void sim_top(void) {
 }
 
 /* Every name a select's text gave, kept for the screens that show the characters only as pictures (the replay
-   list). Only in memory: it comes from the disc each run. */
-static char sNameCache[MCHR_RANDOM][64];
+   list, the spectator's line). Only in memory: it comes from the disc each run. 256: BT4's ids go past 0xA0. */
+#define NAME_CACHE_IDS 256
+static char sNameCache[NAME_CACHE_IDS][64];
 
 /* The name of character `chara` from a select's own text (line chara of its name and form files: sections 43 and 44
    of the versus select, as CharSel_Draw shows them), and its form after it when that says something else. */
@@ -1318,7 +1319,7 @@ static void chara_name(char *out, int cap, uint32_t GAME_PTR nameText, uint32_t 
         len = strlen(out);
         snprintf(out + len, cap - len, ", %s", form);
     }
-    if (chara >= 0 && chara < MCHR_RANDOM) {
+    if (chara >= 0 && chara < NAME_CACHE_IDS) {
         snprintf(sNameCache[chara], sizeof(sNameCache[chara]), "%s", out);
     }
 }
@@ -1326,7 +1327,7 @@ static void chara_name(char *out, int cap, uint32_t GAME_PTR nameText, uint32_t 
 /* Reads every character's name once from a select's text into sNameCache. */
 static void name_cache_fill(uint32_t GAME_PTR nameText, uint32_t GAME_PTR formText) {
     char name[A11Y_TEXT];
-    int chara, lines = MCHR_RANDOM;
+    int chara, lines = NAME_CACHE_IDS;
 
     if (nameText == NULL) {
         return;
@@ -1340,9 +1341,19 @@ static void name_cache_fill(uint32_t GAME_PTR nameText, uint32_t GAME_PTR formTe
     }
 }
 
+/* The online select of more than two (menu/port_nsel.c), as it opens: its name and form texts into sNameCache. */
+void PortA11y_CacheNames(uint32_t nameText, uint32_t formText) {
+    name_cache_fill((uint32_t GAME_PTR)(uintptr_t)nameText, (uint32_t GAME_PTR)(uintptr_t)formText);
+}
+
+/* A character's name from sNameCache, NULL when no select has given it (ui.cpp: the spectator's line). */
+const char *PortA11y_CachedName(int chara) {
+    return chara >= 0 && chara < NAME_CACHE_IDS && sNameCache[chara][0] != '\0' ? sNameCache[chara] : NULL;
+}
+
 /* A name from sNameCache, or the character's number when no select has given it yet. */
 static void cached_name(char *out, int cap, int chara) {
-    if (chara >= 0 && chara < MCHR_RANDOM && sNameCache[chara][0] != '\0') {
+    if (chara >= 0 && chara < NAME_CACHE_IDS && sNameCache[chara][0] != '\0') {
         snprintf(out, cap, "%s", sNameCache[chara]);
     } else {
         snprintf(out, cap, tr("Character %d"), chara);
@@ -3567,6 +3578,16 @@ const char *PortA11y_StageName(int id) {
 /* ... and a song's, by music-list value. */
 const char *PortA11y_SongName(int v) {
     return song_name(v);
+}
+
+/* Whether a test variable is set, for the port's own screens (game code does not read the environment). */
+int PortA11y_EnvOn(const char *name) {
+    return getenv(name) != NULL;
+}
+
+/* A line in the log from the port's own screens (tests): "bt3: <what> <n> <text>" (a re-run blank says it again). */
+void PortA11y_LogLine(const char *what, int n, const char *text) {
+    fprintf(stderr, "bt3: %s %d %s\n", what, n, text);
 }
 
 /* Line n of a game text file at game address `file`, as UTF-8 (text_line): for the port's own screens. */

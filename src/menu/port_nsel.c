@@ -69,6 +69,10 @@ extern const char *Port_NetName(int player);
 extern void PortA11y_SayChanged(const char *text, int interrupt); /* port/src/a11y_game.c */
 extern const char *PortA11y_StageName(int id);
 extern const char *PortA11y_SongName(int v);
+extern int strcmp(const char *a, const char *b);
+extern void PortA11y_LogLine(const char *what, int n, const char *text); /* port/src/a11y_game.c: a line in the log */
+extern int PortA11y_EnvOn(const char *name);
+extern void PortA11y_CacheNames(u32 nameText, u32 formText);
 extern int PortA11y_TextLine(char *out, int cap, u32 file, int n); /* a line of a game text file, as UTF-8 */
 extern char *PortTbo_FighterName(s32 chara);   /* menu/port_tbo.c */
 extern s32 MChr_PortBt4Valid(s32 id);          /* menu/menu_c_e.c: a grid id that is a character */
@@ -90,7 +94,8 @@ extern void BattleSetup_Finish(void);
 #define NS_MAX 10
 #define NS_SECTION 2      /* the select's pack in the duel's archive (CharSel_Run(2), TeamSel_Run(2)) */
 #define NS_START_DELAY 60 /* blanks between everyone ready and the stage and music vote */
-#define NS_RESULT_TIME 120 /* blanks the vote's result is shown before the battle */
+#define NS_RESULT_TIME 170 /* blanks the vote's result is shown before the battle, */
+#define NS_ROULETTE 80     /* of them the roulette's turning */
 #define NS_WORD(pack, n) (((s32 *)(pack))[((u32 *)(pack))[n] >> 2]) /* (menu_c_e.c MPACK_WORD) */
 #define NS_REEL 7         /* chips on a reel: a row of the grid (MCHR_COLS), or a character's forms */
 #define NS_RES(pack, n) ((MTexRes *)MPACK_AT(pack, n))
@@ -117,7 +122,8 @@ enum { NS_V_STAGE, NS_V_MUSIC, NS_V_DONE };
 enum {
     NX_TITLE, NX_PLAYERS, NX_TEAMS, NX_FFA, NX_STAGE, NX_RANDOM, NX_READY, NX_CPU, NX_COSTUME, NX_PLAYER,
     NX_HELP, NX_HELP_HOST, NX_HELP_READY, NX_STARTS, NX_MOVE, NX_OK, NX_BACK, NX_SIDE, NX_HELP_FFA, NX_CPU_LEVEL,
-    NX_TO_VOTE, NX_VOTE_TITLE, NX_VOTE_RULE, NX_VOTE_HELP, NX_MUSIC, NX_TRACK, NX_RESULT, NX_LEVEL0, NX_COUNT = NX_LEVEL0 + 5
+    NX_TO_VOTE, NX_VOTE_TITLE, NX_VOTE_RULE, NX_VOTE_HELP, NX_MUSIC, NX_TRACK, NX_RESULT, NX_PICK_TEAM, NX_TEAM_N,
+    NX_STAGE_IS, NX_DRAWING, NX_LEVEL0, NX_COUNT = NX_LEVEL0 + 5
 };
 static const char *const kNsText[NX_COUNT][2] = {
     {"ONLINE BATTLE", "BATALLA ONLINE"},
@@ -130,9 +136,9 @@ static const char *const kNsText[NX_COUNT][2] = {
     {"COMPUTER", "CPU"},
     {"COSTUME %d/%d", "TRAJE %d/%d"},
     {"PLAYER %d", "JUGADOR %d"},
-    {"Each player: left / right the team, cross; then the d-pad and cross: the fighter, the transformation, the costume; triangle goes back.",
-     "Cada jugador: izquierda / derecha el equipo, cruz; despu\303\251s la cruceta y cruz: el personaje, la transformaci\303\263n y el traje; tri\303\241ngulo vuelve."},
-    {" The host: L2 the teams, R2 the computer's level.", " El anfitri\303\263n: L2 los equipos, R2 el nivel de la CPU."},
+    {"Left / right and cross: your team. Then the d-pad and cross: fighter, transformation, costume. Triangle: back.",
+     "Izquierda / derecha y cruz: tu equipo. Despu\303\251s cruceta y cruz: personaje, transformaci\303\263n y traje. Tri\303\241ngulo: volver."},
+    {" Host: L2 teams, R2 computer level.", " Anfitri\303\263n: L2 equipos, R2 nivel de la CPU."},
     {"Ready! The battle starts when everyone is. Triangle: change your choice.",
      "\302\241Listo! La batalla empieza cuando est\303\251n todos. Tri\303\241ngulo: cambiar tu elecci\303\263n."},
     {"THE BATTLE STARTS!", "\302\241EMPIEZA LA BATALLA!"},
@@ -140,18 +146,22 @@ static const char *const kNsText[NX_COUNT][2] = {
     {"Choose", "Elegir"},
     {"Back", "Volver"},
     {"<  TEAM %d  >", "<  EQUIPO %d  >"},
-    {"Each player: the d-pad moves, cross chooses the fighter, then the transformation, then the costume; triangle goes back.",
-     "Cada jugador: la cruceta mueve, cruz elige el personaje, despu\303\251s la transformaci\303\263n y el traje; tri\303\241ngulo vuelve."},
+    {"The d-pad and cross: fighter, transformation, costume. Triangle: back.",
+     "Cruceta y cruz: personaje, transformaci\303\263n y traje. Tri\303\241ngulo: volver."},
     {"COMPUTER: %s", "CPU: %s"},
     {"Everyone is ready: now the stage and the music.", "Todos listos: ahora el escenario y la m\303\272sica."},
     {"STAGE AND MUSIC", "ESCENARIO Y M\303\232SICA"},
     {"The same for everyone: that one. If not, one of the votes is drawn.",
      "Si todos eligen lo mismo, va eso; si no, se sortea entre los votos."},
-    {"Each player: the d-pad and cross choose the stage, left / right and cross the music; triangle goes back.",
-     "Cada jugador: la cruceta y cruz eligen el escenario, izquierda / derecha y cruz la m\303\272sica; tri\303\241ngulo vuelve."},
+    {"The d-pad and cross: the stage. Left / right and cross: the music. Triangle: back.",
+     "Cruceta y cruz: el escenario. Izquierda / derecha y cruz: la m\303\272sica. Tri\303\241ngulo: volver."},
     {"MUSIC", "M\303\232SICA"},
     {"TRACK %d", "TEMA %d"},
     {"STAGE: %s  -  MUSIC: %s", "ESCENARIO: %s  -  M\303\232SICA: %s"},
+    {"CHOOSE A TEAM", "ELIGE EQUIPO"},
+    {"TEAM %d", "EQUIPO %d"},
+    {"STAGE", "ESCENARIO"},
+    {"Drawing among the votes...", "Sorteando entre los votos..."},
     {"VERY EASY", "MUY F\303\201CIL"},
     {"EASY", "F\303\201CIL"},
     {"NORMAL", "NORMAL"},
@@ -267,13 +277,25 @@ static s32 Ns_Costumes(s32 k) {
     return n < 1 ? 1 : n;
 }
 
-/* (not `?:` between a table's entry and another pointer: the 32-bit pointer build read the entry as 8 bytes, a
+/* A character's name as the game's select shows it: line `chara` of its name text (section 43), its form (section
+   44) after it when that says more; BT4's are its own (BT3's table named a BT4 character after the one it replaces:
+   the user, Gohan Beast as Turles). Into `buf`, 64 bytes.
+   (not `?:` between a table's entry and another pointer: the 32-bit pointer build read the entry as 8 bytes, a
    card of the computer's on the "random" cell crashed; as port_tbo.c Tb_Fighter notes) */
-static char *Ns_Name(s32 chara) {
+static char *Ns_Name(s32 chara, char *buf) {
+    char form[64];
+
     if (chara == MCHR_RANDOM) {
         return NX(NX_RANDOM);
     }
-    return PortTbo_FighterName(chara);
+    if (PortA11y_TextLine(buf, 64, (u32)MPACK_AT(sNs.selRes, 43), chara) <= 0) {
+        return PortTbo_FighterName(chara);
+    }
+    if (PortA11y_TextLine(form, sizeof(form), (u32)MPACK_AT(sNs.selRes, 44), chara) > 0 && strcmp(form, buf) != 0) {
+        Ps_Cat(buf, " - ", 64);
+        Ps_Cat(buf, form, 64);
+    }
+    return buf;
 }
 
 static char *Ns_StageName(s32 id) {
@@ -421,6 +443,8 @@ static void Ns_Player(s32 k) {
     }
 }
 
+static s32 Ns_Roulette(s32 t); /* (the vote's picture, below) */
+
 /* Everyone has their fighter: the stage and music vote of each player still here (the others vote nothing). */
 static void Ns_VoteStart(void) {
     s32 k;
@@ -531,8 +555,14 @@ static void Ns_Update(s32 live) {
         return;
     }
     if (sNs.phase == 2) {
+        s32 was = Ns_Roulette(sNs.allReady);
+
         if (++sNs.allReady >= NS_RESULT_TIME) {
             Ns_Leave(1);
+        } else if (sNs.allReady == NS_ROULETTE) {
+            Snd_PlaySe(1, 1); /* (it stops) */
+        } else if (Ns_Roulette(sNs.allReady) != was) {
+            Snd_PlaySe(1, 0); /* (a turn) */
         }
         return;
     }
@@ -673,20 +703,84 @@ static void Ns_Setup(void) {
     BattleSetup_Finish();
 }
 
-/* ---- the picture: a card per player, two columns, as tall as the players leave room for ---- */
-#define NS_CARDS_TOP 86.0f
-#define NS_CARDS_BOTTOM 322.0f /* (the message box's top edge is at 326) */
-#define NS_CARD_W 236.0f
+/* ---- the picture: a window of two columns, one per team (in a free for all the places in turn), each player's card
+   in its team's column under the team's capsule (gold, steel), "VS" between them; a card as tall as its column
+   leaves room for. A card: the character's chip large in the team's colour, the player, and what they are at: the
+   team (arrows), the reel (the grid's row, the forms), the costume, or ready (the character's name, green). ---- */
+#define NS_CARDS_TOP 106.0f
+#define NS_CARDS_BOTTOM 318.0f /* (the window ends at 322, the message box's top edge is at 326) */
+#define NS_COL_W 224.0f
+#define NS_CARD_GAP 4.0f
+#define NS_TALL 38.0f /* a card this tall has two lines (and the reel), a lower one one line */
 
-static f32 Ns_CardH(void) {
-    f32 h = (NS_CARDS_BOTTOM - NS_CARDS_TOP) / (f32)((sNs.players + 1) / 2) - 4.0f;
-
-    return h > 64.0f ? 64.0f : h;
+static f32 Ns_ColX(s32 col) {
+    return col == 0 ? 16.0f : 496.0f - NS_COL_W;
 }
 
-static void Ns_Card(s32 k, f32 *x0, f32 *y0) {
-    *x0 = (k & 1) ? 262.0f : 14.0f;
-    *y0 = NS_CARDS_TOP + (Ns_CardH() + 4.0f) * (f32)(k / 2);
+/* Player k's column and card: its left edge, top and height. (The rows are counted in floats: a loop index made a
+   float can be a 64-bit conversion the game's code has no helper for, port/tools/link.py's stubs.) */
+static s32 Ns_Slot(s32 k, f32 *x, f32 *y, f32 *h) {
+    s32 col = sNs.ffa ? (k & 1) : sNs.team[k];
+    f32 before = 0.0f;
+    f32 count = 0.0f;
+    s32 j;
+
+    for (j = 0; j < sNs.players; j++) {
+        if ((sNs.ffa ? (j & 1) : sNs.team[j]) == col) {
+            count += 1.0f;
+            before += j < k ? 1.0f : 0.0f;
+        }
+    }
+    *h = (NS_CARDS_BOTTOM - NS_CARDS_TOP - NS_CARD_GAP * (count - 1.0f)) / count;
+    if (*h > 74.0f) {
+        *h = 74.0f;
+    }
+    *x = Ns_ColX(col);
+    /* (a column of few cards: in the middle of the window's height) */
+    *y = (NS_CARDS_TOP + NS_CARDS_BOTTOM - (*h + NS_CARD_GAP) * count + NS_CARD_GAP) * 0.5f + (*h + NS_CARD_GAP) * before;
+    return col;
+}
+
+/* A card's letters grow with it: the small line's and the large line's scale. */
+static f32 Ns_Small(f32 h) {
+    f32 s = h * 0.0062f;
+
+    return s < 0.28f ? 0.28f : s > 0.42f ? 0.42f : s;
+}
+
+static f32 Ns_Big(f32 h) {
+    f32 s = h * 0.0078f;
+
+    return s < 0.32f ? 0.32f : s > 0.56f ? 0.56f : s;
+}
+
+/* A team's colour, and dark (dark: the foot of a gradient). */
+static u32 Ns_TeamColor(s32 k, s32 dark) {
+    if (sNs.ffa) {
+        return dark ? Ps_Rgba(90, 90, 100, 255) : Ps_Rgba(200, 200, 210, 255);
+    }
+    if (Ns_Team(k) == 0) {
+        return dark ? Ps_Rgba(120, 50, 8, 255) : Ps_Rgba(250, 140, 30, 255);
+    }
+    return dark ? Ps_Rgba(16, 50, 120, 255) : Ps_Rgba(60, 140, 255, 255);
+}
+
+/* The chip of a character (the select's own pictures: one per grid id, "random" too). */
+static u8 *Ns_Chip(s32 id) {
+    return NS_RES(sNs.chips, id + 1)->tex;
+}
+
+/* A card's parts: the chip's box, and where the words go (from tx0 to tx1). */
+static void Ns_CardParts(f32 x, f32 y, f32 h, f32 *cx0, f32 *cy0, f32 *cx1, f32 *cy1, f32 *tx0, f32 *tx1) {
+    f32 cap = Ps_PillCap(TBO_KIT_BAR, h);
+    f32 s = h - 8.0f;
+
+    *cx0 = x + cap * 0.55f;
+    *cy0 = y + 4.0f;
+    *cx1 = *cx0 + s * 0.857f; /* (square: a unit across is 7:6 of one down) */
+    *cy1 = y + h - 4.0f;
+    *tx0 = *cx1 + 6.0f;
+    *tx1 = x + NS_COL_W - cap * 0.6f;
 }
 
 /* Player k's reel, `w` units wide from (x, y): the bar, the chips in the frame's windows (the grid row on the grid,
@@ -740,49 +834,51 @@ static void Ns_Backdrop(void) {
     Ps_SpriteScreen(TBO_BG, 0.0f, 0.0f, 512.0f, 448.0f, 0.5f - u * 0.5f, 0.5f - v * 0.5f, 0.5f + u * 0.5f, 0.5f + v * 0.5f, PS_PLAIN, 0x80);
 }
 
-/* A card's inside: from its x, what lies between the bar's round ends (x0, and the width w). */
-static void Ns_Inside(f32 x, f32 h, f32 *x0, f32 *w) {
-    f32 cap = Ps_PillCap(TBO_KIT_BAR, h);
-
-    *x0 = x + cap * 0.75f;
-    *w = NS_CARD_W - cap * 1.5f;
-}
-
-/* The reel's width on a card of height h: what the card's inside leaves after the team's colour, as tall as 55 %
-   of the card at most. */
-static f32 Ns_ReelW(f32 h) {
-    f32 x0;
-    f32 in;
-    f32 w = 0.55f * h * 0.857f * (NS_REEL_S1 - NS_REEL_S0) / 64.0f;
-
-    Ns_Inside(0.0f, h, &x0, &in);
-    return w > in - 14.0f ? in - 14.0f : w;
-}
-
-/* The reel's height for that width. */
+/* The reel's height for a width. */
 static f32 Ns_ReelH(f32 w) {
     return 64.0f * w / (NS_REEL_S1 - NS_REEL_S0) / 0.857f;
 }
 
+/* Whether player k's card shows the reel: a player at the grid or the forms, on a card of two lines. */
+static s32 Ns_ShowsReel(s32 k, f32 h) {
+    return !Ns_Gone(k) && (sNs.step[k] == NS_GRID || sNs.step[k] == NS_FORM) && h >= NS_TALL;
+}
+
 static void Ns_Draw(void) {
-    f32 h = Ns_CardH();
-    f32 w = Ns_ReelW(h);
     s32 k;
 
+    Ps_Panel(TBO_KIT_WINDOW, 8.0f, 78.0f, 504.0f, 322.0f, 0x80);
+    if (sNs.ffa) {
+        Ps_Pill(TBO_KIT_GOLD, 16.0f, 84.0f, 496.0f, 102.0f, 0x80);
+    } else { /* the two teams' capsules, a stripe of each team's colour under them */
+        Ps_Pill(TBO_KIT_GOLD, Ns_ColX(0), 84.0f, Ns_ColX(0) + NS_COL_W, 102.0f, 0x80);
+        Ps_Pill(TBO_KIT_STEEL, Ns_ColX(1), 84.0f, Ns_ColX(1) + NS_COL_W, 102.0f, 0x80);
+        Ps_Rect(Ns_ColX(0) + 14.0f, 101.0f, Ns_ColX(0) + NS_COL_W - 14.0f, 103.0f, Ps_Rgba(250, 140, 30, 255), Ps_Rgba(250, 140, 30, 255));
+        Ps_Rect(Ns_ColX(1) + 14.0f, 101.0f, Ns_ColX(1) + NS_COL_W - 14.0f, 103.0f, Ps_Rgba(60, 140, 255, 255), Ps_Rgba(60, 140, 255, 255));
+    }
     for (k = 0; k < sNs.players; k++) {
-        f32 x;
-        f32 y;
-        u32 c = sNs.ffa ? Ps_Rgba(150, 150, 150, 255) : Ns_Team(k) == 0 ? Ps_Rgba(240, 130, 30, 255) : Ps_Rgba(50, 120, 240, 255);
+        f32 x, y, h, cx0, cy0, cx1, cy1, tx0, tx1;
 
-        Ns_Card(k, &x, &y);
-        Ps_Pill(sNs.step[k] == NS_READY ? TBO_KIT_SEL : TBO_KIT_BAR, x, y, x + NS_CARD_W, y + h, 0x80);
-        {
-            f32 x0;
-            f32 in;
+        Ns_Slot(k, &x, &y, &h);
+        Ns_CardParts(x, y, h, &cx0, &cy0, &cx1, &cy1, &tx0, &tx1);
+        Ps_Pill(TBO_KIT_BAR, x, y, x + NS_COL_W, y + h, 0x80);
+        /* the chip in a frame of the team's colour, darker below (green once ready) */
+        if (sNs.step[k] == NS_READY) {
+            Ps_Rect(cx0 - 2.5f, cy0 - 2.5f, cx1 + 2.5f, cy1 + 2.5f, Ps_Rgba(120, 255, 120, 255), Ps_Rgba(20, 140, 40, 255));
+        } else {
+            Ps_Rect(cx0 - 2.0f, cy0 - 2.0f, cx1 + 2.0f, cy1 + 2.0f, Ns_TeamColor(k, 0), Ns_TeamColor(k, 1));
+        }
+        Ps_Rect(cx0, cy0, cx1, cy1, Ps_Rgba(10, 16, 40, 255), Ps_Rgba(30, 40, 80, 255));
+        Ps_GameTex(Ns_Chip(Ns_Chara(k)), cx0, cy0, cx1, cy1, Ns_Gone(k) && k < sNs.humans ? 0x505050 : PS_PLAIN, 0x80);
+        if (Ns_ShowsReel(k, h)) {
+            f32 w = tx1 - tx0;
+            f32 rh = Ns_ReelH(w);
 
-            Ns_Inside(x, h, &x0, &in);
-            Ps_Rect(x0 + 5.0f, y + h * 0.3f, x0 + 9.0f, y + h * 0.84f, c, c); /* the team's colour, clear of the border */
-            Ns_Reel(k, x0 + 14.0f + (in - 14.0f - w) * 0.5f, y + h * 0.62f - Ns_ReelH(w) * 0.5f, w);
+            if (rh > h * 0.48f) { /* (as tall as the card's lower half at most) */
+                rh = h * 0.48f;
+                w = rh * 0.857f * (NS_REEL_S1 - NS_REEL_S0) / 64.0f;
+            }
+            Ns_Reel(k, tx0, y + h - 3.0f - rh, w);
         }
     }
     MsgWin_PortDrawString(NULL);
@@ -790,11 +886,13 @@ static void Ns_Draw(void) {
 
 /* What a card says of player k's choice: the character (its form), and the costume once it is chosen. */
 static void Ns_Choice(s32 k, char *out) {
+    char name[64];
+
     if (sNs.step[k] == NS_SIDE) {
         sprintf(out, NX(NX_SIDE), (int)(sNs.team[k] + 1));
         return;
     }
-    Ps_Copy(out, Ns_Name(Ns_Chara(k)), 80);
+    Ps_Copy(out, Ns_Name(Ns_Chara(k), name), 80);
     if (sNs.step[k] >= NS_COSTUME && Ns_Costumes(k) > 1) {
         char what[64];
 
@@ -809,11 +907,68 @@ static void Ns_Choice(s32 k, char *out) {
     }
 }
 
+/* Who is on a card: "1  name", the computer's, or "PLAYER 1". */
+static void Ns_Who(s32 k, char *out) {
+    const char *name = Port_NetName(k);
+
+    if (Ns_Gone(k)) {
+        sprintf(out, "%d  %s", (int)(k + 1), NX(NX_CPU));
+    } else if (name[0] != 0) {
+        sprintf(out, "%d  %s", (int)(k + 1), name);
+    } else {
+        sprintf(out, NX(NX_PLAYER), (int)(k + 1));
+    }
+}
+
+/* The words of player k's card: on two lines, the player and where they are (or the character, at the reel) above,
+   the team's arrows, the costume or the character below; on one, the player and their choice. */
+static void Ns_CardText(s32 k) {
+    char who[80];
+    char what[80];
+    char name[64];
+    f32 x, y, h, cx0, cy0, cx1, cy1, tx0, tx1;
+    s32 s = sNs.step[k];
+
+    Ns_Slot(k, &x, &y, &h);
+    Ns_CardParts(x, y, h, &cx0, &cy0, &cx1, &cy1, &tx0, &tx1);
+    f32 sm = Ns_Small(h);
+    f32 bg = Ns_Big(h);
+
+    Ns_Who(k, who);
+    if (h < NS_TALL) {
+        Ps_Text(tx0, Ps_TextTop(y + h * 0.5f, sm), who, sm, (tx1 - tx0) * 0.38f, 0);
+        Ns_Choice(k, what);
+        Ps_Align(2);
+        Ps_Text(tx1, Ps_TextTop(y + h * 0.5f, sm), what, sm, (tx1 - tx0) * 0.58f, s == NS_READY ? 5 : s == NS_SIDE ? 1 : 3);
+        Ps_Align(0);
+        return;
+    }
+    Ps_Text(tx0, Ps_TextTop(y + h * 0.27f, sm), who, sm, (tx1 - tx0) * 0.5f, 0);
+    Ps_Align(2);
+    if (s == NS_READY) {
+        Ps_Text(tx1, Ps_TextTop(y + h * 0.27f, sm), NX(NX_READY), sm, 60.0f, 5);
+    } else if (s == NS_SIDE) {
+        Ps_Text(tx1, Ps_TextTop(y + h * 0.27f, sm), NX(NX_PICK_TEAM), sm, (tx1 - tx0) * 0.48f, 4);
+    } else { /* (at the reel or the costume: the character the cursor is on) */
+        Ps_Text(tx1, Ps_TextTop(y + h * 0.27f, sm), Ns_Name(Ns_Chara(k), name), sm, (tx1 - tx0) * 0.48f, 1);
+    }
+    Ps_Align(1);
+    if (s == NS_SIDE) {
+        sprintf(what, NX(NX_SIDE), (int)(sNs.team[k] + 1));
+        Ps_Text((tx0 + tx1) * 0.5f, Ps_TextTop(y + h * 0.68f, bg), what, bg, tx1 - tx0, 1);
+    } else if (s == NS_COSTUME) {
+        Ns_Choice(k, what);
+        Ps_Text((tx0 + tx1) * 0.5f, Ps_TextTop(y + h * 0.68f, bg * 0.85f), what, bg * 0.85f, tx1 - tx0, 3);
+    } else if (s == NS_READY || Ns_Gone(k)) {
+        Ns_Choice(k, what);
+        Ps_Text((tx0 + tx1) * 0.5f, Ps_TextTop(y + h * 0.68f, bg * 0.9f), what, bg * 0.9f, tx1 - tx0, s == NS_READY ? 5 : 3);
+    }
+    Ps_Align(0);
+}
+
 static void Ns_DrawText(void) {
     char line[200];
     char what[80];
-    f32 h = Ns_CardH();
-    f32 big = h < 50.0f ? 0.38f : 0.44f;
     s32 k;
 
     Ps_Heading(44.0f, Ps_TextTop(32.0f, 1.3f), NX(NX_TITLE), 1.3f, 300.0f, 0x80);
@@ -828,33 +983,22 @@ static void Ns_DrawText(void) {
     Ps_Cat(line, "  -  ", 200);
     sprintf(what, NX(NX_CPU_LEVEL), NX(NX_LEVEL0 + sNs.cpu));
     Ps_Cat(line, what, 200);
-    Ps_Text(20.0f, Ps_TextTop(72.0f, 0.5f), line, 0.5f, 470.0f, 2);
+    Ps_Text(20.0f, Ps_TextTop(68.0f, 0.46f), line, 0.46f, 470.0f, 2);
+    Ps_Align(1);
+    if (sNs.ffa) {
+        Ps_Text(256.0f, Ps_TextTop(93.0f, 0.5f), NX(NX_FFA), 0.5f, 400.0f, 0);
+    } else {
+        for (k = 0; k < 2; k++) {
+            sprintf(what, NX(NX_TEAM_N), (int)(k + 1));
+            Ps_Text(Ns_ColX(k) + NS_COL_W * 0.5f, Ps_TextTop(93.0f, 0.5f), what, 0.5f, NS_COL_W - 30.0f, 0);
+        }
+    }
+    Ps_Align(0);
+    if (!sNs.ffa) { /* "VS" between the columns, in the headings' gold */
+        Ps_Heading(256.0f - Ps_TextWidth("VS", 0.9f) * 0.5f, Ps_TextTop(212.0f, 0.9f), "VS", 0.9f, 0.0f, 0x80);
+    }
     for (k = 0; k < sNs.players; k++) {
-        f32 x;
-        f32 y;
-        const char *name = Port_NetName(k);
-
-        Ns_Card(k, &x, &y);
-        if (Ns_Gone(k)) {
-            sprintf(what, "%d  %s", (int)(k + 1), NX(NX_CPU));
-        } else if (name[0] != 0) {
-            sprintf(what, "%d  %s", (int)(k + 1), name);
-        } else {
-            sprintf(what, NX(NX_PLAYER), (int)(k + 1));
-        }
-        {
-            f32 x0;
-            f32 in;
-
-            Ns_Inside(x, h, &x0, &in);
-            x0 += 4.0f; /* (the round ends close in at the top: the words keep off them a little more) */
-            in -= 8.0f;
-            Ps_Text(x0, Ps_TextTop(y + h * 0.24f, 0.4f), what, 0.4f, 68.0f, 0);
-            Ns_Choice(k, what);
-            Ps_Align(2);
-            Ps_Text(x0 + in, Ps_TextTop(y + h * 0.24f, big), what, big, in - 74.0f, sNs.step[k] == NS_READY ? 5 : 3);
-            Ps_Align(0);
-        }
+        Ns_CardText(k);
     }
     if (sNs.allReady > 0) {
         Ps_MsgLines(NX(NX_TO_VOTE), 40.0f, 343.0f, 380.0f, 3);
@@ -957,6 +1101,7 @@ static void Ns_WinInit(void) {
     count = ((s32 *)sNs.selRes)[((u32 *)sNs.selRes)[42] >> 2];
     ChrGrid_Build(&sNs.cellCount, sNs.grid, &count, (MChrCell *)(MPACK_AT(sNs.selRes, 42) + 0x10), &custom, sNs.custom);
     sNs.rows = (sNs.cellCount + MCHR_COLS - 1) / MCHR_COLS;
+    PortA11y_CacheNames((u32)MPACK_AT(sNs.selRes, 43), (u32)MPACK_AT(sNs.selRes, 44)); /* (the spectator's line) */
     /* the vote's stages and music: the select's lists as CharSel_Init reads them (sections 39 and 56, the stage
        pictures 46), without the save's locks; the stages its "random" draws from (BT4's past the markers too) */
     {
@@ -985,6 +1130,21 @@ static void Ns_WinInit(void) {
         }
         sNs.songs[sNs.songCount++] = CHARSEL_BGM_RANDOM;
     }
+    if (PortA11y_EnvOn("BT3_NSEL_DUMP")) { /* (tests: every character of the grid, its id and name: sweeps of BT4) */
+        char name[64];
+
+        for (i = 0; i < sNs.cellCount; i++) {
+            s32 f;
+
+            for (f = 0; f < (sNs.grid[i].formCount > 0 ? sNs.grid[i].formCount : 1); f++) {
+                s32 id = sNs.grid[i].formCount > 0 ? sNs.grid[i].form[f] : sNs.grid[i].id;
+
+                if (MChr_PortBt4Valid(id)) {
+                    PortA11y_LogLine("nsel: character", id, Ns_Name(id, name));
+                }
+            }
+        }
+    }
 }
 
 /* A stage's picture (the select's icon pack: one per stage id, "random" too). */
@@ -992,18 +1152,96 @@ static u8 *Ns_StageTex(s32 id) {
     return NS_RES(MPACK_AT(sNs.selRes, 46), id + 1)->tex;
 }
 
-/* ---- the vote's picture: the stage grid on the left with each player's cursor, the votes on the right ---- */
-#define NS_GRID_X1 300.0f
-#define NS_VOTE_X0 308.0f
+/* ---- the vote's picture: the stage grid in a window on the left, each player's cursor in their own colour with
+   their number; the votes in a window on the right, a bar each with the stage's picture; the result over both, the
+   stages voted turning like a roulette and stopping on the one drawn ---- */
+#define NS_GX0 18.0f  /* the grid */
+#define NS_GX1 320.0f
+#define NS_GY0 88.0f
+#define NS_GY1 312.0f
+#define NS_VX0 342.0f /* the votes */
+#define NS_VX1 498.0f
+
+/* An int as a float, out of line: in a loop the compiler can widen the index to 64 bits and make the conversion a
+   call the game's code has no helper for (__floatundisf, port/tools/link.py's stubs). */
+static f32 __attribute__((noinline)) Ns_F(s32 v) {
+    return (f32)v;
+}
 
 /* Stage i's cell on the grid. */
 static void Ns_StageCell(s32 i, f32 *x, f32 *y, f32 *w, f32 *h) {
     s32 cols = Ns_StageCols();
 
-    *w = (NS_GRID_X1 - 14.0f) / (f32)cols;
-    *h = (NS_CARDS_BOTTOM - NS_CARDS_TOP) / (f32)((sNs.stageCount + cols - 1) / cols);
-    *x = 14.0f + *w * (f32)(i % cols);
-    *y = NS_CARDS_TOP + *h * (f32)(i / cols);
+    *w = (NS_GX1 - NS_GX0) / Ns_F(cols);
+    *h = (NS_GY1 - NS_GY0) / Ns_F((sNs.stageCount + cols - 1) / cols);
+    *x = NS_GX0 + *w * Ns_F(i % cols);
+    *y = NS_GY0 + *h * Ns_F(i / cols);
+}
+
+/* Each player's own colour in the vote (the teams' two would not tell the cursors apart). */
+static u32 Ns_PColor(s32 k) {
+    static const u8 kRgb[NS_MAX][3] = {
+        {255, 70, 60}, {60, 150, 255}, {80, 220, 90}, {255, 210, 50}, {190, 100, 255},
+        {255, 140, 30}, {60, 230, 230}, {255, 120, 200}, {170, 255, 60}, {235, 235, 235},
+    };
+
+    return Ps_Rgba(kRgb[k % NS_MAX][0], kRgb[k % NS_MAX][1], kRgb[k % NS_MAX][2], 255);
+}
+
+/* Where a picture of the game's goes in a box, its own shape kept, centred: the box shrunk to it. */
+static void Ns_FitBox(u8 *tex, f32 *x0, f32 *y0, f32 *x1, f32 *y1) {
+    f32 r = Ps_GameTexShape(tex) / 0.857f; /* (its width over height on the page) */
+    f32 w = *x1 - *x0;
+    f32 h = *y1 - *y0;
+    f32 cx = (*x0 + *x1) * 0.5f;
+    f32 cy = (*y0 + *y1) * 0.5f;
+
+    if (w > h * r) {
+        w = h * r;
+    } else {
+        h = w / r;
+    }
+    *x0 = cx - w * 0.5f;
+    *x1 = cx + w * 0.5f;
+    *y0 = cy - h * 0.5f;
+    *y1 = cy + h * 0.5f;
+}
+
+static void Ns_Fit(u8 *tex, f32 x0, f32 y0, f32 x1, f32 y1, u32 tint) {
+    Ns_FitBox(tex, &x0, &y0, &x1, &y1);
+    Ps_GameTex(tex, x0, y0, x1, y1, tint, 0x80);
+}
+
+/* The votes the roulette turns through (the players still here, in order), and which one it shows at blank t of the
+   result: it turns ever slower and stops, NS_ROULETTE blanks in, on the stage drawn. Returns the stage id shown. */
+static s32 Ns_Roulette(s32 t) {
+    s32 votes[NS_MAX];
+    s32 n = 0;
+    s32 k;
+    s32 r = 0;
+    s32 at = 0;
+    s32 steps = 0;
+    s32 total = 0;
+
+    for (k = 0; k < sNs.humans; k++) {
+        if (!Ns_Gone(k)) {
+            votes[n++] = sNs.stages[sNs.stg[k]];
+        }
+    }
+    if (n < 2 || t >= NS_ROULETTE) {
+        return sNs.stage;
+    }
+    for (k = n - 1; k >= 0; k--) { /* (the result's vote: the roulette's last turn lands on it) */
+        r = votes[k] == sNs.stage ? k : r;
+    }
+    while (at + 3 + total / 2 <= NS_ROULETTE) { /* (the turns: each one a little longer) */
+        at += 3 + total / 2;
+        total++;
+    }
+    for (at = 0; at + 3 + steps / 2 <= t; steps++) {
+        at += 3 + steps / 2;
+    }
+    return votes[((steps - total + r) % n + n) % n];
 }
 
 /* How many players before k have their cursor on k's cell (their frames nest, their numbers go side by side). */
@@ -1017,13 +1255,6 @@ static s32 Ns_Before(s32 k) {
     return n;
 }
 
-static u32 Ns_Color(s32 k) {
-    if (sNs.ffa) {
-        return Ps_Rgba(200, 200, 200, 255);
-    }
-    return Ns_Team(k) == 0 ? Ps_Rgba(240, 130, 30, 255) : Ps_Rgba(50, 120, 240, 255);
-}
-
 static void Ns_Frame(f32 x0, f32 y0, f32 x1, f32 y1, f32 t, u32 c) {
     Ps_Rect(x0, y0, x1, y0 + t, c, c);
     Ps_Rect(x0, y1 - t, x1, y1, c, c);
@@ -1031,51 +1262,79 @@ static void Ns_Frame(f32 x0, f32 y0, f32 x1, f32 y1, f32 t, u32 c) {
     Ps_Rect(x1 - t, y0, x1, y1, c, c);
 }
 
-/* A row of the votes' list: as tall as the players leave room for. */
+/* A row of the votes' list: as tall as the players leave room for, and its top. */
 static f32 Ns_VoteRowH(void) {
-    f32 h = (NS_CARDS_BOTTOM - NS_CARDS_TOP) / (f32)sNs.humans - 3.0f;
+    f32 h = (NS_GY1 - NS_GY0 + 3.0f) / Ns_F(sNs.humans) - 3.0f;
 
-    return h > 44.0f ? 44.0f : h;
+    return h > 48.0f ? 48.0f : h;
+}
+
+static f32 Ns_VoteRowY(s32 k) {
+    return NS_GY0 + (Ns_VoteRowH() + 3.0f) * Ns_F(k);
+}
+
+/* A player's number on a disc of their colour (the cursor's corner, the vote's bar). */
+static void Ns_Badge(s32 k, f32 cx, f32 cy, f32 r) {
+    Ps_Disc(cx, cy, r + 1.2f, Ps_Rgba(10, 10, 20, 255), Ps_Rgba(10, 10, 20, 255));
+    Ps_Disc(cx, cy, r, Ns_PColor(k), Ns_PColor(k));
+}
+
+/* The roulette's window over the grid and the votes: the stage it shows, framed in gold once it stops. */
+static void Ns_DrawResult(void) {
+    s32 shown = Ns_Roulette(sNs.allReady);
+    s32 stopped = sNs.allReady >= NS_ROULETTE;
+    f32 x0 = 140.0f;
+    f32 y0 = 122.0f;
+    f32 x1 = 372.0f;
+    f32 y1 = 238.0f;
+
+    /* (the GS's alpha: 0x80 is opaque) */
+    Ps_Rect(8.0f, 78.0f, 504.0f, 322.0f, Ps_Rgba(0, 0, 10, 0x50), Ps_Rgba(0, 0, 10, 0x60));
+    if (stopped) { /* (the hosts cheer the one drawn) */
+        Ps_Stand(TBO_HOSTS_CHEER, 448.0f, 330.0f, 190.0f, 0x80);
+    }
+    Ps_Panel(TBO_KIT_WINDOW, 104.0f, 104.0f, 408.0f, 312.0f, 0x80);
+    Ns_FitBox(Ns_StageTex(shown), &x0, &y0, &x1, &y1);
+    Ps_Rect(x0 - 3.0f, y0 - 3.0f, x1 + 3.0f, y1 + 3.0f, Ps_Rgba(0, 0, 10, 0x80), Ps_Rgba(0, 0, 10, 0x80));
+    Ps_GameTex(Ns_StageTex(shown), x0, y0, x1, y1, PS_PLAIN, 0x80);
+    Ns_Frame(x0 - 4.0f, y0 - 4.0f, x1 + 4.0f, y1 + 4.0f, stopped ? 3.0f : 1.5f,
+             stopped ? Ps_Rgba(255, 210, 60, 255) : Ps_Rgba(150, 170, 200, 255));
 }
 
 static void Ns_DrawVote(void) {
     f32 x, y, cw, ch;
     s32 i, k;
 
-    for (i = 0; i < sNs.stageCount; i++) {
-        u8 *tex = Ns_StageTex(sNs.stages[i]);
-        f32 r = Ps_GameTexShape(tex);
-        f32 w, h;
-
+    Ps_Panel(TBO_KIT_WINDOW, 8.0f, 78.0f, 330.0f, 322.0f, 0x80);
+    Ps_Panel(TBO_KIT_WINDOW, 336.0f, 78.0f, 504.0f, 322.0f, 0x80);
+    for (i = 0; i < sNs.stageCount; i++) { /* the grid: each stage's picture on a dark tile */
         Ns_StageCell(i, &x, &y, &cw, &ch);
-        w = cw - 4.0f;
-        h = ch - 4.0f;
-        if (w > h * r) { /* (the picture's own shape, centred in its cell) */
-            w = h * r;
-        } else {
-            h = w / r;
-        }
-        Ps_GameTex(tex, x + (cw - w) * 0.5f, y + (ch - h) * 0.5f, x + (cw + w) * 0.5f, y + (ch + h) * 0.5f,
-                   sNs.phase == 2 && sNs.stages[i] != sNs.stage ? 0x505050 : PS_PLAIN, 0x80);
-        if (sNs.phase == 2 && sNs.stages[i] == sNs.stage) {
-            Ns_Frame(x, y, x + cw, y + ch, 3.0f, Ps_Rgba(255, 210, 60, 255)); /* (the stage drawn: gold) */
-        }
+        Ps_Rect(x + 1.0f, y + 1.0f, x + cw - 1.0f, y + ch - 1.0f, Ps_Rgba(0, 0, 10, 0x50), Ps_Rgba(0, 0, 10, 0x68));
+        Ns_Fit(Ns_StageTex(sNs.stages[i]), x + 3.0f, y + 3.0f, x + cw - 3.0f, y + ch - 3.0f, PS_PLAIN);
     }
-    for (k = 0; k < sNs.humans && sNs.phase == 1; k++) {
-        f32 in = 1.0f + 2.5f * (f32)Ns_Before(k);
-
+    for (k = 0; k < sNs.humans && sNs.phase == 1; k++) { /* each player's cursor, nested on a shared cell */
         if (!Ns_Gone(k)) {
+            f32 in = 0.5f + 2.5f * Ns_F(Ns_Before(k));
+
             Ns_StageCell(sNs.stg[k], &x, &y, &cw, &ch);
-            Ns_Frame(x + in, y + in, x + cw - in, y + ch - in, 2.0f, Ns_Color(k));
+            Ns_Frame(x + in, y + in, x + cw - in, y + ch - in, sNs.vote[k] == NS_V_STAGE ? 2.0f : 1.2f, Ns_PColor(k));
+            Ns_Badge(k, x + 6.0f + 9.0f * Ns_F(Ns_Before(k)), y + 6.0f, 4.5f);
         }
     }
-    y = NS_CARDS_TOP - Ns_VoteRowH() - 3.0f;
-    for (k = 0; k < sNs.humans; k++) { /* the votes: a bar each, lit once the player has voted */
+    for (k = 0; k < sNs.humans; k++) { /* the votes: a bar each (lit once voted), the player's colour, the stage */
         f32 rh = Ns_VoteRowH();
+        f32 ry = Ns_VoteRowY(k);
+        f32 th = rh - 10.0f;
 
-        y += rh + 3.0f; /* (not `k * ...`: the loop's 64-bit index as a float is a helper the game's code lacks) */
-        Ps_Pill(sNs.vote[k] == NS_V_DONE ? TBO_KIT_SEL : TBO_KIT_BAR, NS_VOTE_X0, y, 498.0f, y + rh, 0x80);
-        Ps_Rect(NS_VOTE_X0 + 12.0f, y + rh * 0.25f, NS_VOTE_X0 + 15.0f, y + rh * 0.75f, Ns_Color(k), Ns_Color(k));
+        Ps_Pill(sNs.vote[k] == NS_V_DONE ? TBO_KIT_SEL : TBO_KIT_BAR, NS_VX0, ry, NS_VX1, ry + rh, 0x80);
+        Ns_Badge(k, NS_VX0 + 13.0f, ry + rh * 0.5f, rh * 0.18f > 6.0f ? 6.0f : rh * 0.18f);
+        if (!Ns_Gone(k)) {
+            Ps_Rect(NS_VX0 + 22.0f, ry + 5.0f, NS_VX0 + 22.0f + th * 1.4f, ry + rh - 5.0f, Ps_Rgba(0, 0, 10, 0x68), Ps_Rgba(0, 0, 10, 0x68));
+            Ns_Fit(Ns_StageTex(sNs.stages[sNs.stg[k]]), NS_VX0 + 23.0f, ry + 6.0f, NS_VX0 + 21.0f + th * 1.4f, ry + rh - 6.0f, PS_PLAIN);
+        }
+    }
+    if (sNs.phase == 2) {
+        Ns_DrawResult();
     }
     MsgWin_PortDrawString(NULL);
 }
@@ -1086,50 +1345,65 @@ static void Ns_DrawVoteText(void) {
     char buf[24];
     f32 x, y, cw, ch;
     f32 rh = Ns_VoteRowH();
-    f32 big = rh < 30.0f ? 0.3f : 0.36f;
     s32 k;
 
     Ps_Heading(44.0f, Ps_TextTop(32.0f, 1.3f), NX(NX_VOTE_TITLE), 1.3f, 300.0f, 0x80);
-    Ps_Text(20.0f, Ps_TextTop(72.0f, 0.5f), NX(NX_VOTE_RULE), 0.5f, 470.0f, 2);
-    for (k = 0; k < sNs.humans && sNs.phase == 1; k++) { /* each cursor's number */
+    Ps_Text(20.0f, Ps_TextTop(68.0f, 0.46f), NX(NX_VOTE_RULE), 0.46f, 470.0f, 2);
+    Ps_Align(1);
+    for (k = 0; k < sNs.humans && sNs.phase == 1; k++) { /* each cursor's number, on its disc */
         if (!Ns_Gone(k)) {
             Ns_StageCell(sNs.stg[k], &x, &y, &cw, &ch);
             sprintf(what, "%d", (int)(k + 1));
-            Ps_Text(x + 4.0f + 8.0f * (f32)Ns_Before(k), Ps_TextTop(y + 8.0f, 0.36f), what, 0.36f, 0.0f,
-                    sNs.vote[k] == NS_V_DONE ? 5 : 1);
+            Ps_Text(x + 6.0f + 9.0f * Ns_F(Ns_Before(k)), Ps_TextTop(y + 6.0f, 0.24f), what, 0.24f, 0.0f, 0);
         }
     }
-    y = NS_CARDS_TOP - rh - 3.0f;
-    for (k = 0; k < sNs.humans; k++) {
-        const char *name = Port_NetName(k);
+    for (k = 0; k < sNs.humans && sNs.phase == 1; k++) { /* the votes' bars: the number, the player, the stage, the music */
+        f32 ry = Ns_VoteRowY(k);
+        f32 tx = NS_VX0 + 26.0f + (rh - 10.0f) * 1.4f;
+        f32 tw = NS_VX1 - 8.0f - tx;
+        s32 v = sNs.vote[k];
 
-        y += rh + 3.0f; /* (as in Ns_DrawVote) */
+        sprintf(what, "%d", (int)(k + 1));
+        Ps_Align(1);
+        Ps_Text(NS_VX0 + 13.0f, Ps_TextTop(ry + rh * 0.5f, 0.24f), what, 0.24f, 0.0f, 0);
+        Ps_Align(0);
         if (Ns_Gone(k)) {
-            sprintf(what, "%d  %s", (int)(k + 1), NX(NX_CPU));
-        } else if (name[0] != 0) {
-            sprintf(what, "%d  %s", (int)(k + 1), name);
-        } else {
-            sprintf(what, NX(NX_PLAYER), (int)(k + 1));
-        }
-        Ps_Text(NS_VOTE_X0 + 20.0f, Ps_TextTop(y + rh * 0.3f, big), what, big, 70.0f, 0);
-        if (Ns_Gone(k)) {
+            Ps_Text(NS_VX0 + 26.0f, Ps_TextTop(ry + rh * 0.5f, 0.3f), NX(NX_CPU), 0.3f, 60.0f, 4);
             continue;
         }
-        Ps_Align(2);
-        Ps_Text(490.0f, Ps_TextTop(y + rh * 0.3f, big), Ns_StageName(sNs.stages[sNs.stg[k]]), big, 100.0f,
-                sNs.vote[k] == NS_V_STAGE ? 1 : 3);
-        if (sNs.vote[k] == NS_V_MUSIC) {
+        if (rh >= 40.0f) { /* (three lines: the player too) */
+            const char *name = Port_NetName(k);
+
+            if (name[0] != 0) {
+                Ps_Copy(what, (char *)name, 80);
+            } else {
+                sprintf(what, NX(NX_PLAYER), (int)(k + 1));
+            }
+            Ps_Text(tx, Ps_TextTop(ry + rh * 0.24f, 0.3f), what, 0.3f, tw, 0);
+        }
+        Ps_Text(tx, Ps_TextTop(ry + rh * (rh >= 40.0f ? 0.52f : 0.32f), 0.34f), Ns_StageName(sNs.stages[sNs.stg[k]]), 0.34f,
+                tw, v == NS_V_DONE ? 5 : v == NS_V_STAGE ? 1 : 3);
+        if (v == NS_V_MUSIC) {
             sprintf(what, "<  %s  >", Ns_SongName(sNs.songs[sNs.song[k]], buf));
         } else {
-            sprintf(what, "%s: %s", NX(NX_MUSIC), Ns_SongName(sNs.songs[sNs.song[k]], buf));
+            Ps_Copy(what, Ns_SongName(sNs.songs[sNs.song[k]], buf), 80);
         }
-        Ps_Text(490.0f, Ps_TextTop(y + rh * 0.72f, big), what, big, 160.0f,
-                sNs.vote[k] == NS_V_DONE ? 5 : sNs.vote[k] == NS_V_MUSIC ? 1 : 3);
-        Ps_Align(0);
+        Ps_Text(tx, Ps_TextTop(ry + rh * (rh >= 40.0f ? 0.8f : 0.72f), 0.3f), what, 0.3f, tw,
+                v == NS_V_DONE ? 5 : v == NS_V_MUSIC ? 1 : 3);
     }
-    if (sNs.phase == 2) {
+    if (sNs.phase == 2) { /* the result: the stage the roulette shows; its name and the music once it stops */
+        s32 shown = Ns_Roulette(sNs.allReady);
+
+        Ps_Align(1);
+        Ps_Text(256.0f, Ps_TextTop(252.0f, 0.3f), NX(sNs.allReady >= NS_ROULETTE ? NX_STAGE_IS : NX_DRAWING), 0.3f, 280.0f, 4);
+        Ps_Text(256.0f, Ps_TextTop(270.0f, 0.6f), Ns_StageName(shown), 0.6f, 290.0f, sNs.allReady >= NS_ROULETTE ? 1 : 0);
+        if (sNs.allReady >= NS_ROULETTE) {
+            sprintf(what, "%s: %s", NX(NX_MUSIC), Ns_SongName(sNs.bgm, buf));
+            Ps_Text(256.0f, Ps_TextTop(292.0f, 0.4f), what, 0.4f, 290.0f, 3);
+        }
+        Ps_Align(0);
         sprintf(line, NX(NX_RESULT), Ns_StageName(sNs.stage), Ns_SongName(sNs.bgm, buf));
-        Ps_MsgLines(line, 40.0f, 343.0f, 380.0f, 3);
+        Ps_MsgLines(sNs.allReady >= NS_ROULETTE ? line : NX(NX_DRAWING), 40.0f, 343.0f, 380.0f, 3);
     } else {
         Ps_MsgLines(NX(NX_VOTE_HELP), 40.0f, 343.0f, 380.0f, 3);
     }

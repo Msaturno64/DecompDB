@@ -379,6 +379,7 @@ static void font_picker(const char *label, PanelFont &pf, const char *tip) {
 // example), BT4's (PRIVATE) its green gauge in a steel frame.
 extern "C" int gPortBt4; // plat_mem.c
 extern "C" int Port_MenuLang(void); // (below)
+extern "C" const char *PortA11y_CachedName(int chara); // a11y_game.c: a character's name from the game's text
 static void multi_bars_draw(void) {
     PortMultiBar b[20];
     int n = PortMulti_ReadBars(b, 20);
@@ -386,38 +387,61 @@ static void multi_bars_draw(void) {
     float w = (float)gUiPresentW * 0.07f, h = (float)gUiPresentH * 0.008f + 2.0f;
     float cw = w * 0.16f, ch = cw * 0.9f; // the chevron, over the bar
 
+    float H = (float)gUiPresentH, W = (float)gUiPresentW, X0 = (float)gUiPresentX, Y0 = (float)gUiPresentY;
     if (PortMulti_ReadAssist()) { // a teammate joined this side's beam struggle (Tag Team Mod: "BEAM ASSIST X1.5")
-        const char *say = "BEAM ASSIST X1.5";
-        float size = (float)gUiPresentH * 0.045f;
-        ImVec2 at((float)gUiPresentX + (float)gUiPresentW * 0.03f, (float)gUiPresentY + (float)gUiPresentH * 0.38f);
-        for (int ox = -2; ox <= 2; ox += 2) {
-            for (int oy = -2; oy <= 2; oy += 2) {
-                dl->AddText(NULL, size, ImVec2(at.x + ox, at.y + oy), IM_COL32(20, 14, 6, 255), say);
-            }
-        }
-        dl->AddText(NULL, size, at, IM_COL32(255, 236, 120, 255), say);
+        // a gold banner from the left edge: a dark band, a gold plate with a light top, the words in dark brown
+        const char *say = "BEAM ASSIST  x1.5";
+        float size = H * 0.042f;
+        ImVec2 ts = ImGui::GetFont()->CalcTextSizeA(size, FLT_MAX, 0.0f, say);
+        ImVec2 a(X0, Y0 + H * 0.36f), z(X0 + ts.x + H * 0.07f, Y0 + H * 0.36f + size * 1.5f);
+        dl->AddRectFilled(ImVec2(a.x, a.y - 3.0f), ImVec2(z.x + 6.0f, z.y + 3.0f), IM_COL32(40, 20, 4, 230), size * 0.5f, ImDrawFlags_RoundCornersRight);
+        dl->AddRectFilledMultiColor(a, ImVec2(z.x, (a.y + z.y) * 0.5f), IM_COL32(255, 244, 170, 255), IM_COL32(255, 220, 110, 255),
+                                    IM_COL32(250, 190, 60, 255), IM_COL32(255, 205, 80, 255));
+        dl->AddRectFilledMultiColor(ImVec2(a.x, (a.y + z.y) * 0.5f), z, IM_COL32(250, 190, 60, 255), IM_COL32(255, 205, 80, 255),
+                                    IM_COL32(205, 120, 20, 255), IM_COL32(220, 135, 25, 255));
+        dl->AddText(NULL, size, ImVec2(a.x + H * 0.03f, a.y + size * 0.25f), IM_COL32(60, 25, 4, 255), say);
     }
 
-    int watch = PortMulti_ReadWatch();
+    int chara = -1, watch = PortMulti_ReadWatch(&chara);
     if (watch >= 0) { // the player's fighter is down and the fight goes on: whom this screen follows (L3: the next one)
-        char say[96], who[40];
-        const char *name = Port_NetName(PortNsel_PlaceOf(watch));
-        float size = (float)gUiPresentH * 0.04f;
-
-        if (name[0] != '\0') {
-            snprintf(who, sizeof(who), "%s", name);
-        } else {
-            snprintf(who, sizeof(who), "%s %d", Port_MenuLang() == 1 ? "LUCHADOR" : "FIGHTER", watch + 1);
+        // a dark plate at the top, a light blue edge: "SPECTATOR" small, the character big, the player under it, and
+        // the L3 key with "next" at its right end
+        bool es = Port_MenuLang() == 1;
+        const char *player = Port_NetName(PortNsel_PlaceOf(watch));
+        const char *cname = PortA11y_CachedName(chara);
+        char big[80], small[80];
+        snprintf(big, sizeof(big), "%s", cname != NULL ? cname : "");
+        if (big[0] == '\0') {
+            snprintf(big, sizeof(big), "%s %d", es ? "LUCHADOR" : "FIGHTER", watch + 1);
         }
-        snprintf(say, sizeof(say), Port_MenuLang() == 1 ? "ESPECTADOR: %s   (L3: cambiar)" : "SPECTATING: %s   (L3: next)", who);
-        ImVec2 ts = ImGui::GetFont()->CalcTextSizeA(size, FLT_MAX, 0.0f, say);
-        ImVec2 at((float)gUiPresentX + ((float)gUiPresentW - ts.x) * 0.5f, (float)gUiPresentY + (float)gUiPresentH * 0.16f);
-        for (int ox = -2; ox <= 2; ox += 2) {
-            for (int oy = -2; oy <= 2; oy += 2) {
-                dl->AddText(NULL, size, ImVec2(at.x + ox, at.y + oy), IM_COL32(10, 10, 20, 255), say);
-            }
-        }
-        dl->AddText(NULL, size, at, IM_COL32(170, 225, 255, 255), say);
+        snprintf(small, sizeof(small), "%s", player[0] != '\0' ? player : (es ? "CPU" : "COMPUTER"));
+        const char *label = es ? "ESPECTADOR" : "SPECTATOR", *next = es ? "cambiar" : "next";
+        float sBig = H * 0.042f, sSmall = H * 0.026f, pad = H * 0.018f;
+        ImFont *f = ImGui::GetFont();
+        float wBig = f->CalcTextSizeA(sBig, FLT_MAX, 0.0f, big).x, wSmall = f->CalcTextSizeA(sSmall, FLT_MAX, 0.0f, small).x;
+        float wLabel = f->CalcTextSizeA(sSmall, FLT_MAX, 0.0f, label).x, wNext = f->CalcTextSizeA(sSmall, FLT_MAX, 0.0f, next).x;
+        float key = sSmall * 1.9f; // the L3 key's width
+        float body = wBig > wSmall ? wBig : wSmall;
+        body = body > wLabel ? body : wLabel;
+        float w = pad * 3.0f + body + key + pad + wNext, h = sSmall * 2.0f + sBig + pad * 1.4f;
+        ImVec2 a(X0 + (W - w) * 0.5f, Y0 + H * 0.13f), z(a.x + w, a.y + h);
+        dl->AddRectFilled(ImVec2(a.x + 3.0f, a.y + 4.0f), ImVec2(z.x + 3.0f, z.y + 4.0f), IM_COL32(0, 0, 0, 110), h * 0.18f);
+        dl->AddRectFilledMultiColor(a, z, IM_COL32(16, 28, 60, 225), IM_COL32(16, 28, 60, 225), IM_COL32(6, 10, 26, 235), IM_COL32(6, 10, 26, 235));
+        dl->AddRect(a, z, IM_COL32(120, 200, 255, 255), h * 0.18f, 0, 2.0f);
+        dl->AddLine(ImVec2(a.x + pad, a.y + pad * 0.5f + sSmall * 1.05f), ImVec2(a.x + pad + wLabel, a.y + pad * 0.5f + sSmall * 1.05f),
+                    IM_COL32(120, 200, 255, 160), 1.0f);
+        float x = a.x + pad, y = a.y + pad * 0.5f;
+        dl->AddText(f, sSmall, ImVec2(x, y), IM_COL32(120, 200, 255, 255), label);
+        dl->AddText(f, sBig, ImVec2(x + 1.5f, y + sSmall * 1.2f + 1.5f), IM_COL32(0, 0, 0, 200), big);
+        dl->AddText(f, sBig, ImVec2(x, y + sSmall * 1.2f), IM_COL32(255, 255, 255, 255), big);
+        dl->AddText(f, sSmall, ImVec2(x, y + sSmall * 1.2f + sBig), IM_COL32(190, 200, 220, 255), small);
+        // the L3 key: a rounded key cap with "L3", "next" beside it
+        float kx = a.x + pad * 2.0f + body, ky = (a.y + z.y) * 0.5f - sSmall * 0.85f;
+        dl->AddRectFilled(ImVec2(kx, ky), ImVec2(kx + key, ky + sSmall * 1.7f), IM_COL32(230, 236, 245, 255), sSmall * 0.5f);
+        dl->AddRect(ImVec2(kx, ky), ImVec2(kx + key, ky + sSmall * 1.7f), IM_COL32(60, 70, 90, 255), sSmall * 0.5f, 0, 1.5f);
+        float wl3 = f->CalcTextSizeA(sSmall, FLT_MAX, 0.0f, "L3").x;
+        dl->AddText(f, sSmall, ImVec2(kx + (key - wl3) * 0.5f, ky + sSmall * 0.35f), IM_COL32(20, 26, 40, 255), "L3");
+        dl->AddText(f, sSmall, ImVec2(kx + key + pad * 0.6f, ky + sSmall * 0.35f), IM_COL32(220, 230, 245, 255), next);
     }
 
     for (int i = 0; i < n; i++) {
@@ -2496,7 +2520,7 @@ static bool frame_build(void) {
         chat_close();
     }
     bool chat = online && (sChat || chat_recent());
-    bool watching = sReady && PortMulti_ReadWatch() >= 0; // (spectating: multi_bars_draw says whom)
+    bool watching = sReady && PortMulti_ReadWatch(NULL) >= 0; // (spectating: multi_bars_draw says whom)
     meter_count();
     sBuilt = false;
     if (!sReady || (!sOpen && !sQuit && !notice && !overlay && !meter && !names && !bars && !chat && !watching)) {

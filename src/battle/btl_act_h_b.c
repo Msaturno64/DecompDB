@@ -837,7 +837,13 @@ s32 BtlAct_TransformB(BtlActHChr *chr, s32 phase) {
  */
 s32 BtlAct_TransformC(BtlActHChr *chr, s32 phase) {
     if (phase == 0) {
+#ifdef PORT
+        /* (BT4 plays motion 0x1A4, the one it waits on below: REA, 0x1FE644. With BT3's 0x177 nothing below matched in
+           BT4 and the fighter stayed in the change for good, its model loaded: the user, Ultimate Gohan to Beast) */
+        BtlAnim_Play(chr, gPortBt4 ? 0x1A4 : 0x177, 0.0f);
+#else
         BtlAnim_Play(chr, 0x177, 0.0f);
+#endif
         BtlChar_GetPos(chr)->unk98 = 0.0f;
         BtlChar_GetPos(chr)->unk9C = 0.0f;
         BtlMove_SetHeading(chr, BtlChar_GetPos(chr)->rot.y, 0.0f);

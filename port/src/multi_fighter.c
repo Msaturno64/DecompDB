@@ -505,8 +505,9 @@ int PortMulti_ViewFighter(int side) {
     return side == (me < 2 ? me : 0) ? viewer() : side;
 }
 
-/* ui.cpp: the fighter the player watches while its own is down, -1 otherwise (published with the bars). */
-PORT_HOST static int sWatchShown = -1;
+/* ui.cpp: the fighter the player watches while its own is down, -1 otherwise, and its character (published with the
+   bars). */
+PORT_HOST static int sWatchShown = -1, sWatchChara = -1;
 
 /* btl_cam.c, BtlCam_UpdateOverride (as the Tag Team Mod's cinematic_camera_state / special_camera_arbitration):
    whether the screen shows a technique camera of `subject` (a view's priority, or the demo camera's cinematic): with
@@ -1058,6 +1059,11 @@ void PortMulti_ProjectBars(int view, int last) {
         sBarCount = sBarBuilt;
         sAssistShown = sAssistBuild;
         sWatchShown = n > 2 && player() >= 0 && viewer() != player() ? viewer() : -1;
+        {
+            extern int BattleSide_GetChara(int side); /* src/battle/battle_load.c: its form now */
+
+            sWatchChara = sWatchShown >= 0 ? BattleSide_GetChara(sWatchShown) : -1;
+        }
         __atomic_add_fetch(&sBarSeq, 1, __ATOMIC_ACQ_REL);
     }
 }
@@ -1073,8 +1079,11 @@ int PortMulti_ReadAssist(void) {
     return sBarSameReads <= BAR_STALE_READS && __atomic_load_n(&sAssistShown, __ATOMIC_ACQUIRE);
 }
 
-/* ... and the fighter the player watches while its own is down (spectating), -1 */
-int PortMulti_ReadWatch(void) {
+/* ... and the fighter the player watches while its own is down (spectating), -1; its character in *chara */
+int PortMulti_ReadWatch(int *chara) {
+    if (chara != NULL) {
+        *chara = __atomic_load_n(&sWatchChara, __ATOMIC_ACQUIRE);
+    }
     return sBarSameReads <= BAR_STALE_READS ? __atomic_load_n(&sWatchShown, __ATOMIC_ACQUIRE) : -1;
 }
 
@@ -1588,6 +1597,10 @@ int PortMulti_TestTeamSize(int side) {
 }
 
 int PortMulti_TestChara(int side, int i) {
+    /* BT3_NET_EXTRA=<chara> (tests): every added member that character (one only an extra plays: BT4's Gohan Beast) */
+    if (getenv("BT3_NET_EXTRA") != NULL) {
+        return atoi(getenv("BT3_NET_EXTRA"));
+    }
     return kDemoExtra[side & 1][(i - 1) % 5];
 }
 
