@@ -35,8 +35,10 @@
  * the players' names are everyone's (the host sends them all). Only the screen reader speaks for this copy's player.
  * shortcut: BT3's reel only (its frame's windows measured on BT3's texture); BT4's hexagons when BT4 online has
  * more than two.
- * shortcut: the stage and song names are BT3's (port/src/a11y_game.c); BT4 shows its songs by number, and its
- * stages' names are BT3's list until BT4's are read from its disc.
+ * The vote's result shows the stage's name as the game's select does: its picture of the names (NS_NAME_ART), the
+ * disc's own, in the disc's language. In words (the votes, the result's line, the screen reader) BT3's stages have
+ * the port's names (port/src/a11y_game.c), BT4's their number in the grid: BT4 has its names as pictures only.
+ * shortcut: BT4's songs by number too, the same reason.
  */
 #include "menu/tbo_art.h"
 #include "menu/tbo_sizes.h"
@@ -114,6 +116,10 @@ extern void BattleSetup_Finish(void);
 #define NS_WIN_W PORT_BT4(46.0f, 38.0f)
 #define NS_WIN_T0 12.0f
 #define NS_WIN_T1 49.0f
+/* The stages' names (CharSel_Init's image 39, its "mc_map_name" clip): entry id / 4 of section 6's table, a 512 x 256
+   picture of four names, id % 4 the row of 64 texels. BT4's select draws them the same way, its table longer (REA,
+   0x344AE4 in both discs' DBZP.BIN). */
+#define NS_NAME_ART 6
 
 /* Each player's step (as the game's select has them), and of the vote. */
 enum { NS_SIDE, NS_GRID, NS_FORM, NS_COSTUME, NS_READY };
@@ -123,7 +129,7 @@ enum {
     NX_TITLE, NX_PLAYERS, NX_TEAMS, NX_FFA, NX_STAGE, NX_RANDOM, NX_READY, NX_CPU, NX_COSTUME, NX_PLAYER,
     NX_HELP, NX_HELP_HOST, NX_HELP_READY, NX_STARTS, NX_MOVE, NX_OK, NX_BACK, NX_SIDE, NX_HELP_FFA, NX_CPU_LEVEL,
     NX_TO_VOTE, NX_VOTE_TITLE, NX_VOTE_RULE, NX_VOTE_HELP, NX_MUSIC, NX_TRACK, NX_RESULT, NX_PICK_TEAM, NX_TEAM_N,
-    NX_STAGE_IS, NX_DRAWING, NX_LEVEL0, NX_COUNT = NX_LEVEL0 + 5
+    NX_STAGE_IS, NX_DRAWING, NX_STAGE_N, NX_LEVEL0, NX_COUNT = NX_LEVEL0 + 5
 };
 static const char *const kNsText[NX_COUNT][2] = {
     {"ONLINE BATTLE", "BATALLA ONLINE"},
@@ -162,6 +168,7 @@ static const char *const kNsText[NX_COUNT][2] = {
     {"TEAM %d", "EQUIPO %d"},
     {"STAGE", "ESCENARIO"},
     {"Drawing among the votes...", "Sorteando entre los votos..."},
+    {"No. %d", "N.\302\272 %d"},
     {"VERY EASY", "MUY F\303\201CIL"},
     {"EASY", "F\303\201CIL"},
     {"NORMAL", "NORMAL"},
@@ -298,11 +305,25 @@ static char *Ns_Name(s32 chara, char *buf) {
     return buf;
 }
 
-static char *Ns_StageName(s32 id) {
+/* A stage's name in words: BT3's the port's, BT4's its number in the grid (into `buf`, 24 bytes). */
+static char *Ns_StageName(s32 id, char *buf) {
+    s32 i;
+
     if (id == CHARSEL_STAGE_RANDOM) {
         return NX(NX_RANDOM);
     }
-    return (char *)PortA11y_StageName(id);
+    if (!gPortBt4) {
+        return (char *)PortA11y_StageName(id);
+    }
+    for (i = 0; i < sNs.stageCount && sNs.stages[i] != id; i++) {
+    }
+    sprintf(buf, NX(NX_STAGE_N), (int)(i + 1));
+    return buf;
+}
+
+/* Whether the game's picture of the names has stage `id`'s (TexFile.count: the entries of its table). */
+static s32 Ns_HasNameArt(s32 id) {
+    return id >= 0 && id != CHARSEL_STAGE_RANDOM && id / 4 < NS_RES(sNs.selRes, NS_NAME_ART)->unk0[0];
 }
 
 /* A song's name by music-list value (BT4's: its number in the list, into `buf`). */
@@ -1021,14 +1042,15 @@ static void Ns_Speak(void) {
     now[0] = 0;
     if (sNs.phase != 0) { /* the vote: this player's stage and music, then the result */
         char buf[24];
+        char sbuf[24];
 
         Ps_Copy(now, NX(NX_VOTE_TITLE), 400);
         Ps_Cat(now, ". ", 400);
         if (sNs.phase == 2) {
-            sprintf(what, NX(NX_RESULT), Ns_StageName(sNs.stage), Ns_SongName(sNs.bgm, buf));
+            sprintf(what, NX(NX_RESULT), Ns_StageName(sNs.stage, sbuf), Ns_SongName(sNs.bgm, buf));
             Ps_Cat(now, what, 400);
         } else if (me < sNs.humans) {
-            Ps_Cat(now, Ns_StageName(sNs.stages[sNs.stg[me]]), 400);
+            Ps_Cat(now, Ns_StageName(sNs.stages[sNs.stg[me]], sbuf), 400);
             Ps_Cat(now, ". ", 400);
             Ps_Cat(now, NX(NX_MUSIC), 400);
             Ps_Cat(now, ": ", 400);
@@ -1087,8 +1109,8 @@ static void Ns_WinInit(void) {
     MsgWin_Open();
     /* the grid, its chips and the reel's pictures, as CharSel_Init has them (menu_c_e.c) */
     sNs.selRes = Sprite_Unpack(MPACK_AT(gMenuArc5, NS_SECTION), NULL, NULL);
-    for (i = 0; i < 2; i++) {
-        MTexRes *res = NS_RES(sNs.selRes, kReelRes[i]);
+    for (i = 0; i < 3; i++) {
+        MTexRes *res = NS_RES(sNs.selRes, i < 2 ? kReelRes[i] : NS_NAME_ART);
 
         Res_RelocateOffsets(&res, res, res);
     }
@@ -1133,6 +1155,10 @@ static void Ns_WinInit(void) {
     if (PortA11y_EnvOn("BT3_NSEL_DUMP")) { /* (tests: every character of the grid, its id and name: sweeps of BT4) */
         char name[64];
 
+        for (i = 0; i < sNs.stageCount; i++) { /* (and every stage, whether the picture of the names has it) */
+            PortA11y_LogLine(Ns_HasNameArt(sNs.stages[i]) ? "nsel: stage, named" : "nsel: stage, no name", sNs.stages[i],
+                             Ns_StageName(sNs.stages[i], name));
+        }
         for (i = 0; i < sNs.cellCount; i++) {
             s32 f;
 
@@ -1299,6 +1325,12 @@ static void Ns_DrawResult(void) {
     Ps_GameTex(Ns_StageTex(shown), x0, y0, x1, y1, PS_PLAIN, 0x80);
     Ns_Frame(x0 - 4.0f, y0 - 4.0f, x1 + 4.0f, y1 + 4.0f, stopped ? 3.0f : 1.5f,
              stopped ? Ps_Rgba(255, 210, 60, 255) : Ps_Rgba(150, 170, 200, 255));
+    if (Ns_HasNameArt(shown)) { /* its name, the game's picture of it (as wide as the game's, 8 to 1) */
+        f32 t = Ns_F(shown % 4) * 64.0f;
+
+        Ps_GameTexAt(MTEX(NS_RES(sNs.selRes, NS_NAME_ART), 0), shown / 4, 152.0f, 258.0f, 360.0f, 284.0f, 0.0f, t, 512.0f,
+                     t + 64.0f, PS_PLAIN, 0x80);
+    }
 }
 
 static void Ns_DrawVote(void) {
@@ -1343,6 +1375,7 @@ static void Ns_DrawVoteText(void) {
     char line[200];
     char what[80];
     char buf[24];
+    char sbuf[24];
     f32 x, y, cw, ch;
     f32 rh = Ns_VoteRowH();
     s32 k;
@@ -1381,7 +1414,7 @@ static void Ns_DrawVoteText(void) {
             }
             Ps_Text(tx, Ps_TextTop(ry + rh * 0.24f, 0.3f), what, 0.3f, tw, 0);
         }
-        Ps_Text(tx, Ps_TextTop(ry + rh * (rh >= 40.0f ? 0.52f : 0.32f), 0.34f), Ns_StageName(sNs.stages[sNs.stg[k]]), 0.34f,
+        Ps_Text(tx, Ps_TextTop(ry + rh * (rh >= 40.0f ? 0.52f : 0.32f), 0.34f), Ns_StageName(sNs.stages[sNs.stg[k]], sbuf), 0.34f,
                 tw, v == NS_V_DONE ? 5 : v == NS_V_STAGE ? 1 : 3);
         if (v == NS_V_MUSIC) {
             sprintf(what, "<  %s  >", Ns_SongName(sNs.songs[sNs.song[k]], buf));
@@ -1396,13 +1429,15 @@ static void Ns_DrawVoteText(void) {
 
         Ps_Align(1);
         Ps_Text(256.0f, Ps_TextTop(252.0f, 0.3f), NX(sNs.allReady >= NS_ROULETTE ? NX_STAGE_IS : NX_DRAWING), 0.3f, 280.0f, 4);
-        Ps_Text(256.0f, Ps_TextTop(270.0f, 0.6f), Ns_StageName(shown), 0.6f, 290.0f, sNs.allReady >= NS_ROULETTE ? 1 : 0);
+        if (!Ns_HasNameArt(shown)) { /* (else the game's picture of the name, Ns_DrawResult) */
+            Ps_Text(256.0f, Ps_TextTop(270.0f, 0.6f), Ns_StageName(shown, sbuf), 0.6f, 290.0f, sNs.allReady >= NS_ROULETTE ? 1 : 0);
+        }
         if (sNs.allReady >= NS_ROULETTE) {
             sprintf(what, "%s: %s", NX(NX_MUSIC), Ns_SongName(sNs.bgm, buf));
             Ps_Text(256.0f, Ps_TextTop(292.0f, 0.4f), what, 0.4f, 290.0f, 3);
         }
         Ps_Align(0);
-        sprintf(line, NX(NX_RESULT), Ns_StageName(sNs.stage), Ns_SongName(sNs.bgm, buf));
+        sprintf(line, NX(NX_RESULT), Ns_StageName(sNs.stage, sbuf), Ns_SongName(sNs.bgm, buf));
         Ps_MsgLines(sNs.allReady >= NS_ROULETTE ? line : NX(NX_DRAWING), 40.0f, 343.0f, 380.0f, 3);
     } else {
         Ps_MsgLines(NX(NX_VOTE_HELP), 40.0f, 343.0f, 380.0f, 3);
