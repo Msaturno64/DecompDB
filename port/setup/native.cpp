@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <algorithm>
 #include <atomic>
 #include <mutex>
 #include <string>
@@ -19,6 +20,7 @@
 #include <vector>
 #include <SDL3/SDL.h>
 #include "native.h"
+#include "../src/port_release.h"
 
 namespace {
 
@@ -35,8 +37,12 @@ bool sBt4;
 const Uint32 kRomBase = 0x100000, kRomEnd = 0x2FF180;
 #ifdef _WIN32
 const char *kGame = "Tenkaichi3Decomp.exe";
+const char *kAsset = "Tenkaichi3Decomp-windows-x64.zip"; // (the release's file for this system)
+const char *kCurl = "curl.exe", *kTar = "tar.exe";        // (part of Windows 10 and later)
 #else
 const char *kGame = "Tenkaichi3Decomp";
+const char *kAsset = "Tenkaichi3Decomp-linux-x64.zip";
+const char *kCurl = "curl", *kTar = "tar";
 #endif
 
 std::mutex sLock;
@@ -500,7 +506,222 @@ void work(std::string root, std::string path) {
     sRunning = false;
 }
 
+// -------------------------------------------------------------------------------------------------------- update
+// Tenkaichi3Decomp-setup --update (the game's "Update now", F1): the newest release of PORT_UPDATE_REPO, when newer
+// than this program's PORT_RELEASE, is downloaded and unpacked over this folder with the system's own curl and tar.
+// Only the release's files are written: gamedata/, the saves, the settings and what was added by hand stay.
+
+// Runs a program of the system without a console window. `out`: what it printed. `grows`: a file it writes, whose
+// size is reported as it grows (of `total` bytes). False: it could not be started.
+bool run(const char *const *args, std::string *out, const std::string &grows = "", Uint64 total = 0) {
+    SDL_PropertiesID props = SDL_CreateProperties();
+    SDL_SetPointerProperty(props, SDL_PROP_PROCESS_CREATE_ARGS_POINTER, (void *)args);
+    SDL_SetNumberProperty(props, SDL_PROP_PROCESS_CREATE_STDOUT_NUMBER, out != NULL ? SDL_PROCESS_STDIO_APP : SDL_PROCESS_STDIO_NULL);
+    SDL_SetBooleanProperty(props, SDL_PROP_PROCESS_CREATE_BACKGROUND_BOOLEAN, true);
+    SDL_Process *p = SDL_CreateProcessWithProperties(props);
+    SDL_DestroyProperties(props);
+    if (p == NULL) {
+        return false;
+    }
+    if (out != NULL) {
+        size_t n = 0;
+        char *data = (char *)SDL_ReadProcess(p, &n, NULL);
+        *out = data != NULL ? std::string(data, n) : "";
+        SDL_free(data);
+    } else {
+        int shown = -1;
+        while (!SDL_WaitProcess(p, false, NULL)) {
+            SDL_PathInfo info;
+            if (!grows.empty() && SDL_GetPathInfo(grows.c_str(), &info) && (int)(info.size >> 20) != shown) {
+                char line[64];
+                shown = (int)(info.size >> 20);
+                snprintf(line, sizeof(line), "@note %d of %d MB", shown, (int)(total >> 20));
+                say(line);
+            }
+            if (sCancel) {
+                SDL_KillProcess(p, true);
+            }
+            SDL_Delay(200);
+        }
+    }
+    SDL_DestroyProcess(p);
+    return true;
+}
+
+// Deletes a folder this program made, with what is in it.
+void remove_tree(const std::string &dir) {
+    int count = 0;
+    char **list = SDL_GlobDirectory(dir.c_str(), NULL, 0, &count);
+    std::vector<std::string> dirs;
+    for (int i = 0; list != NULL && i < count; i++) {
+        std::string p = dir + list[i];
+        SDL_PathInfo info;
+        if (SDL_GetPathInfo(p.c_str(), &info) && info.type == SDL_PATHTYPE_DIRECTORY) {
+            dirs.push_back(p);
+        } else {
+            SDL_RemovePath(p.c_str());
+        }
+    }
+    SDL_free(list);
+    std::sort(dirs.begin(), dirs.end(), [](const std::string &a, const std::string &b) { return a.size() > b.size(); });
+    for (auto &d : dirs) { // (the deepest first)
+        SDL_RemovePath(d.c_str());
+    }
+    SDL_RemovePath(dir.c_str());
+}
+
+// Copies every file under `from` (ending in '/') to the same place under `to`. A file in use (this program's own and
+// its SDL3.dll; the game, still closing) is moved aside to <name>.old, which Windows allows, and the new one written
+// in its place, tried for ten seconds; failing that the old one is put back, so the folder always keeps a setup that
+// can try again. fonts/fonts.tsv is never replaced once there (the user lists fonts of their own in it).
+void copy_tree(const std::string &from, const std::string &to) {
+    int count = 0;
+    char **list = SDL_GlobDirectory(from.c_str(), NULL, 0, &count);
+    if (list == NULL) {
+        throw Stop{"The downloaded release could not be read."};
+    }
+    for (int i = 0; i < count; i++) {
+        std::string rel = list[i];
+        std::replace(rel.begin(), rel.end(), '\\', '/'); // (Windows names them with its own separator)
+        std::string src = from + rel, dst = to + rel, old = dst + ".old";
+        size_t slash = rel.rfind('/');
+        SDL_PathInfo info;
+        bool ok, moved = false;
+        if (!SDL_GetPathInfo(src.c_str(), &info) || info.type == SDL_PATHTYPE_DIRECTORY ||
+            (rel == "fonts/fonts.tsv" && SDL_GetPathInfo(dst.c_str(), &info))) {
+            continue;
+        }
+        if (slash != std::string::npos) {
+            SDL_CreateDirectory((to + rel.substr(0, slash)).c_str());
+        }
+        ok = SDL_CopyFile(src.c_str(), dst.c_str());
+        for (int t = 0; !ok && t < 40; t++) {
+            if (!moved) {
+                SDL_RemovePath(old.c_str()); // (a previous update's, no longer in use)
+                moved = SDL_RenamePath(dst.c_str(), old.c_str());
+            }
+            if (!moved || t > 0) {
+                SDL_Delay(250);
+            }
+            ok = SDL_CopyFile(src.c_str(), dst.c_str());
+        }
+        if (!ok) {
+            std::string why = SDL_GetError();
+            if (moved) {
+                SDL_RenamePath(old.c_str(), dst.c_str());
+            }
+            SDL_free(list);
+            throw Stop{"Could not write " + dst + " (" + why + ").\nClose the game and press Update again."};
+        }
+        if (moved) {
+            SDL_RemovePath(old.c_str()); // (still in use: it goes with the next update)
+        }
+    }
+    SDL_free(list);
+}
+
+void work_update(std::string root) {
+    try {
+        std::string api = std::string("https://api.github.com/repos/") + PORT_UPDATE_REPO + "/releases/latest", json, url;
+        std::string zip = root + "update.zip", dir = root + ".update/";
+        const char *ask[] = {kCurl, "-s", "-L", "-m", "20", "-A", "Tenkaichi3Decomp-setup", api.c_str(), NULL};
+        int a = 0, b = -1, c = -1, latest;
+        int mine = getenv("BT3_UPDATE_FROM") != NULL ? atoi(getenv("BT3_UPDATE_FROM")) : PORT_RELEASE; // (testing: an older one)
+        Uint64 size = 0;
+        size_t at;
+        char line[160];
+
+        say("@step 1 3 Newest release");
+        if (PORT_UPDATE_REPO[0] == '\0') {
+            throw Stop{"This copy of the game names no place it is published, so it cannot update itself."};
+        }
+        bool asked = run(ask, &json);
+        at = json.find("\"tag_name\"");
+        at = at == std::string::npos ? at : json.find('v', at + 10);
+        if (!asked || at == std::string::npos || sscanf(json.c_str() + at, "v%d.%d.%d", &a, &b, &c) != 3 || a != 0 || b < 0 || c < 0 ||
+            c >= 100) {
+            throw Stop{"GitHub could not be asked for the newest release.\nIs this computer connected to the internet?"};
+        }
+        latest = b * 100 + c; // (as PORT_RELEASE counts: 0.2.1 is 201)
+        if (latest <= mine) {
+            snprintf(line, sizeof(line), "@ok this is the newest release, 0.%d.%d", mine / 100, mine % 100);
+            say(line);
+            say("@step 2 3 Download");
+            say("@skip nothing to download");
+            say("@step 3 3 Install");
+            say("@skip nothing to install");
+            say("@done " + root + kGame);
+            sRunning = false;
+            return;
+        }
+        for (size_t pos = 0; (pos = json.find("\"browser_download_url\"", pos)) != std::string::npos; pos += 22) {
+            size_t q1 = json.find('"', pos + 22), q2 = q1 == std::string::npos ? q1 : json.find('"', q1 + 1);
+            std::string v = q2 == std::string::npos ? "" : json.substr(q1 + 1, q2 - q1 - 1);
+            if (v.size() > strlen(kAsset) && v.compare(v.size() - strlen(kAsset), strlen(kAsset), kAsset) == 0) {
+                size_t s = json.rfind("\"size\"", pos); // (the asset's own fields come before its address)
+                url = v;
+                size = s != std::string::npos ? strtoull(json.c_str() + json.find(':', s) + 1, NULL, 10) : 0;
+                break;
+            }
+        }
+        if (url.empty()) {
+            snprintf(line, sizeof(line), "Release 0.%d.%d has no download for this system (%s).", b, c, kAsset);
+            throw Stop{line};
+        }
+        snprintf(line, sizeof(line), "@ok 0.%d.%d (this is 0.%d.%d)", b, c, mine / 100, mine % 100);
+        say(line);
+        check_cancel();
+
+        say("@step 2 3 Download");
+        SDL_RemovePath(zip.c_str());
+        {
+            const char *get[] = {kCurl, "-s", "-L", "--fail", "-A", "Tenkaichi3Decomp-setup", "-o", zip.c_str(), url.c_str(), NULL};
+            SDL_PathInfo info;
+            if (!run(get, NULL, zip, size) || !SDL_GetPathInfo(zip.c_str(), &info) || info.size == 0 || (size != 0 && info.size != size)) {
+                check_cancel();
+                throw Stop{"The download did not finish. Press Update to try again."};
+            }
+        }
+        say("@ok downloaded");
+        check_cancel();
+
+        say("@step 3 3 Install");
+        remove_tree(dir);
+        SDL_CreateDirectory(dir.c_str());
+        {
+            const char *unpack[] = {kTar, "-xf", zip.c_str(), "-C", dir.c_str(), NULL};
+            SDL_PathInfo info;
+            if (!run(unpack, NULL) || !SDL_GetPathInfo((dir + "Tenkaichi3Decomp/" + kGame).c_str(), &info)) {
+                throw Stop{"The downloaded release could not be unpacked."};
+            }
+        }
+        copy_tree(dir + "Tenkaichi3Decomp/", root);
+        remove_tree(dir);
+        SDL_RemovePath(zip.c_str());
+        snprintf(line, sizeof(line), "@ok updated to 0.%d.%d", b, c);
+        say(line);
+        say("@done " + root + kGame);
+    } catch (const Stop &s) {
+        std::string why = s.why;
+        for (size_t i = 0; (i = why.find('\n', i)) != std::string::npos;) {
+            why.replace(i, 1, "\\n");
+        }
+        say("@fail");
+        say("@stopped " + why);
+    }
+    sRunning = false;
+}
+
 } // namespace
+
+void Native_StartUpdate(const std::string &root) {
+    if (sThread.joinable()) {
+        sThread.join();
+    }
+    sCancel = false;
+    sRunning = true;
+    sThread = std::thread(work_update, root);
+}
 
 void Native_Start(const std::string &root, const std::string &iso) {
     if (sThread.joinable()) {

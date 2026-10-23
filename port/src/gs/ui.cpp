@@ -1497,6 +1497,39 @@ static void effects_tab(PortVideo &v) {
 static int sUpdCheck = -1; // the setting; -1 not read yet
 static bool sUpdAsked, sUpdTold;
 
+// "Update now": the setup next to the game (a release folder) puts the newest release over this one
+// (Tenkaichi3Decomp-setup --update, port/setup/native.cpp), which needs the game closed: it closes once the setup
+// has started. False: there is no setup here (a source build: the release page instead).
+static bool update_now(bool start) {
+    const char *base = SDL_GetBasePath();
+    char path[1024];
+    SDL_PathInfo info;
+#ifdef _WIN32
+    SDL_snprintf(path, sizeof(path), "%sTenkaichi3Decomp-setup.exe", base != NULL ? base : "");
+#else
+    SDL_snprintf(path, sizeof(path), "%sTenkaichi3Decomp-setup", base != NULL ? base : "");
+#endif
+    if (!SDL_GetPathInfo(path, &info)) {
+        return false;
+    }
+    if (start) {
+        const char *args[] = {path, "--update", NULL};
+        SDL_PropertiesID props = SDL_CreateProperties();
+        SDL_SetPointerProperty(props, SDL_PROP_PROCESS_CREATE_ARGS_POINTER, (void *)args);
+        SDL_SetBooleanProperty(props, SDL_PROP_PROCESS_CREATE_BACKGROUND_BOOLEAN, true);
+        SDL_Process *setup = SDL_CreateProcessWithProperties(props);
+        SDL_DestroyProperties(props);
+        if (setup != NULL) {
+            SDL_Event quit;
+            SDL_DestroyProcess(setup);
+            SDL_zero(quit);
+            quit.type = SDL_EVENT_QUIT;
+            SDL_PushEvent(&quit);
+        }
+    }
+    return true;
+}
+
 static int update_latest(void) {
     const char *fake = SDL_getenv("BT3_UPDATE_LATEST");
     if (sUpdCheck < 0) {
@@ -2054,10 +2087,18 @@ static void build(void) {
                 ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "Update available: 0.%d.%d (this is 0.%d.%d).", latest / 100, latest % 100,
                                    PORT_RELEASE / 100, PORT_RELEASE % 100);
                 ImGui::SameLine();
-                if (ImGui::Button("Download page")) {
-                    SDL_OpenURL("https://github.com/" PORT_UPDATE_REPO "/releases/latest");
+                if (update_now(false)) {
+                    if (ImGui::Button("Update now")) {
+                        update_now(true);
+                    }
+                    ImGui::SetItemTooltip("Downloads the new release and puts it over this one. The game closes for it;\n"
+                                          "your game data, saves and settings stay.");
+                } else {
+                    if (ImGui::Button("Download page")) {
+                        SDL_OpenURL("https://github.com/" PORT_UPDATE_REPO "/releases/latest");
+                    }
+                    ImGui::SetItemTooltip("Opens the release page in your browser. To update, copy the new files over the old ones.");
                 }
-                ImGui::SetItemTooltip("Opens the release page in your browser. To update, copy the new files over the old ones.");
                 ImGui::Separator();
             }
         }
@@ -2498,7 +2539,9 @@ static bool frame_build(void) {
     if (sReady && !sUpdTold && update_latest() > PORT_RELEASE && SDL_GetTicks() >= sNoticeUntil) {
         int latest = update_latest(); // (told once, and not over another notice)
         sUpdTold = true;
-        SDL_snprintf(sNotice, sizeof(sNotice), "Update available: 0.%d.%d. F1 for the download page.", latest / 100, latest % 100);
+        SDL_snprintf(sNotice, sizeof(sNotice),
+                     Port_MenuLang() == 1 ? "Actualizaci\303\263n disponible: 0.%d.%d. F1 para actualizar." : "Update available: 0.%d.%d. F1 to update.",
+                     latest / 100, latest % 100);
         sNoticeUntil = SDL_GetTicks() + 10000;
     }
     bool notice = sNotice[0] != '\0' && SDL_GetTicks() < sNoticeUntil;

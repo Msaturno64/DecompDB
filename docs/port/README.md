@@ -2097,6 +2097,18 @@ offscreen run without the override; with a pretended 0.1.40, the line over the p
 row, from the window's own picture. Not checked: the WinHTTP path (written, not run), and the button's opening of
 a browser.
 
+**"Update now" (2026-10-23, this copy).** `PORT_UPDATE_REPO` is this copy's own repository (Msaturno64/DecompDB,
+release 0.2.1 = 201). In a release folder the settings window's button is "Update now" (F1; the notice over the
+picture says "F1 to update", in the menus' language): it starts `Tenkaichi3Decomp-setup --update` and closes the
+game. The setup (port/setup/native.cpp `work_update`) asks for the newest release again, downloads its
+`Tenkaichi3Decomp-windows-x64.zip` with the system's `curl.exe` and unpacks it with `tar.exe` (both part of Windows
+10 and later), then copies its files over the folder. A file in use (the setup's own and its SDL3.dll, the game
+while it closes) is renamed to `<name>.old` first, which Windows allows, and put back if the copy still fails;
+`fonts/fonts.tsv` is kept once there. Nothing else is touched: gamedata/, saves, settings, files added by hand.
+`--update --print` does the same without a window; `BT3_UPDATE_FROM=<n>` pretends this is release n (testing).
+Checked: from a pretended 1.0 to the published 0.2.0 (the download, the copy over the running setup, the kept
+font list and game data), and "this is the newest" from 0.2.1. Not checked: pressing the game's button itself.
+
 **Where the options are (same day).** The settings window has a seventh tab, Misc: "Check for updates" and the
 three skip options (logos, intro video, copyright page), which were on the UI tab. The UI tab keeps HUD Style,
 "Menus in 4:3" and "Side bars". Earlier sections that say "F1, UI" for the skips mean this tab now.

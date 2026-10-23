@@ -5,6 +5,8 @@
 // that script prints (one line each: @step, @note, @ok, @skip, @fail, @missing, @stopped, @done; see install.py).
 //
 //   build:  port/setup/build.sh   ->  ./Tenkaichi3Decomp-setup
+//   update: Tenkaichi3Decomp-setup --update (the game's "Update now", F1) puts the newest release over a release
+//           folder (native.cpp, work_update)
 //   test:   BT3_SETUP_ISO=<file> starts the installation at once; BT3_SETUP_SHOT=<prefix> writes the window's
 //           picture to <prefix>_<n>.ppm whenever the page or the step changes (no person needed to check it)
 #include <stdio.h>
@@ -33,11 +35,14 @@ struct Missing { std::string name, why, pkg; };
 // in a release folder (Tenkaichi3Decomp and Tenkaichi3Decomp.dat next to this program: native.cpp unpacks the disc itself).
 static const char *kSourceSteps[] = {"Requirements", "Disc image", "Game data", "Executable data", "Build", "Self-test"};
 static const char *kReleaseSteps[] = {"Disc image", "Game data", "Self-test"};
+static const char *kUpdateSteps[] = {"Newest release", "Download", "Install"}; // (--update: native.cpp work_update)
 static const struct { const char *title, *help; } kHelp[] = {
     {"Requirements", "Compilers and tools on this computer"}, {"Disc image", "Your disc image is read and checked"},
     {"Game data", "Models, sounds and text are unpacked"}, {"Executable data", "The data tables of the game's programs"},
-    {"Build", "The port is compiled (a few minutes)"}, {"Self-test", "The game's demo fight, without a window"}};
-static bool sRelease;
+    {"Build", "The port is compiled (a few minutes)"}, {"Self-test", "The game's demo fight, without a window"},
+    {"Newest release", "Asked of the page the game is published on"}, {"Download", "The new release's files"},
+    {"Install", "Copied over these; your game data, saves and settings stay"}};
+static bool sRelease, sUpdate;
 
 static const char *step_help(const std::string &title) {
     for (auto &h : kHelp) {
@@ -115,11 +120,26 @@ static void style() {
 // ---------------------------------------------------------------------------------------------- the engine script
 
 static void reset_rows() {
-    size_t n = sRelease ? sizeof(kReleaseSteps) / sizeof(kReleaseSteps[0]) : sizeof(kSourceSteps) / sizeof(kSourceSteps[0]);
+    const char *const *steps = sUpdate ? kUpdateSteps : sRelease ? kReleaseSteps : kSourceSteps;
+    size_t n = sUpdate ? sizeof(kUpdateSteps) / sizeof(kUpdateSteps[0])
+               : sRelease ? sizeof(kReleaseSteps) / sizeof(kReleaseSteps[0]) : sizeof(kSourceSteps) / sizeof(kSourceSteps[0]);
     sRows.assign(n, StepRow());
     for (size_t i = 0; i < n; i++) {
-        sRows[i].title = sRelease ? kReleaseSteps[i] : kSourceSteps[i];
+        sRows[i].title = steps[i];
     }
+}
+
+// --update: the newest release over this folder (the game's "Update now").
+static void start_update() {
+    sUpdate = true;
+    reset_rows();
+    sMissing.clear();
+    sError.clear();
+    sLauncher.clear();
+    sRunStart = SDL_GetTicks();
+    sNative = true;
+    Native_StartUpdate(sRoot);
+    sPage = PAGE_RUN;
 }
 
 static void start_install() {
@@ -437,7 +457,7 @@ static void step_list() {
 
 static void page_run() {
     int done = 0;
-    heading("Setting up", "You can leave this running. Finished steps are kept if it is interrupted.");
+    heading(sUpdate ? "Updating" : "Setting up", sUpdate ? "Your game data, saves and settings are kept." : "You can leave this running. Finished steps are kept if it is interrupted.");
     step_list();
     for (auto &r : sRows) {
         done += r.state == OK || r.state == SKIPPED;
@@ -456,7 +476,9 @@ static void page_run() {
 
 static void page_done() {
     char sub[128];
-    if (sRunEnd > sRunStart) {
+    if (sUpdate) {
+        snprintf(sub, sizeof(sub), "The game is up to date.");
+    } else if (sRunEnd > sRunStart) {
         snprintf(sub, sizeof(sub), "The game is installed and its demo fight ran correctly.  (%d min %d s)", (int)((sRunEnd - sRunStart) / 60000),
                  (int)((sRunEnd - sRunStart) / 1000 % 60));
     } else {
@@ -493,7 +515,8 @@ static void page_done() {
 }
 
 static void page_failed() {
-    heading("Setup stopped", "Nothing is broken: finished steps are kept, and Install continues from where it stopped.");
+    heading(sUpdate ? "Update stopped" : "Setup stopped",
+            sUpdate ? "The game was left as it was where nothing was copied yet." : "Nothing is broken: finished steps are kept, and Install continues from where it stopped.");
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.93f, 0.36f, 0.33f, 0.10f));
     ImGui::BeginChild("why", ImVec2(0.0f, sMissing.empty() ? 150.0f : 90.0f), ImGuiChildFlags_AlwaysUseWindowPadding);
     ImGui::TextWrapped("%s", sError.c_str());
@@ -521,8 +544,12 @@ static void page_failed() {
         sQuit = true;
     }
     ImGui::SameLine();
-    if (big_button("Back", true)) {
-        sPage = PAGE_PICK;
+    if (big_button(sUpdate ? "Try again" : "Back", true)) {
+        if (sUpdate) {
+            start_update();
+        } else {
+            sPage = PAGE_PICK;
+        }
     }
 }
 
@@ -660,8 +687,9 @@ int main(int argc, char **argv) {
         }
     }
 #endif
-    if (argc > 2 && strcmp(argv[1], "--install") == 0) {
-        // Without a window: Tenkaichi3Decomp-setup --install <disc.iso>. A release folder only; prints the event lines.
+    if (argc > 2 && (strcmp(argv[1], "--install") == 0 || (strcmp(argv[1], "--update") == 0 && strcmp(argv[2], "--print") == 0))) {
+        // Without a window: Tenkaichi3Decomp-setup --install <disc.iso>, or --update --print. A release folder only;
+        // prints the event lines.
         std::string line;
         bool ok = false;
         SDL_Init(0);
@@ -670,7 +698,11 @@ int main(int argc, char **argv) {
             fprintf(stderr, GAME "-setup --install works in a release folder (" GAME " and " GAME ".dat next to it).\nIn a source checkout: python3 install.py --iso <file>\n");
             return 2;
         }
-        Native_Start(sRoot, argv[2]);
+        if (strcmp(argv[1], "--update") == 0) {
+            Native_StartUpdate(sRoot);
+        } else {
+            Native_Start(sRoot, argv[2]);
+        }
         for (bool last = false; !last;) {
             last = !Native_Running(); // one more round after the worker has ended: nothing is left behind
             while (Native_Poll(line)) {
@@ -772,7 +804,11 @@ int main(int argc, char **argv) {
         sLauncher = sRoot + (file_exists((sRoot + GAME ".exe").c_str()) ? GAME ".exe" : GAME);
         sPage = PAGE_DONE;
     }
-    if (argc > 1) {
+    if (argc > 1 && strcmp(argv[1], "--update") == 0) { // (the game's "Update now")
+        if (sRelease) {
+            start_update();
+        }
+    } else if (argc > 1) {
         SDL_strlcpy(sIso, argv[1], sizeof(sIso));
     }
     if (getenv("BT3_SETUP_ISO") != NULL) {

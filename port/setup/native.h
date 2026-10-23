@@ -5,6 +5,7 @@
 #include <string>
 
 void Native_Start(const std::string &root, const std::string &iso); // root: the folder with bt3 and bt3.dat, ends in '/'
+void Native_StartUpdate(const std::string &root);                  // the newest release over this folder (--update)
 bool Native_Poll(std::string &line);                               // the next event line, if there is one
 bool Native_Running(void);
 void Native_Cancel(void);

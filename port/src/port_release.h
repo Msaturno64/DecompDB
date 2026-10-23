@@ -3,9 +3,9 @@
    releases older than the one its keeper names (port/matchmaking: the variable MIN_RELEASE). */
 #ifndef PORT_RELEASE_H
 #define PORT_RELEASE_H
-#define PORT_RELEASE 135
+#define PORT_RELEASE 201
 /* Where releases are published: the game asks GitHub for the newest one's number once per start (gs/net_match.c,
-   "Check for updates") and opens this repository's release page from the settings window. A fork that publishes
-   its own releases names its own repository here. */
-#define PORT_UPDATE_REPO "" /* this copy (the tag team / BT4 mod) publishes none: the original's releases are not ours */
+   "Check for updates"), and its "Update now" (F1) has the setup put it over this folder (port/setup/native.cpp). A
+   fork that publishes its own releases names its own repository here. */
+#define PORT_UPDATE_REPO "Msaturno64/DecompDB" /* this copy's (the tag team / BT4 mod), not the original's */
 #endif
