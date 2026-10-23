@@ -68,10 +68,10 @@ void Bracket_Init(void) {
             break;
         case TOUR_BIG:
         case TOUR_OTHERWORLD:
-            Bgm_Play(PORT_BT4(BRK_BGM_OTHER, 0x86A));
+            Bgm_Play(PORT_BT4E(BRK_BGM_OTHER, 0x86A, 0x851)); /* (English: REA, 0x3651C0) */
             break;
         case TOUR_YAMCHA:
-            Bgm_Play(PORT_BT4(BRK_BGM_OTHER, 0x8CF));
+            Bgm_Play(PORT_BT4E(BRK_BGM_OTHER, 0x8CF, 0x896));
             break;
         }
     }
@@ -175,10 +175,10 @@ void Bracket_Update(void) {
                 break;
             case TOUR_BIG:
             case TOUR_OTHERWORLD:
-                Bgm_Play(PORT_BT4(BRK_BGM_OTHER, 0x86A));
+                Bgm_Play(PORT_BT4E(BRK_BGM_OTHER, 0x86A, 0x851)); /* (English: REA, 0x365650) */
                 break;
             case TOUR_YAMCHA:
-                Bgm_Play(PORT_BT4(BRK_BGM_OTHER, 0x8CF));
+                Bgm_Play(PORT_BT4E(BRK_BGM_OTHER, 0x8CF, 0x896));
                 break;
             }
             gBracket->flags &= ~BRK_FANFARE;

@@ -1349,8 +1349,9 @@ s32 BtlInput_TestAction(BtlInputChr *chr, s32 id, s32 want) {
         }
         break;
 #ifdef PORT
-    case 115: /* (BT4's own: button bit 0 pressed; REA, its jump table entry 114 -> 0x1D4E20) */
-        if (gPortBt4) {
+    case 115: /* (BT4's own: button bit 0 pressed; REA, its jump table entry 114 -> 0x1D4E20; not on the English
+                 disc, whose ids end at 114 as BT3's: REA, 0x1D4F58) */
+        if (gPortBt4 && !gPortBt4Eng) {
             result = BtlInput_IsPressed(chr, 1);
         }
         break;

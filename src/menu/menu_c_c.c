@@ -499,7 +499,7 @@ void HistResult_UpdateSe(void) {
         }
         break;
     case 3:
-        Bgm_Play(PORT_BT4(0x10B18, 0x86C));
+        Bgm_Play(PORT_BT4E(0x10B18, 0x86C, 0x87D)); /* (English: REA, 0x341C1C) */
         gHistResult->seState = 0;
         break;
     }

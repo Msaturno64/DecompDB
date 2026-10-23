@@ -92,7 +92,7 @@ s32 Shen_Main(void) {
     do {
         switch (gProgress->mode) {
         case 70:
-            Bgm_Play(PORT_BT4(0x10B18, 0x83A));
+            Bgm_Play(PORT_BT4E(0x10B18, 0x83A, 0x8E9)); /* (REA: 0x2BD2CC) */
             Pad_SetRepeat(20, 1);
             Shen_Run(2);
             Adx_StopAll();

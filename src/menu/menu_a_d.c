@@ -263,9 +263,9 @@ void ModeMenu_Init(s32 section) {
         i--; /* (BT4: sagas 2 and 3 play what 1 and 2 do, REA: its jump table at 0x3B1390) */
     }
 #endif
-    switch (i) {
+    switch (i) { /* (the English disc's music: REA, 0x338CE8..0x338DA8) */
     case 0:
-        Bgm_Play(PORT_BT4(MODEMENU_BGM, 0x834));
+        Bgm_Play(PORT_BT4E(MODEMENU_BGM, 0x834, 0x899));
         StreamSe_PlayDefault(0, PORT_BT4(0x10BDC, 0x159));
         break;
     case 1:
@@ -278,16 +278,16 @@ void ModeMenu_Init(s32 section) {
         break;
     case 3:
     case 4:
-        Bgm_Play(PORT_BT4(MODEMENU_BGM, 0x81C));
+        Bgm_Play(PORT_BT4E(MODEMENU_BGM, 0x81C, 0x86C));
         break;
     case 5:
         Bgm_Play(PORT_BT4(0x10B1E, 0x837));
         break;
     case 6:
-        Bgm_Play(PORT_BT4(0x10B28, 0x838));
+        Bgm_Play(PORT_BT4E(0x10B28, 0x838, 0x828));
         break;
     case 7:
-        Bgm_Play(PORT_BT4(MODEMENU_BGM, 0x82D));
+        Bgm_Play(PORT_BT4E(MODEMENU_BGM, 0x82D, 0x867));
         break;
     }
 }

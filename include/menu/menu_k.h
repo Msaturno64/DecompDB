@@ -243,7 +243,7 @@ typedef struct Bracket {
 #define BRK_VS_FRONT 0x40000     /* the versus panel and banners are drawn under the guide */
 #define BRK_FANFARE 0x80000      /* the opening jingle plays; the music starts when it ends */
 
-#define BRK_BGM_WORLD PORT_BT4(0x10B29, 0x829)
+#define BRK_BGM_WORLD PORT_BT4E(0x10B29, 0x829, 0x8C1) /* (English: REA, 0x365190) */
 #define BRK_BGM_CELL PORT_BT4(0x10B24, 0x824)
 #define BRK_BGM_OTHER 0x10B18
 #define BRK_SE_FANFARE PORT_BT4(0x10BCA, 0x151)

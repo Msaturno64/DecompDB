@@ -123,8 +123,8 @@ s32 Ub_Main(void) {
             UO_PROG->mode = 14;
             Adx_StopAll();
             break;
-        case 17:
-            Bgm_Play(PORT_BT4(UB_BGM, 0x840));
+        case 17: /* (the English disc's music of cases 17, 24..30: REA, 0x379C38..0x379EE8) */
+            Bgm_Play(PORT_BT4E(UB_BGM, 0x840, 0x84A));
             if (SurvSel_Run(2)) {
                 UO_PROG->mode = 18;
             } else {
@@ -186,7 +186,7 @@ s32 Ub_Main(void) {
             Adx_StopAll();
             break;
         case 24:
-            Bgm_Play(PORT_BT4(UB_BGM, 0x84B));
+            Bgm_Play(PORT_BT4E(UB_BGM, 0x84B, 0x84A));
             if (DiscFusion_Run(6)) {
                 if (UO_PROG->cursor == 0) {
                     UO_PROG->teamSize = 1;
@@ -201,7 +201,7 @@ s32 Ub_Main(void) {
             Adx_StopAll();
             break;
         case 25:
-            Bgm_Play(PORT_BT4(UB_BGM, 0x83F));
+            Bgm_Play(PORT_BT4E(UB_BGM, 0x83F, 0x8DC));
             if (SoloSel_Run(4)) {
                 UO_PROG->mode = 26;
             } else {
@@ -210,7 +210,7 @@ s32 Ub_Main(void) {
             Adx_StopAll();
             break;
         case 26:
-            Bgm_Play(PORT_BT4(UB_BGM, 0x84A));
+            Bgm_Play(PORT_BT4E(UB_BGM, 0x84A, 0x8EE));
             if (UbRank_Run(0)) {
                 UO_PROG->mode = 27;
                 done = 1;
@@ -220,13 +220,13 @@ s32 Ub_Main(void) {
             Adx_StopAll();
             break;
         case 27:
-            Bgm_Play(PORT_BT4(UB_BGM, 0x841));
+            Bgm_Play(PORT_BT4E(UB_BGM, 0x841, 0x83E));
             UbResult_Run(3);
             UO_PROG->mode = 26;
             Adx_StopAll();
             break;
         case 28:
-            Bgm_Play(PORT_BT4(UB_BGM, 0x84A));
+            Bgm_Play(PORT_BT4E(UB_BGM, 0x84A, 0x84E));
             if (UbzSel_Run(0)) {
                 UO_PROG->mode = 29;
             } else {
@@ -235,7 +235,7 @@ s32 Ub_Main(void) {
             Adx_StopAll();
             break;
         case 29:
-            Bgm_Play(PORT_BT4(UB_BGM, 0x83F));
+            Bgm_Play(PORT_BT4E(UB_BGM, 0x83F, 0x832));
             if (SoloSel_Run(4)) {
                 Ub_SetupSolo2();
                 done = 1;
@@ -246,7 +246,7 @@ s32 Ub_Main(void) {
             Adx_StopAll();
             break;
         case 30:
-            Bgm_Play(PORT_BT4(UB_BGM, 0x841));
+            Bgm_Play(PORT_BT4E(UB_BGM, 0x841, 0x84F));
             UbResult_Run(3);
             UO_PROG->mode = 28;
             Adx_StopAll();

@@ -188,36 +188,38 @@ void HistOutro_Init(s32 section) {
         TextBox_SetUnk50(&gHistOutro->box[i], 1);
     }
 
+/* (the English disc's music of each saga: REA, 0x33B680..0x33B770) */
+#define OUTRO_ENG(eng) (gPortBt4Eng ? (eng) : OUTRO_BGM)
     switch (gProgress->subMenu) {
     case 0:
-        Bgm_Play(OUTRO_BGM);
+        Bgm_Play(OUTRO_ENG(0x899));
         StreamSe_PlayDefault(0, PORT_BT4(0x10BDC, 0x159));
         break;
     case 1:
-        Bgm_Play(OUTRO_BGM);
+        Bgm_Play(OUTRO_ENG(0x834));
         StreamSe_PlayDefault(0, PORT_BT4(0x10BDD, 0x15A));
         OUTRO_COUNT(1);
         break;
     case 2:
-        Bgm_Play(OUTRO_BGM);
+        Bgm_Play(OUTRO_ENG(0x834));
         StreamSe_PlayDefault(0, PORT_BT4(0x10BDE, 0x15B));
         break;
     case 3:
-        Bgm_Play(OUTRO_BGM);
+        Bgm_Play(OUTRO_ENG(0x835));
         break;
     case 4:
-        Bgm_Play(OUTRO_BGM);
+        Bgm_Play(OUTRO_ENG(0x86C));
         OUTRO_COUNT(4);
         break;
     case 5:
-        Bgm_Play(PORT_BT4(0x10B1E, 0x81E));
+        Bgm_Play(PORT_BT4E(0x10B1E, 0x81E, 0x837));
         OUTRO_COUNT(5);
         break;
     case 6:
         Bgm_Play(PORT_BT4(0x10B28, 0x828));
         break;
     case 7:
-        Bgm_Play(OUTRO_BGM);
+        Bgm_Play(OUTRO_ENG(0x867));
         OUTRO_COUNT(7);
         break;
     }
@@ -865,7 +867,7 @@ s32 Hist_Main(void) {
     do {
         switch (gProgress->mode) {
         case 6:
-            Bgm_Play(PORT_BT4(0x10B18, 0x86C));
+            Bgm_Play(PORT_BT4E(0x10B18, 0x86C, 0x838)); /* (English: REA, 0x33CC98) */
             r = HistSel_Run(1);
             Adx_StopAll();
             gProgress->prevMode = gProgress->mode;

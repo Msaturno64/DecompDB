@@ -7,7 +7,8 @@
  * file cannot be told from the layout.
  */
 
-#define DC_BGM PORT_BT4(0x10B18, 0x818)
+/* (English: each mode has its own music, REA 0x3A9924..0x3A99B4) */
+#define DC_BGM(eng) PORT_BT4E(0x10B18, 0x818, (eng))
 
 /*
  * Runs the Data Center until it is left: mode 53 the top menu, 54 the password screen, 55 the list of saved
@@ -28,7 +29,7 @@ s32 Dc_Main(void) {
     do {
         switch (gProgress->mode) {
         case 53:
-            Bgm_Play(DC_BGM);
+            Bgm_Play(DC_BGM(0x856));
             next = DcMenu_Run(1);
             if (next != 0) {
                 Adx_StopAll();
@@ -41,19 +42,19 @@ s32 Dc_Main(void) {
             }
             break;
         case 54:
-            Bgm_Play(DC_BGM);
+            Bgm_Play(DC_BGM(0x856));
             DcPass_Run(3);
             Adx_StopAll();
             gProgress->mode = 53;
             break;
         case 55:
-            Bgm_Play(DC_BGM);
+            Bgm_Play(DC_BGM(0x892));
             DcList_Run(2);
             Adx_StopAll();
             gProgress->mode = 53;
             break;
         case 56:
-            Bgm_Play(DC_BGM);
+            Bgm_Play(DC_BGM(0x87E));
             next = ReplayMenu_Run(4);
             if (next != 0) {
                 /* The constant lives in a variable set BEFORE the call: only then is its lifetime long enough

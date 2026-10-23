@@ -753,7 +753,7 @@ s32 MisResult_Run(s32 section) {
     s32 result = 1;
 
 #ifdef PORT
-    if (gPortBt4) { /* (REA: 0x37DADC -> 0x3BECEC) */
+    if (gPortBt4 && !gPortBt4Eng) { /* (REA: 0x37DADC -> 0x3BECEC; the English disc keeps BT3's call) */
         extern void Bt4Story_End(void);
         Bt4Story_End();
     }

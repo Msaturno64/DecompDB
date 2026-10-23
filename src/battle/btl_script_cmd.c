@@ -730,7 +730,7 @@ s32 BtlScriptCmd_WaitButton(u32 phase, void *taskWork) {
 s32 BtlScriptCmd_SetStory(u32 phase, void *taskWork) {
     if (phase == GSC_PHASE_BEGIN || phase == GSC_PHASE_BEGIN_ABORT) {
 #ifdef PORT
-        if (gPortBt4) {
+        if (gPortBt4 && !gPortBt4Eng) { /* (the English disc keeps BT3's: REA, 0x25B2A8) */
             extern void Bt4Story_Set(s32 n);
             Bt4Story_Set(Gsc_GetInt());
         } else

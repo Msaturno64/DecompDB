@@ -28,6 +28,9 @@ const char *kDbzpSha1 = "4f910969e05d9b25c83af7642b60da9949a4348b";
 // research/bt4/extract_bt4.py does: every file, and the archives without a header split by BIN/DBZ4.BIN's records.
 const char *kBt4ElfSha1 = "caea50ebcdab5ae80b47e12c6d4bf3247e50784f";
 const char *kBt4DbzpSha1 = "de91913f40bd675d70ee748aa16a42a96dff5919";
+// Its English version (B14 REV2 ENG): the same layout and data runs, English text and voices.
+const char *kBt4EngElfSha1 = "0716ef8ba62e297eb0df5b352c0da1c474134735";
+const char *kBt4EngDbzpSha1 = "1d9f8da80c200bb50e7df3210fff30827e5dae9c";
 bool sBt4;
 const Uint32 kRomBase = 0x100000, kRomEnd = 0x2FF180;
 #ifdef _WIN32
@@ -241,12 +244,15 @@ void step_disc(Iso &iso, const std::string &path) {
         Sha1 a, b;
         a.add(elf4.data(), elf4.size());
         b.add(menu.data(), menu.size());
-        if (a.hex() != kBt4ElfSha1 || b.hex() != kBt4DbzpSha1) {
+        std::string ha = a.hex(), hb = b.hex();
+        bool eng = ha == kBt4EngElfSha1 && hb == kBt4EngDbzpSha1;
+        if (!eng && (ha != kBt4ElfSha1 || hb != kBt4DbzpSha1)) {
             throw Stop{"This is a Budokai Tenkaichi 4 image, but not the version the port supports.\n"
-                       "The port needs TeamBT4's B14 REV2 (SLUS_219.78.DBZBT4B14REV2)."};
+                       "The port needs TeamBT4's B14 REV2 (SLUS_219.78.DBZBT4B14REV2) or its English version."};
         }
         sBt4 = true;
-        say("@ok Budokai Tenkaichi 4 (TeamBT4 B14 REV2), checksums match");
+        say(eng ? "@ok Budokai Tenkaichi 4 (TeamBT4 B14 REV2, English), checksums match"
+                : "@ok Budokai Tenkaichi 4 (TeamBT4 B14 REV2), checksums match");
         return;
     }
     const IsoFile *slus = iso.find("SLUS_216.78"), *dbzp = iso.find("BIN/DBZP.BIN");

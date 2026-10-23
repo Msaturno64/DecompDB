@@ -397,6 +397,9 @@ static void data_fail(const char *what, const char *path) {
    starts; the game code reads it (sys/file.h). */
 #define PORT_BT4_HASH 0x01331AE1061785F4ull
 PORT_HOST int gPortBt4 = 0;
+/* Its English disc (B14 REV2 ENG): the same data runs, so the same checksum; its program differs in code only (the
+   menus' music, no story extension), told by the music the code at 0x2BD2CC loads (REA: li a0,0x8E9, REV2 0x83A). */
+PORT_HOST int gPortBt4Eng = 0;
 
 static void Port_LoadGameData(void) {
     char exe[1024], path[1200];
@@ -490,6 +493,11 @@ static void Port_LoadGameData(void) {
                 memcpy(src[0] + (sh[3] - ROM_BASE), elf + sh[4], sh[5]);
             }
         }
+        if (gPortBt4) {
+            uint32_t w;
+            memcpy(&w, src[0] + (0x2BD2CCu - ROM_BASE), 4);
+            gPortBt4Eng = w == 0x340408E9u;
+        }
         free(elf);
     }
     snprintf(path, sizeof(path), "%s/disc/BIN/DBZP.BIN", root);
@@ -517,6 +525,9 @@ static void Port_LoadGameData(void) {
         data_fail(gPortBt4 ? "the game's programs in your game data are not BT4 B14 REV2 (SLUS-21978)"
                            : "the game's programs in your game data are not the unmodified USA release (SLUS-21678)",
                   NULL);
+    }
+    if (gPortBt4) {
+        fprintf(stderr, "bt3: Budokai Tenkaichi 4 (B14 REV2%s)\n", gPortBt4Eng ? ", English" : "");
     }
 }
 

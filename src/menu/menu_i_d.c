@@ -1149,7 +1149,7 @@ s32 Tour_Main(void) {
                     gMenuArc4 = File_LoadSync(gProgress->baseFile + 2, NULL, 0);
                 }
             }
-            Bgm_Play(PORT_BT4(0x10B1B, 0x81B));
+            Bgm_Play(PORT_BT4E(0x10B1B, 0x81B, 0x891)); /* (English: REA, 0x362298) */
             if (EntrySel_Run(2)) {
                 Adx_StopAll();
                 gProgress->mode = 35;

@@ -49,7 +49,7 @@ extern s32 Dc_Main(void);
 extern void CharRefMode_Main(void);
 extern void OptMode_Main(void);
 
-#define MENU_BGM_TITLE PORT_BT4(0x10B16, 0x816)
+#define MENU_BGM_TITLE PORT_BT4E(0x10B16, 0x816, 0x84C) /* (English disc: REA, 0x336D18) */
 
 #define MENU_ARC_FREE(p) \
     if ((p) != NULL) { \
